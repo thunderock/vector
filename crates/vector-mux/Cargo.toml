@@ -10,3 +10,6 @@ description = "Window/Tab/Pane mux tree and Domain trait — Phase 4."
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

@@ -10,3 +10,6 @@ description = "Font discovery + rasterization — Phase 3 (crossfont / cosmic-te
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

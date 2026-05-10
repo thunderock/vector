@@ -10,3 +10,6 @@ description = "Async SSH client — PTY channel, port-forward, agent — Phase 7
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true
