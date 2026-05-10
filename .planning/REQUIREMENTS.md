@@ -147,26 +147,67 @@ Explicitly excluded. Documented to prevent scope creep — the four research dim
 
 ## Traceability
 
-Empty initially. Filled by the roadmapper agent in the next step.
+Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUILD-01..05 | TBD | Pending |
-| CORE-01..06 | TBD | Pending |
-| RENDER-01..05 | TBD | Pending |
-| WIN-01..05 | TBD | Pending |
-| POLISH-01..08 | TBD | Pending |
-| AUTH-01..03 | TBD | Pending |
-| CS-01..07 | TBD | Pending |
-| DT-01..04 | TBD | Pending |
-| PERSIST-01..04 | TBD | Pending |
-| HARDEN-01..04 | TBD | Pending |
+| BUILD-01 | Phase 1 | Pending |
+| BUILD-02 | Phase 1 | Pending |
+| BUILD-03 | Phase 1 | Pending |
+| BUILD-04 | Phase 1 | Pending |
+| BUILD-05 | Phase 1 | Pending |
+| WIN-05 | Phase 1 | Pending |
+| CORE-01 | Phase 2 | Pending |
+| CORE-02 | Phase 2 | Pending |
+| CORE-03 | Phase 2 | Pending |
+| CORE-04 | Phase 2 | Pending |
+| CORE-05 | Phase 2 | Pending |
+| CORE-06 | Phase 2 | Pending |
+| RENDER-01 | Phase 3 | Pending |
+| RENDER-02 | Phase 3 | Pending |
+| RENDER-03 | Phase 3 | Pending |
+| RENDER-04 | Phase 3 | Pending |
+| RENDER-05 | Phase 3 | Pending |
+| WIN-01 | Phase 3 | Pending |
+| WIN-02 | Phase 4 | Pending |
+| WIN-03 | Phase 4 | Pending |
+| WIN-04 | Phase 4 | Pending |
+| POLISH-01 | Phase 5 | Pending |
+| POLISH-02 | Phase 5 | Pending |
+| POLISH-03 | Phase 5 | Pending |
+| POLISH-04 | Phase 5 | Pending |
+| POLISH-05 | Phase 5 | Pending |
+| POLISH-06 | Phase 5 | Pending |
+| POLISH-07 | Phase 5 | Pending |
+| POLISH-08 | Phase 5 | Pending |
+| AUTH-01 | Phase 6 | Pending |
+| AUTH-02 | Phase 6 | Pending |
+| AUTH-03 | Phase 6 | Pending |
+| CS-01 | Phase 6 | Pending |
+| CS-02 | Phase 6 | Pending |
+| CS-03 | Phase 6 | Pending |
+| CS-04 | Phase 7 | Pending |
+| CS-05 | Phase 7 | Pending |
+| CS-06 | Phase 7 | Pending |
+| CS-07 | Phase 7 | Pending |
+| DT-01 | Phase 8 | Pending |
+| DT-02 | Phase 8 | Pending |
+| DT-03 | Phase 8 | Pending |
+| DT-04 | Phase 8 | Pending |
+| PERSIST-01 | Phase 9 | Pending |
+| PERSIST-02 | Phase 9 | Pending |
+| PERSIST-03 | Phase 9 | Pending |
+| PERSIST-04 | Phase 9 | Pending |
+| HARDEN-01 | Phase 10 | Pending |
+| HARDEN-02 | Phase 10 | Pending |
+| HARDEN-03 | Phase 10 | Pending |
+| HARDEN-04 | Phase 10 | Pending |
 
 **Coverage:**
 - v1 requirements: 51 total (5 BUILD + 6 CORE + 5 RENDER + 5 WIN + 8 POLISH + 3 AUTH + 7 CS + 4 DT + 4 PERSIST + 4 HARDEN)
-- Mapped to phases: 0 (pending roadmapper)
-- Unmapped: 51 ⚠️ (will be resolved when roadmap is created)
+- Mapped to phases: 51 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-10*
-*Last updated: 2026-05-10 after initial definition*
+*Last updated: 2026-05-10 — roadmapper filled traceability; mapped 51 / 51 v1 REQs to 10 phases*
