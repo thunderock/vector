@@ -1,3 +1,16 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0.0
+milestone_name: milestone
+status: planning
+last_updated: "2026-05-10T19:37:52.618Z"
+progress:
+  total_phases: 10
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
 # Project State: Vector
 
 **Last updated:** 2026-05-10 (initial roadmap)
@@ -82,6 +95,7 @@ None.
 **Next action when resuming:** Run `/gsd-plan-phase 1` to decompose Phase 1 (Foundation & CI/DMG Pipeline) into executable plans.
 
 **Files to re-read on resume:**
+
 1. `.planning/ROADMAP.md` — phase structure and success criteria
 2. `.planning/REQUIREMENTS.md` — v1 requirements + traceability
 3. `.planning/PROJECT.md` — core value, constraints, key decisions
