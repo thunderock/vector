@@ -1,0 +1,12 @@
+[package]
+name = "vector-fonts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Font discovery + rasterization — Phase 3 (crossfont / cosmic-text)."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

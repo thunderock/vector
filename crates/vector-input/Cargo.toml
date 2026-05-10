@@ -1,0 +1,12 @@
+[package]
+name = "vector-input"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Keymap + IME + mouse encoding — Phase 5."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

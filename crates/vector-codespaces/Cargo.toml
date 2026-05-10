@@ -1,0 +1,12 @@
+[package]
+name = "vector-codespaces"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "GitHub Codespaces auth + list + connect — Phases 6/7 (octocrab + tonic)."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

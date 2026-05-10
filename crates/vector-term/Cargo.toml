@@ -1,0 +1,12 @@
+[package]
+name = "vector-term"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "VT/ANSI state machine + grid + scrollback — Phase 2 (alacritty_terminal wrapper)."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
