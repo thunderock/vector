@@ -33,8 +33,14 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   2. Tagging a release publishes the unsigned Universal DMG to GitHub Releases with the `xattr -dr com.apple.quarantine` instructions in the README.
   3. Running `cargo xtask dmg` locally produces an identical DMG on an Apple Silicon dev machine.
   4. The skeleton runs `winit::EventLoop` on the main thread and a multi-thread `tokio` runtime on background threads, with `EventLoopProxy::send_event` as the only cross-thread signal — verified by an architecture lint and a smoke test that crashes the build if a `tokio::main` macro reappears.
-**Plans**: TBD
-**Stack additions**: `cargo` workspace, `rust-toolchain.toml` pinned to 1.88+, `cargo-bundle 0.10`, `lipo`, `hdiutil`, `cargo-deny`, GitHub Actions on `macos-14` (arm64) + `macos-13` (x86_64) matrix.
+**Plans**: 6 plans
+  - [ ] 01-01-PLAN.md — Workspace skeleton + toolchain pin + xtask alias + 14 crate stubs
+  - [ ] 01-02-PLAN.md — Workspace lints + cargo-deny + cargo-husky + per-crate architecture-lint tests
+  - [ ] 01-03-PLAN.md — Threading skeleton + AppKit window + native menu + version overlay + build.rs SHA
+  - [ ] 01-04-PLAN.md — xtask separate workspace + cargo-bundle + create-dmg + universal DMG pipeline (Wave-0 spike)
+  - [ ] 01-05-PLAN.md — GitHub Actions ci.yml: matrix-then-merge build + tip release (macos-15-intel amendment)
+  - [ ] 01-06-PLAN.md — release.yml on v* tags + README install block + ADRs 0001..0006 + branch protection setup
+**Stack additions**: `cargo` workspace, `rust-toolchain.toml` pinned to 1.88.0, `cargo-bundle 0.10`, `lipo`, `iconutil`, `hdiutil`, `create-dmg`, `cargo-deny`, `cargo-husky`, `convco`, `git-cliff`, GitHub Actions on `macos-14` (arm64) + `macos-15-intel` (x86_64) matrix (D-21 amended: macos-13 retired Dec 2025).
 **Risks & notes**:
   - Universal binary on CI: macOS 14 runners are arm64-only; macOS 13 runners are x86_64. Validate matrix-build + `lipo` end-to-end here, do not assume.
   - **winit/tokio main-thread ownership must be established in this phase's skeleton.** Getting it wrong here bites in Phase 3 and is expensive to retrofit.
