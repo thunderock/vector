@@ -1,0 +1,8 @@
+/target
+/xtask/target
+**/*.rs.bk
+.DS_Store
+crates/vector-app/resources/icon.iconset/
+crates/vector-app/resources/icon.icns
+artifacts/
+RELEASE_NOTES.md
