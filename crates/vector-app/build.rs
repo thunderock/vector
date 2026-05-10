@@ -6,8 +6,10 @@ fn main() {
         .output()
         .ok()
         .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|| "unknown".into());
+        .map_or_else(
+            || "unknown".into(),
+            |o| String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        );
 
     println!("cargo:rustc-env=VECTOR_BUILD_SHA={sha}");
     println!("cargo:rerun-if-changed=.git/HEAD");

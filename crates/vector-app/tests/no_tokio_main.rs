@@ -12,7 +12,8 @@ const FORBIDDEN: &[&str] = &[
     "Runtime::new()",
 ];
 
-const BLOCK_ON_ALLOWLIST: &[&str] = &["src/main.rs"];
+// `rel` is computed as the relative path from `src/`, so `src/main.rs` shows up as `main.rs`.
+const BLOCK_ON_ALLOWLIST: &[&str] = &["main.rs"];
 
 #[test]
 fn forbidden_tokio_patterns_absent_from_src() {

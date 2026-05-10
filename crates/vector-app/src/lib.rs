@@ -1,1 +1,2 @@
-//! Vector app shell. Filled out in Phase 1 Plan 01-03.
+//! Vector app shell crate. The binary entry is `main.rs`; this file is empty
+//! by convention so `cargo doc` produces a valid landing page.
