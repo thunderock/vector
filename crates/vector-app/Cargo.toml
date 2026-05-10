@@ -28,3 +28,17 @@ cargo-husky = { version = "1", default-features = false, features = ["user-hooks
 
 [lints]
 workspace = true
+
+[package.metadata.bundle]
+name = "Vector"
+identifier = "com.vector.app"
+icon = ["resources/icon.icns"]
+copyright = "© 2026 Vector contributors"
+category = "public.app-category.developer-tools"
+short_description = "Native macOS terminal with first-class GitHub Codespaces support."
+long_description = """
+Vector is a fast native macOS terminal — written in Rust, GPU-accelerated —
+with first-class GitHub Codespaces and Dev Tunnels support.
+"""
+osx_minimum_system_version = "13.0"
+osx_info_plist_exts = ["resources/Info.plist.partial"]

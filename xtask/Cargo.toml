@@ -1,0 +1,17 @@
+# Separate workspace per D-04. The empty `[workspace]` table opts this crate
+# OUT of the parent workspace so xtask deps don't pollute the main resolver
+# graph (and so cargo-deny only audits shippable code).
+[workspace]
+
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+xshell = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+toml_edit = "0.22"
