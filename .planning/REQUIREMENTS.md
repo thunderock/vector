@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 
 ### Build & Distribution
 
-- [ ] **BUILD-01**: A cargo workspace skeleton compiles on macOS 13+ with Rust 1.88+ (pinned via `rust-toolchain.toml`)
+- [x] **BUILD-01**: A cargo workspace skeleton compiles on macOS 13+ with Rust 1.88+ (pinned via `rust-toolchain.toml`)
 - [ ] **BUILD-02**: GitHub Actions CI builds Universal binaries (arm64 + x86_64 via `lipo`) on every push to main and on every tag
 - [ ] **BUILD-03**: An `xtask dmg` command produces an unsigned `Vector.dmg` locally, identical to what CI ships
 - [ ] **BUILD-04**: Tagged releases publish the unsigned `.dmg` to GitHub Releases (ghostty-style "tip" + tagged release pattern)
@@ -38,7 +38,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [ ] **WIN-02**: Tabs — open new tab (Cmd-T), cycle (Cmd-Shift-]/[), close (Cmd-W). Native `NSWindowTabbingMode` or visually equivalent custom bar.
 - [ ] **WIN-03**: Splits — horizontal (Cmd-D) and vertical (Cmd-Shift-D) splits within a tab, with focus routing and per-pane resize
 - [ ] **WIN-04**: A `Domain / Pane / PtyTransport` abstraction (WezTerm-style) is the only seam between terminal model and transport — local, SSH, and tunnel transports all implement the same trait
-- [ ] **WIN-05**: `winit::EventLoop` runs on the main thread; `tokio` runs on background threads; cross-thread signaling goes through `EventLoopProxy::send_event` (no `block_on` on main, no shared mutex held across `await`)
+- [x] **WIN-05**: `winit::EventLoop` runs on the main thread; `tokio` runs on background threads; cross-thread signaling goes through `EventLoopProxy::send_event` (no `block_on` on main, no shared mutex held across `await`)
 
 ### Polish (Local Daily-Driver)
 
@@ -151,12 +151,12 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUILD-01 | Phase 1 | Pending |
+| BUILD-01 | Phase 1 | Complete |
 | BUILD-02 | Phase 1 | Pending |
 | BUILD-03 | Phase 1 | Pending |
 | BUILD-04 | Phase 1 | Pending |
 | BUILD-05 | Phase 1 | Pending |
-| WIN-05 | Phase 1 | Pending |
+| WIN-05 | Phase 1 | Complete |
 | CORE-01 | Phase 2 | Pending |
 | CORE-02 | Phase 2 | Pending |
 | CORE-03 | Phase 2 | Pending |

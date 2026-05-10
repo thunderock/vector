@@ -3,41 +3,34 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-10T22:55:00.000Z"
+last_updated: "2026-05-10T23:13:41.505Z"
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
 ---
 
 # Project State: Vector
 
-**Last updated:** 2026-05-10 (paused mid-phase 1, after Wave 2)
+**Last updated:** 2026-05-10 (after Wave 3 — plan 01-03 complete)
 
 ## Project Reference
 
 **Core value:** Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
 
-**Current focus:** Phase 01 — foundation-ci-dmg-pipeline (paused after Wave 2; resume on macOS)
+**Current focus:** Phase 01 — foundation-ci-dmg-pipeline
 
 ## Current Position
 
-Phase: 01 (foundation-ci-dmg-pipeline) — EXECUTING (paused)
-Plan: 3 of 6 (next to execute)
-
-- **Phase:** 1 — Foundation & CI/DMG Pipeline
-- **Plans complete:** 01-01 (workspace scaffold), 01-02 (architectural invariants)
-- **Plans remaining:** 01-03, 01-04, 01-05, 01-06 — paused; resume on macOS
-- **Status:** Paused mid-phase (Linux VM can't build AppKit code or run NSWindow checkpoint)
-- **Progress:** `[..........]` 0/10 phases complete · Phase 1: 2/6 plans
+Phase: 01 (foundation-ci-dmg-pipeline) — EXECUTING
+Plan: 3 of 6
 
 ## Phase Map
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | Foundation & CI/DMG Pipeline | Not started |
+| 1 | Foundation & CI/DMG Pipeline | In progress (3/6 plans) |
 | 2 | Headless Terminal Core | Not started |
 | 3 | GPU Renderer & First Paint | Not started |
 | 4 | Mux — Tabs & Splits | Not started |
@@ -54,9 +47,9 @@ Plan: 3 of 6 (next to execute)
 |--------|-------|
 | Phases planned | 10 |
 | Phases complete | 0 |
-| Plans complete | 0 |
+| Plans complete | 3 |
 | v1 requirements mapped | 51 / 51 (100%) |
-| v1 requirements completed | 0 / 51 |
+| v1 requirements completed | 2 / 51 (WIN-05, BUILD-01) |
 
 ## Accumulated Context
 
@@ -91,7 +84,7 @@ Plan: 3 of 6 (next to execute)
 
 - [x] Wave 1 (plan 01-01) — workspace scaffold complete
 - [x] Wave 2 (plan 01-02) — architectural invariants complete
-- [ ] Wave 3 (plan 01-03) — AppKit window + threading skeleton (REQUIRES macOS)
+- [x] Wave 3 (plan 01-03) — AppKit window + threading skeleton complete (on macOS, user-approved checkpoint)
 - [ ] Wave 4 (plan 01-04) — DMG xtask pipeline (REQUIRES macOS)
 - [ ] Wave 5 (plan 01-05) — GitHub Actions CI
 - [ ] Wave 6 (plan 01-06) — release pipeline + README + ADRs
@@ -99,37 +92,24 @@ Plan: 3 of 6 (next to execute)
 
 ### Blockers
 
-- **Platform:** Current dev environment is Linux (Amazon Linux 2023). Plan 01-03 wires
-  `objc2-app-kit` + `NSWindow` + native menu bar, and its checkpoint task requires a human
-  to run the binary and visually verify ticking title, version overlay, menu bar, Cmd-Q/M/W
-  shortcuts on macOS. Plan 01-04 invokes `cargo-bundle` + `hdiutil` to build a DMG —
-  `hdiutil` is macOS-only. Resume on a Mac (macOS 13+).
+- None. Development is now on macOS (resumed); Plan 01-03 landed cleanly with user-approved
+  checkpoint. Plan 01-04 (DMG xtask pipeline) and later waves can proceed on this host.
 
 ## Session Continuity
 
-**Next action when resuming on macOS:**
+**Last session:** 2026-05-10 — completed plan 01-03 (Wave 3: AppKit window + threading skeleton). User-approved the visual + functional checkpoint after running the binary on macOS.
+
+**Stopped at:** Completed `01-03-PLAN.md` — Wave 4 (plan 01-04, DMG xtask pipeline) is next.
+
+**Next action:**
 
 ```bash
-# Verify the merged state of Phase 1 still builds + tests clean on Mac
-cargo build --workspace
-cargo test --workspace --tests
-cargo deny check advisories licenses bans sources
-
-# Then continue execution from Wave 3
+# Continue execution from Wave 4 on macOS (hdiutil + cargo-bundle available)
 /gsd-execute-phase 1
 ```
 
-The `/gsd-execute-phase` workflow auto-skips plans 01-01 and 01-02 (their SUMMARY.md files
-exist) and resumes from 01-03.
-
-**Important note for Wave 2 → 3 hand-off:**
-
-Plan 01-02's worktree-isolated executor bypassed the cargo-husky pre-commit hook (gitlink
-`.git` in worktrees) so its committed code didn't fmt/clippy-check against the lints it
-just installed. The orchestrator layered an integration fix in commit `cd05f27`:
-- `cargo fmt --all` applied across 14 `no_tokio_main.rs` files
-- 3 pedantic clippy lints muted workspace-wide for stub-scaffolding noise:
-  `unnecessary_wraps`, `doc_markdown`, `unnecessary_debug_formatting`
+The `/gsd-execute-phase` workflow auto-skips plans 01-01 / 01-02 / 01-03 (their SUMMARY.md
+files exist) and resumes from 01-04.
 
 **Files to re-read on resume:**
 
@@ -138,7 +118,8 @@ just installed. The orchestrator layered an integration fix in commit `cd05f27`:
 3. `.planning/PROJECT.md` — core value, constraints, key decisions
 4. `.planning/phases/01-foundation-ci-dmg-pipeline/01-01-SUMMARY.md` — workspace scaffold details
 5. `.planning/phases/01-foundation-ci-dmg-pipeline/01-02-SUMMARY.md` — lints + cargo-deny + arch-lint details
+6. `.planning/phases/01-foundation-ci-dmg-pipeline/01-03-SUMMARY.md` — threading skeleton + AppKit window + menu + overlay details
 
 ---
 *State initialized: 2026-05-10*
-*Paused mid-phase 1 (after Wave 2): 2026-05-10*
+*Plan 01-03 completed: 2026-05-10*

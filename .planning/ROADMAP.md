@@ -36,7 +36,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 **Plans**: 6 plans
   - [x] 01-01-PLAN.md — Workspace skeleton + toolchain pin + xtask alias + 14 crate stubs
   - [x] 01-02-PLAN.md — Workspace lints + cargo-deny + cargo-husky + per-crate architecture-lint tests
-  - [ ] 01-03-PLAN.md — Threading skeleton + AppKit window + native menu + version overlay + build.rs SHA
+  - [x] 01-03-PLAN.md — Threading skeleton + AppKit window + native menu + version overlay + build.rs SHA
   - [ ] 01-04-PLAN.md — xtask separate workspace + cargo-bundle + create-dmg + universal DMG pipeline (Wave-0 spike)
   - [ ] 01-05-PLAN.md — GitHub Actions ci.yml: matrix-then-merge build + tip release (macos-15-intel amendment)
   - [ ] 01-06-PLAN.md — release.yml on v* tags + README install block + ADRs 0001..0006 + branch protection setup
@@ -209,7 +209,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & CI/DMG Pipeline | 0/0 | Not started | - |
+| 1. Foundation & CI/DMG Pipeline | 3/6 | In Progress | - |
 | 2. Headless Terminal Core | 0/0 | Not started | - |
 | 3. GPU Renderer & First Paint | 0/0 | Not started | - |
 | 4. Mux — Tabs & Splits | 0/0 | Not started | - |
