@@ -1605,26 +1605,30 @@ scopes:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `cargo bundle --release` reliably pick up the universal binary we placed at `target/release/`?**
    - What we know: cargo-bundle reads the binary from `target/<profile>/<bin-name>` based on the active target triple.
    - What's unclear: whether passing no `--target` defaults to the host triple, in which case `lipo`-merged universal binary may be silently dropped.
    - Recommendation: Wave 0 smoke task — run `cargo xtask dmg --universal` locally on Apple Silicon and verify `lipo -info Vector.app/Contents/MacOS/vector-app` shows both archs. If broken, use the `cargo-bundle --bin <name>` + post-process patch route documented in A5.
+   - **RESOLVED:** Wave-0 smoke test scheduled in 01-04 Task 1; cargo-bundle accepts the pre-merged universal binary at target/release/ per the spike.
 
 2. **Branch protection automation: probot/settings or manual?**
    - What we know: probot/settings exists and works, but requires a GitHub App install.
    - What's unclear: whether the user wants to install a third-party app on the repo.
    - Recommendation: Manual configuration via UI, documented in `0006-branch-protection.md` ADR (or fold into `0001`). Add a setup-checklist to `docs/setup.md` so future contributors can re-verify.
+   - **RESOLVED:** 01-06 documents manual UI configuration in docs/setup.md and captures the decision in ADR 0006; probot/settings deferred until multi-contributor scenario emerges.
 
 3. **Should `cargo-husky` be opt-in via env var or always-on with a CI gate?**
    - What we know: `cargo-husky` installs hooks at first build; CI must not install them.
    - What's unclear: whether contributors who don't want auto-hooks have a clean way to opt out.
    - Recommendation: `CARGO_HUSKY_DONT_INSTALL_HOOKS=1` env var, documented in CONTRIBUTING.md. Default = hooks-on for local devs.
+   - **RESOLVED:** 01-02 documents the CARGO_HUSKY_DONT_INSTALL_HOOKS=1 environment variable; 01-05 ci.yml sets it in the workflow env: block; manual verification step captured in 01-02-SUMMARY.md.
 
 4. **convco install via `cargo install convco` vs prebuilt binary download?**
    - What we know: `cargo install convco` works but takes 30–60s in CI.
    - Recommendation: download prebuilt from GH Releases (5s). Cache the binary in `Swatinem/rust-cache@v2` for free.
+   - **RESOLVED:** 01-05 ci.yml uses the prebuilt binary curl-download (~5s) over cargo install (~30s) per the recommendation.
 
 ---
 
