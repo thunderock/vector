@@ -10,3 +10,6 @@ description = "TOML config + hot reload — Phase 5 (serde + toml + notify)."
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

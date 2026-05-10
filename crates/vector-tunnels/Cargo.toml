@@ -10,3 +10,6 @@ description = "Microsoft Dev Tunnels client — Phase 8 (microsoft/dev-tunnels r
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

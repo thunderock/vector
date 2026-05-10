@@ -10,3 +10,6 @@ description = "macOS Keychain token storage — Phase 6 (keyring 4.0)."
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

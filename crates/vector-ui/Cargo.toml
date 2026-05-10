@@ -10,3 +10,6 @@ description = "Non-grid UI surfaces — tab bar, picker, settings — Phase 4+."
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

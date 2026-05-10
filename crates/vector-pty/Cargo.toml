@@ -10,3 +10,6 @@ description = "Local PTY pair + child spawn — Phase 2 (portable-pty wrapper)."
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

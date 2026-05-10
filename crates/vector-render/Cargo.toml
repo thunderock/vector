@@ -10,3 +10,6 @@ description = "GPU pipeline, glyph atlas, damage tracking — Phase 3 (wgpu, Met
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true
