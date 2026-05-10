@@ -1,0 +1,12 @@
+[package]
+name = "vector-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "GPU pipeline, glyph atlas, damage tracking — Phase 3 (wgpu, Metal)."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

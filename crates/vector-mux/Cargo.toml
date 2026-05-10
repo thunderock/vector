@@ -1,0 +1,12 @@
+[package]
+name = "vector-mux"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Window/Tab/Pane mux tree and Domain trait — Phase 4."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "vector-tunnels"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Microsoft Dev Tunnels client — Phase 8 (microsoft/dev-tunnels rs/)."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

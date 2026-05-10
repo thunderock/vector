@@ -1,0 +1,12 @@
+[package]
+name = "vector-secrets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "macOS Keychain token storage — Phase 6 (keyring 4.0)."
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
