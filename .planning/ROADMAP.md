@@ -35,7 +35,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   4. The skeleton runs `winit::EventLoop` on the main thread and a multi-thread `tokio` runtime on background threads, with `EventLoopProxy::send_event` as the only cross-thread signal — verified by an architecture lint and a smoke test that crashes the build if a `tokio::main` macro reappears.
 **Plans**: 6 plans
   - [x] 01-01-PLAN.md — Workspace skeleton + toolchain pin + xtask alias + 14 crate stubs
-  - [ ] 01-02-PLAN.md — Workspace lints + cargo-deny + cargo-husky + per-crate architecture-lint tests
+  - [x] 01-02-PLAN.md — Workspace lints + cargo-deny + cargo-husky + per-crate architecture-lint tests
   - [ ] 01-03-PLAN.md — Threading skeleton + AppKit window + native menu + version overlay + build.rs SHA
   - [ ] 01-04-PLAN.md — xtask separate workspace + cargo-bundle + create-dmg + universal DMG pipeline (Wave-0 spike)
   - [ ] 01-05-PLAN.md — GitHub Actions ci.yml: matrix-then-merge build + tip release (macos-15-intel amendment)

@@ -37,7 +37,11 @@ fn scan_dir(root: &Path, dir: &Path) {
 }
 
 fn check_file(root: &Path, path: &Path) {
-    let rel = path.strip_prefix(root).unwrap_or(path).display().to_string();
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string();
     let body = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
     for pattern in FORBIDDEN {
         assert!(
@@ -46,7 +50,9 @@ fn check_file(root: &Path, path: &Path) {
         );
     }
     if body.contains("block_on(") {
-        let allowed = BLOCK_ON_ALLOWLIST.iter().any(|a| rel.replace('\\', "/").ends_with(a));
+        let allowed = BLOCK_ON_ALLOWLIST
+            .iter()
+            .any(|a| rel.replace('\\', "/").ends_with(a));
         assert!(
             allowed,
             "{rel}: `block_on` outside allowlist (D-08). Allowlist: {BLOCK_ON_ALLOWLIST:?}.",
