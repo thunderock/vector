@@ -12,7 +12,7 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-vector-pty = { path = "../vector-pty" }
+vector-pty = { path = "../vector-pty", version = "2026.5.10" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
