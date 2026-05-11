@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Ready to plan
-stopped_at: Phase 3 context gathered (D-40..D-55 captured)
-last_updated: "2026-05-11T17:51:47.012Z"
+status: Ready to execute
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-05-11T19:37:29.362Z"
 progress:
   total_phases: 11
   completed_phases: 2
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 16
+  completed_plans: 12
 ---
 
 # Project State: Vector
@@ -20,12 +20,12 @@ progress:
 
 **Core value:** Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
 
-**Current focus:** Phase 02 — headless-terminal-core
+**Current focus:** Phase 03 — gpu-renderer-first-paint
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
+Phase: 03 (gpu-renderer-first-paint) — EXECUTING
+Plan: 2 of 5
 
 ## Phase Map
 
@@ -59,6 +59,7 @@ Plan: Not started
 | Phase 02-headless-terminal-core P04 | 4min | 2 tasks | 9 files |
 | Phase 02-headless-terminal-core P05 | 15min | 3 tasks (2 commits + 1 manual UAT) | 6 files |
 | Phase 02 P05 | 15min | 3 tasks | 6 files |
+| Phase 03-gpu-renderer-first-paint P01 | 11min | 2 tasks | 35 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ Plan: Not started
 - **Phase 2 Plan 05 (Wave 4) complete (2026-05-11):** `vector-headless` binary ships — pass-through proxy that spawns `$SHELL` via `LocalDomain`, bridges parent stdin (raw mode, scopeguard-restored on panic) to PTY, pumps PTY output through `Term` (`parking_lot::Mutex` lock-mutate-drop, never across `.await`), repaints the grid at 30Hz with hide-cursor bracketing + 24-bit truecolor + 256-color emit. **Actor pattern over `Box<dyn PtyTransport>`**: `transport_actor` is sole owner of the transport, `biased` `tokio::select!` prioritizes resize over write so SIGWINCH is never starved, `transport.wait()` called exactly once AFTER both command channels close. Eliminates the held-Mutex-across-await pattern entirely — no `tokio::sync::Mutex` over the transport; `clippy::await_holding_lock = "deny"` (D-11) holds at compile time. User-approved 5-step smoke matrix on host parent terminal: `echo hello` / vim / tmux+split / htop / `less +F` — all PASS. CORE-04 verified live (parent terminal resize reflowed tmux pane + htop layout within ~1s). Two task commits: `ab50bf1` + `4a107b0`; Task 3 is a manual UAT checkpoint per VALIDATION.md §"Manual-Only Verifications" (no commit; user "approved" reply 2026-05-11T16:55Z is the gate). Three auto-fixed code deviations: Rule 2 (hide-cursor `\x1b[?25l ... \x1b[?25h` bracketing each frame to kill the 30Hz strobe of cursor positioning), Rule 3 (best-effort raw mode — skip `enable_raw_mode()` when stdin isn't a tty so CI / `< /dev/null` smokes work), Rule 3 (added `alacritty_terminal` as direct binary-local dep for `Color`/`Cell`/`Point` types in `render.rs`; re-export via vector-term would have polluted that crate's public API). One documented-not-fixed shell-side behavior: zsh in `/dev/null` mode holds its prompt on lone EOT (acceptable per plan acceptance criteria — interactive smokes all exit cleanly with `exit` keystroke). Phase 2 closes; Phase 3 (GPU renderer) inherits the Term + PTY + transport plumbing untouched and only swaps `render.rs` for a wgpu glyph atlas (actor pattern, SharedTerm `Arc<parking_lot::Mutex<Term>>`, SIGWINCH watcher, scopeguard discipline all carry forward).
 - **Phase 2 Plan 04 (Wave 3) complete (2026-05-11):** `vector-mux` ships `PtyTransport` + `Domain` traits in their FINAL D-38 shape (`async_trait` boxed futures; `Send + 'static` / `Send + Sync` respectively). `LocalDomain` fully implemented: `$SHELL` → `/etc/passwd` (keyed by `id -un`) → `/bin/zsh` → `/bin/bash` resolution chain; `LocalDomain::spawn(SpawnCommand)` returns `Box<dyn PtyTransport>` wrapping `LocalPty` via the `LocalTransport` newtype (the newtype lives in vector-mux, NOT in vector-pty, to avoid a vector-pty → vector-mux dep cycle while keeping the trait surface in the consumer crate per D-38). `CodespaceDomain::spawn` `unimplemented!("Phase 7")`; `DevTunnelDomain::spawn` `unimplemented!("Phase 8")`; both `reconnect` bodies `unimplemented!("Phase 9: Persistence + reconnect")`. 8 tests pass: 2 compile-time object-safety, 3 label/alive, 2 should_panic phase markers, and **1 end-to-end CORE-04/05 reachability proof** (`LocalDomain::spawn` of `sh -c "echo hi"` through `Box<dyn PtyTransport>` collects "hi" via `take_reader()` and gets `Ok(Some(0))` from `wait()` — proving the trait surface, not just direct LocalPty, carries CORE-04 clean-exit and CORE-05 TERM env). One surface change in vector-pty: `LocalPty::write(&self)` → `LocalPty::write(&mut self)` (Rule 3 blocking fix — `Box<dyn portable_pty::MasterPty + Send>` is `!Sync` so the trait-object Send-future bound forced `&mut self` borrow; no vector-pty caller invokes `.write` in Plan 02-03's tests so the change is zero-risk to existing contracts). Two task commits: b88a02d + c0ad634. Four auto-fixed deviations: 1 Rule 3 (LocalPty::write signature) + 3 Rule 1 (clippy `no_effect_underscore_binding`, `while_let_loop`, rustfmt long-line wrapping).
 - **Phase 2 Plan 02 (Wave 1) complete (2026-05-11):** `vector-term` ships its full public API — `Term::new/feed/resize/grid/cursor/mode/dims/search` + `Match` struct — backed by `alacritty_terminal 0.26`. 26 conformance tests pass in 0.34s wall-clock (D-37 budget was 1s). CORE-01 (CSI/OSC/DCS/partial-UTF-8/alt-screen-1049/DECSTBM/ED/EL), CORE-02 (24-bit + 256-color SGR via `Color::Spec(Rgb)` / `Color::Indexed(u8)` + CJK/emoji-ZWJ `WIDE_CHAR + WIDE_CHAR_SPACER` flags), CORE-03 (10k+ scrollback regex via streaming `RegexSearch`+`RegexIter`, ~150ms — Pitfall 7 honored), CORE-06 (BRACKETED_PASTE + MOUSE_REPORT_CLICK + SGR_MOUSE bit toggles) all covered. search.rs ships with Task 1 (c4bb201) because the ED-2-vs-scrollback test consumes it; Task 2 (5a1fc48) lands CORE-02/03 fixtures. Four auto-fixed deviations (clippy cast lints + manual_let_else + rustfmt assert wrap + the discovery that `\b` doesn't fire in regex_automata's hybrid DFA — substring patterns are our search contract). No `unsafe`, no `from_utf8` in feed path (Pitfall 4), no string materialization in search (Pitfall 7). `_api_probe` retired; the real wrapper is now the load-bearing compile check.
+- **Phase 3 Plan 01 complete (2026-05-11):** wgpu 29 Metal `Surface<'static>` bootstrapped via `Arc<Window>`; `vector-render::RenderContext` (`new`/`resize`/`render_clear`) configured with `PresentMode::Fifo` (D-45) on `Backends::METAL`. `vector-app::App` now holds `Arc<parking_lot::Mutex<Term>>` shared with `pty_actor` (I/O-thread `LocalDomain::spawn` → `EventLoopProxy<UserEvent::PtyOutput>`); Phase-1 NSTextField overlay drops exactly once on first PtyOutput (D-51); `RedrawRequested` paints clear-color via `RenderHost::render_clear_default` (xterm-256 dark; theme uniform deferred to Plan 03-05). `Term::damage()` + `reset_damage()` exposed as `&mut self`; `TermDamage`, `TermDamageIterator`, `LineDamageBounds` re-exported via `vector_term::*` (Plan 03-03 compositor seam). 7 workspace deps locked at exact pins: `wgpu 29.0.3`, `crossfont 0.9.0`, `bytemuck 1.25`, `parking_lot 0.12.5`, `pollster 0.4.0`, `etagere 0.2`, `unicode-width 0.2.2`. 20 `#[ignore = "Wave-0 stub"]` test files seeded across vector-render (11) + vector-fonts (4) + vector-input (2) + vector-app (3) — full mapping in 03-01-SUMMARY.md "Wave-0 Stub Map". 5 deviations: 4 Rule-1/3 auto-fixes (wgpu 29 API drift from plan snippets: `InstanceDescriptor::new_without_display_handle`, `ExperimentalFeatures` field on `DeviceDescriptor`, `multiview_mask` on `RenderPassDescriptor`, `depth_slice` on `RenderPassColorAttachment`, `CurrentSurfaceTexture` enum replacing `Result<_, SurfaceError>`; `clippy::needless_pass_by_value` forced `&Arc<Window>`; `clippy::ignore_without_reason` required `#[ignore = "…"]` reason strings on all 20 stubs; vector-render arch-lint `BLOCK_ON_ALLOWLIST` extended with `pipeline.rs` for `pollster::block_on` of wgpu init on macOS main thread — D-09 PTY-on-tokio invariant intact) + 1 doc drift (plan body said "17 stubs" but `<files>` list enumerated 20; shipped 20). `cargo run -p vector-app --release` alive 5s with clean SIGTERM exit; `cargo test --workspace --tests` 55 passed / 0 failed / 18 ignored (baseline 53 + 2 un-ignored: `pipeline_init` + `win_style_mask`). Arch-lint 15==15 holds. Two task commits: `cd0159d` + `eea4540`.
 
 ### Open Questions / Risk Register
 
@@ -129,9 +131,9 @@ Plan: Not started
 
 ## Session Continuity
 
-**Last session:** 2026-05-11T17:51:47.007Z
+**Last session:** 2026-05-11T19:37:29.359Z
 
-**Stopped at:** Phase 3 context gathered (D-40..D-55 captured)
+**Stopped at:** Completed 03-01-PLAN.md
 
 **Next action:**
 

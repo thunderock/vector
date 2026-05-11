@@ -26,15 +26,15 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 
 ### Rendering
 
-- [ ] **RENDER-01**: GPU-accelerated rendering targets the Metal backend of `wgpu`, with damage-tracked redraws (only dirty rows shaped/uploaded)
+- [x] **RENDER-01**: GPU-accelerated rendering targets the Metal backend of `wgpu`, with damage-tracked redraws (only dirty rows shaped/uploaded)
 - [ ] **RENDER-02**: Sustained `cat large.log` output reaches at least 60 fps on Apple Silicon at 1080p; ProMotion (120 Hz) is detected and honored
-- [ ] **RENDER-03**: Idle CPU usage stays below 1% on Apple Silicon (no redraw when nothing is dirty)
+- [x] **RENDER-03**: Idle CPU usage stays below 1% on Apple Silicon (no redraw when nothing is dirty)
 - [ ] **RENDER-04**: Glyph atlas separates monochrome and emoji textures, evicts via bounded LRU, and survives mid-session scale changes (Retina ↔ external monitor)
 - [ ] **RENDER-05**: Cursor and selection overlays render correctly under the live text grid
 
 ### Window & Mux
 
-- [ ] **WIN-01**: Native macOS AppKit window with title bar, fullscreen, and standard window-control buttons
+- [x] **WIN-01**: Native macOS AppKit window with title bar, fullscreen, and standard window-control buttons
 - [ ] **WIN-02**: Tabs — open new tab (Cmd-T), cycle (Cmd-Shift-]/[), close (Cmd-W). Native `NSWindowTabbingMode` or visually equivalent custom bar.
 - [ ] **WIN-03**: Splits — horizontal (Cmd-D) and vertical (Cmd-Shift-D) splits within a tab, with focus routing and per-pane resize
 - [ ] **WIN-04**: A `Domain / Pane / PtyTransport` abstraction (WezTerm-style) is the only seam between terminal model and transport — local, SSH, and tunnel transports all implement the same trait
@@ -163,12 +163,12 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | CORE-04 | Phase 2 | Complete |
 | CORE-05 | Phase 2 | Complete |
 | CORE-06 | Phase 2 | Complete |
-| RENDER-01 | Phase 3 | Pending |
+| RENDER-01 | Phase 3 | Complete |
 | RENDER-02 | Phase 3 | Pending |
-| RENDER-03 | Phase 3 | Pending |
+| RENDER-03 | Phase 3 | Complete |
 | RENDER-04 | Phase 3 | Pending |
 | RENDER-05 | Phase 3 | Pending |
-| WIN-01 | Phase 3 | Pending |
+| WIN-01 | Phase 3 | Complete |
 | WIN-02 | Phase 4 | Pending |
 | WIN-03 | Phase 4 | Pending |
 | WIN-04 | Phase 4 | Pending |
