@@ -13,6 +13,7 @@ members = [
     "crates/vector-config",
     "crates/vector-secrets",
     "crates/vector-fonts",
+    "crates/vector-headless",
     "crates/vector-input",
     "crates/vector-theme",
 ]
@@ -26,17 +27,21 @@ authors = ["Vector contributors"]
 repository = "https://github.com/colligo/vector"
 
 [workspace.dependencies]
-winit = { version = "0.30.13", default-features = false, features = ["rwh_06"] }
+alacritty_terminal = "0.26"
+anyhow = "1"
+async-trait = "0.1"
 objc2 = "0.6.4"
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
 objc2-quartz-core = { version = "0.3", features = ["CALayer", "objc2-core-foundation", "objc2-core-graphics"] }
+portable-pty = "0.9"
 raw-window-handle = "0.6"
+regex = "1"
+thiserror = "2"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-anyhow = "1"
-thiserror = "2"
+winit = { version = "0.30.13", default-features = false, features = ["rwh_06"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

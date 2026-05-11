@@ -1,0 +1,30 @@
+[package]
+name = "vector-headless"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Headless pass-through proxy binary — Phase 2 (Plan 02-05 fills body)."
+
+[[bin]]
+name = "vector-headless"
+path = "src/main.rs"
+
+[dependencies]
+vector-term = { path = "../vector-term" }
+vector-pty = { path = "../vector-pty" }
+vector-mux = { path = "../vector-mux" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait = { workspace = true }
+regex = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.29"
+scopeguard = "1"
+
+[lints]
+workspace = true
