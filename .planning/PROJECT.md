@@ -12,7 +12,7 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] CI build pipeline that produces installable `.dmg` artifacts (Phase 1 — structural; first real CI run + first tagged release deferred to user's async push session)
 
 ### Active
 
@@ -27,7 +27,7 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 - [ ] Connect to a remote machine running `code tunnel` (Microsoft Dev Tunnels) using GitHub auth
 - [ ] Saved profiles (`my-cs-frontend`, `my-corp-box`, etc.) for one-click reconnect
 - [ ] Themes, fonts, ligatures (table-stakes terminal eye-candy)
-- [ ] CI build pipeline that produces installable `.dmg` artifacts on every tag (ghostty-style "tip" + tagged releases)
+- [x] CI build pipeline that produces installable `.dmg` artifacts on every tag (ghostty-style "tip" + tagged releases) — landed in Phase 1; awaiting first real push/tag
 
 ### Out of Scope
 
@@ -99,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-10 after initialization*
+*Last updated: 2026-05-11 after Phase 1 (Foundation & CI/DMG Pipeline) completion. Workspace + 14 crate stubs + winit/tokio threading skeleton + AppKit window + Universal DMG build path + ci.yml + release.yml + ADRs 0001..0006 all in place; real-world CI/release telemetry pending user's async push.*
