@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Executing Phase 02
-stopped_at: Completed Phase 02 Plan 01 (Wave 0 scaffold + API spike); ready for Wave 1 (Plan 02-02)
-last_updated: "2026-05-11T16:05:28.686Z"
+status: Ready to execute
+stopped_at: Completed Phase 02 Plan 02 (vector-term wrapper + 26 conformance tests); ready for Wave 2 (Plan 02-03 vector-pty)
+last_updated: "2026-05-11T16:17:25.639Z"
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State: Vector
@@ -25,7 +25,7 @@ progress:
 ## Current Position
 
 Phase: 02 (headless-terminal-core) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 
 ## Phase Map
 
@@ -54,6 +54,7 @@ Plan: 2 of 5
 | Phase 01-foundation-ci-dmg-pipeline P05 | 1 task commit + checkpoint approved no-push | 2 tasks | 1 files |
 | Phase 01-foundation-ci-dmg-pipeline P06 | 2 task commits + checkpoint approved no-action | 3 tasks | 10 files |
 | Phase 02-headless-terminal-core P01 | 7min | 3 tasks | 21 files |
+| Phase 02-headless-terminal-core P02 | 7min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,7 @@ Plan: 2 of 5
 - **Plan 01-06 reconciliation:** docs/setup.md §3 enumerates only the 4 PR-reachable required-status-check names (lint, commitlint, test, deny). The 3 push-gated jobs (build-arm64, build-x86_64, package) cannot be required because they never run on PRs (per ci.yml D-17 conditional gate) — listing them would deadlock PR merges. ADR 0006 records the rationale; this reconciles Plan 01-05's overstated hand-off with CONTEXT D-34 ("Universal-DMG build is intentionally NOT a required check").
 - **Phase 1 implementation complete (Plan 01-06):** release.yml + README install block (D-26 place 2 of 3) + CHANGELOG seed + 6 MADR ADRs (D-01..D-35 documented) + docs/setup.md branch-protection guide all committed (4dd0c4e + 75b77b1). xattr literal byte-identical across 4 surfaces (README, ci.yml tip body, release.yml tag body, DMG bg PNG). Terminal human-action checkpoint user-approved without GitHub UI action — branch-protection state + first-tagged-release deferred to user's async push per CLAUDE.md `do not push`.
 - **Phase 2 Plan 01 (Wave 0) complete (2026-05-11):** vector-headless added as 15th workspace member; 4 deps (`alacritty_terminal 0.26`, `portable-pty 0.9`, `regex 1`, `async-trait 0.1`) declared at workspace level; 13 `#[ignore]` test scaffolds created (10 vector-term + 2 vector-pty + 1 vector-mux) covering CORE-01..06 + D-38; alacritty_terminal 0.26 API spike resolved Open Questions 1–3 (`Processor` at `vte::ansi` re-exported via root, `Color::Spec(Rgb)`, `Config.scrolling_history: usize` default 10000); hand-rolled `VectorDims` impl of `grid::Dimensions` chosen over `term::test::TermSize`; `_api_probe` module in vector-term/src/lib.rs is the load-bearing compile check that catches future API drift (replaced by Plan 02-02). Three task commits: 70dd49b + c565208 + 6ea3131. Auto-fixed 2 clippy/fmt lints during Task 3 verification (Rule 1).
+- **Phase 2 Plan 02 (Wave 1) complete (2026-05-11):** `vector-term` ships its full public API — `Term::new/feed/resize/grid/cursor/mode/dims/search` + `Match` struct — backed by `alacritty_terminal 0.26`. 26 conformance tests pass in 0.34s wall-clock (D-37 budget was 1s). CORE-01 (CSI/OSC/DCS/partial-UTF-8/alt-screen-1049/DECSTBM/ED/EL), CORE-02 (24-bit + 256-color SGR via `Color::Spec(Rgb)` / `Color::Indexed(u8)` + CJK/emoji-ZWJ `WIDE_CHAR + WIDE_CHAR_SPACER` flags), CORE-03 (10k+ scrollback regex via streaming `RegexSearch`+`RegexIter`, ~150ms — Pitfall 7 honored), CORE-06 (BRACKETED_PASTE + MOUSE_REPORT_CLICK + SGR_MOUSE bit toggles) all covered. search.rs ships with Task 1 (c4bb201) because the ED-2-vs-scrollback test consumes it; Task 2 (5a1fc48) lands CORE-02/03 fixtures. Four auto-fixed deviations (clippy cast lints + manual_let_else + rustfmt assert wrap + the discovery that `\b` doesn't fire in regex_automata's hybrid DFA — substring patterns are our search contract). No `unsafe`, no `from_utf8` in feed path (Pitfall 4), no string materialization in search (Pitfall 7). `_api_probe` retired; the real wrapper is now the load-bearing compile check.
 
 ### Open Questions / Risk Register
 
@@ -120,9 +122,9 @@ Plan: 2 of 5
 
 ## Session Continuity
 
-**Last session:** 2026-05-11T16:05:28.683Z
+**Last session:** 2026-05-11T16:17:25.635Z
 
-**Stopped at:** Completed Phase 02 Plan 01 (Wave 0 scaffold + API spike); ready for Wave 1 (Plan 02-02)
+**Stopped at:** Completed Phase 02 Plan 02 (vector-term wrapper + 26 conformance tests); ready for Wave 2 (Plan 02-03 vector-pty)
 
 **Next action:**
 
