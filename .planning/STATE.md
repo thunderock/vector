@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Ready to plan
-stopped_at: Phase 2 context gathered (D-36..D-39 captured)
-last_updated: "2026-05-11T06:03:38.148Z"
+status: Executing Phase 02
+stopped_at: Completed Phase 02 Plan 01 (Wave 0 scaffold + API spike); ready for Wave 1 (Plan 02-02)
+last_updated: "2026-05-11T16:05:28.686Z"
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 11
+  completed_plans: 7
 ---
 
 # Project State: Vector
@@ -20,19 +20,19 @@ progress:
 
 **Core value:** Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
 
-**Current focus:** Phase 2: Headless Terminal Core (Phase 1 complete + operationally validated; recommended entry: `/gsd:discuss-phase 2`)
+**Current focus:** Phase 02 — headless-terminal-core
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
+Phase: 02 (headless-terminal-core) — EXECUTING
+Plan: 2 of 5
 
 ## Phase Map
 
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | Foundation & CI/DMG Pipeline | Complete + operationally validated (2026-05-11) |
-| 2 | Headless Terminal Core | Not started |
+| 2 | Headless Terminal Core | In progress (Plan 02-01 Wave 0 complete; Wave 1 next) |
 | 3 | GPU Renderer & First Paint | Not started |
 | 4 | Mux — Tabs & Splits | Not started |
 | 5 | Polish (Local Daily-Driver) | Not started |
@@ -53,6 +53,7 @@ Plan: Not started
 | v1 requirements completed | 6 / 51 (WIN-05, BUILD-01, BUILD-02, BUILD-03, BUILD-04, BUILD-05) — all operationally validated end-to-end on GitHub on 2026-05-11 |
 | Phase 01-foundation-ci-dmg-pipeline P05 | 1 task commit + checkpoint approved no-push | 2 tasks | 1 files |
 | Phase 01-foundation-ci-dmg-pipeline P06 | 2 task commits + checkpoint approved no-action | 3 tasks | 10 files |
+| Phase 02-headless-terminal-core P01 | 7min | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,7 @@ Plan: Not started
 - **Branch-protection contract for Plan 01-06:** the 7 required-status-check job names are `lint, commitlint, test, deny, build-arm64, build-x86_64, package`. Plan 01-06's setup script must list these exactly; any rename in ci.yml requires a lock-step update or branch protection silently no-ops.
 - **Plan 01-06 reconciliation:** docs/setup.md §3 enumerates only the 4 PR-reachable required-status-check names (lint, commitlint, test, deny). The 3 push-gated jobs (build-arm64, build-x86_64, package) cannot be required because they never run on PRs (per ci.yml D-17 conditional gate) — listing them would deadlock PR merges. ADR 0006 records the rationale; this reconciles Plan 01-05's overstated hand-off with CONTEXT D-34 ("Universal-DMG build is intentionally NOT a required check").
 - **Phase 1 implementation complete (Plan 01-06):** release.yml + README install block (D-26 place 2 of 3) + CHANGELOG seed + 6 MADR ADRs (D-01..D-35 documented) + docs/setup.md branch-protection guide all committed (4dd0c4e + 75b77b1). xattr literal byte-identical across 4 surfaces (README, ci.yml tip body, release.yml tag body, DMG bg PNG). Terminal human-action checkpoint user-approved without GitHub UI action — branch-protection state + first-tagged-release deferred to user's async push per CLAUDE.md `do not push`.
+- **Phase 2 Plan 01 (Wave 0) complete (2026-05-11):** vector-headless added as 15th workspace member; 4 deps (`alacritty_terminal 0.26`, `portable-pty 0.9`, `regex 1`, `async-trait 0.1`) declared at workspace level; 13 `#[ignore]` test scaffolds created (10 vector-term + 2 vector-pty + 1 vector-mux) covering CORE-01..06 + D-38; alacritty_terminal 0.26 API spike resolved Open Questions 1–3 (`Processor` at `vte::ansi` re-exported via root, `Color::Spec(Rgb)`, `Config.scrolling_history: usize` default 10000); hand-rolled `VectorDims` impl of `grid::Dimensions` chosen over `term::test::TermSize`; `_api_probe` module in vector-term/src/lib.rs is the load-bearing compile check that catches future API drift (replaced by Plan 02-02). Three task commits: 70dd49b + c565208 + 6ea3131. Auto-fixed 2 clippy/fmt lints during Task 3 verification (Rule 1).
 
 ### Open Questions / Risk Register
 
@@ -118,9 +120,9 @@ Plan: Not started
 
 ## Session Continuity
 
-**Last session:** 2026-05-11T06:03:38.144Z
+**Last session:** 2026-05-11T16:05:28.683Z
 
-**Stopped at:** Phase 2 context gathered (D-36..D-39 captured)
+**Stopped at:** Completed Phase 02 Plan 01 (Wave 0 scaffold + API spike); ready for Wave 1 (Plan 02-02)
 
 **Next action:**
 
