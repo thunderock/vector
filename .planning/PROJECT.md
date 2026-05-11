@@ -14,11 +14,11 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 
 - [x] CI build pipeline that produces installable `.dmg` artifacts (Phase 1 — operationally validated 2026-05-11; CI tip + tagged v2026.5.10 Universal DMG both confirmed launching on macOS Sequoia)
 - [x] xterm-compatible terminal core (parser + grid + scrollback) suitable as a daily-driver local shell (Phase 2 — `vector-headless` proxy ran vim/tmux/htop/less cleanly on 2026-05-11; CORE-01..06 backed by 53 passing tests, conformance suite 0.326s vs 1s D-37 budget)
+- [x] GPU-accelerated terminal rendering on Mac (Metal via wgpu) — Phase 3 operationally validated 2026-05-11: wgpu Metal `Surface<'static>` with PresentMode::Fifo, crossfont + dual-atlas (mono RGBA8 + color emoji) with bounded LRU, Compositor reading `Term::damage()` with truecolor/256-color SGR + per-cell selection bit + block cursor, xterm keymap + bracketed paste + click-drag selection + scroll-wheel scrollback, PTY-burst coalescing (8 ms), LPM 30 fps cap, DPR atlas invalidation, debounced resize, first-paint timing gate. RENDER-01..05 + WIN-01 all verified. Workspace: 175 passing / 0 failed / 0 ignored. 9-item manual smoke matrix signed off (vim, large.log fps, idle <1% CPU, Retina swap, selection, Cmd-V paste, ProMotion, LPM, Cmd-Ctrl-F fullscreen).
 
 ### Active
 
 - [ ] Native macOS app distributed as an unsigned `.dmg` (right-click → Open), Universal binary
-- [ ] GPU-accelerated terminal rendering on Mac (Metal via wgpu) — performance comparable to Alacritty/WezTerm/ghostty
 - [ ] Tabs and splits (horizontal/vertical), multiple sessions per window
 - [ ] Session persistence + transparent reconnect — wifi drop should not lose Codespace state
 - [ ] tmux pass-through that "just works" — no double-multiplex visual glitches when remote tmux is running
@@ -99,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-11 after Phase 2 complete — `vector-headless` pass-through proxy ships with locked D-38 `PtyTransport`/`Domain` trait shapes ready for Phases 4/7/8/9 to plug into. `vector-term` (alacritty_terminal 0.26 wrapper, 26 conformance tests in 0.326s), `vector-pty` (portable-pty 0.9 + tokio blocking-thread bridge), `vector-mux` (LocalDomain full impl + Codespace/DevTunnel `unimplemented!()` stubs), and the binary itself all green; user-approved smoke matrix (echo, vim, tmux, htop, less) passed. CORE-01..06 satisfied.*
+*Last updated: 2026-05-11 after Phase 3 complete — GPU renderer first paint shipped. wgpu Metal `Surface<'static>` (PresentMode::Fifo) replaces the Phase-1 NSTextField overlay; `vector-fonts` over crossfont 0.9 CoreText with bundled JetBrains Mono Regular routes glyphs into a two-atlas RGBA8 wgpu texture store (mono + color emoji) with etagere allocation + bounded LRU; `vector-render::Compositor` consumes `Term::damage()` to emit 72-byte `CellInstance` quads with 24-bit truecolor + 256-color SGR + per-cell selection bit and a separate cursor pass; `vector-input` provides the xterm key table, NSPasteboard-backed Cmd-V bracketed paste, and row-major click-drag `SelectionRange`; `pty_actor` extends Phase 2's actor pattern with write + resize + LPM branches and an 8 ms PTY-burst coalescer; Low Power Mode caps to ~30 fps, DPR change clears atlases, resize debounces 50 ms, and a first-paint gate suppresses redraws until the first non-empty PTY drain. Workspace tests 175 passing / 0 failed / 0 ignored, arch-lint invariant intact (15 `no_tokio_main.rs`), 9-item manual smoke matrix signed off. RENDER-01..05 + WIN-01 validated.*
