@@ -1,0 +1,195 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "1"
+  RUST_BACKTRACE: short
+  MACOSX_DEPLOYMENT_TARGET: "13.0"
+
+jobs:
+  lint:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-lint
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  commitlint:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install convco
+        run: |
+          set -euo pipefail
+          curl -sSL https://github.com/convco/convco/releases/latest/download/convco-macos.zip -o /tmp/convco.zip
+          unzip -o /tmp/convco.zip -d /tmp/convco
+          chmod +x /tmp/convco/convco
+          sudo mv /tmp/convco/convco /usr/local/bin/
+      - name: Lint commits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            convco check ${{ github.event.pull_request.base.sha }}..HEAD
+          else
+            # Tolerant on direct main pushes (allows early bootstrap commits).
+            convco check HEAD~10..HEAD || true
+          fi
+
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-test
+      - name: Architecture-lint per-crate tests
+        run: cargo test --workspace --tests
+      - name: Architecture-lint grep redundancy (D-08)
+        run: |
+          set -e
+          if rg -n --glob 'crates/**/*.rs' --glob '!crates/**/tests/no_tokio_main.rs' \
+               '#\[tokio::main\]|Builder::new_current_thread\(\)' ; then
+            echo "::error::Forbidden tokio pattern found in production code (D-08)."
+            exit 1
+          fi
+      - name: Architecture-lint per-crate test file count
+        run: |
+          set -e
+          tests_count=$(ls crates/*/tests/no_tokio_main.rs 2>/dev/null | wc -l)
+          crates_count=$(ls -d crates/vector-* 2>/dev/null | wc -l)
+          if [ "$tests_count" -ne "$crates_count" ]; then
+            echo "::error::Per-crate architecture-lint test count ($tests_count) != crate count ($crates_count). New crate without tests/no_tokio_main.rs?"
+            exit 1
+          fi
+
+  deny:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources
+
+  build-arm64:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, test, deny]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-build-arm64
+      - run: cargo build --release --target aarch64-apple-darwin -p vector-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-aarch64
+          path: target/aarch64-apple-darwin/release/vector-app
+
+  build-x86_64:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, test, deny]
+    runs-on: macos-15-intel    # AMENDMENT to D-21: previous Intel runner retired Dec 2025; macos-15-intel until Aug 2027.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-build-x86_64
+      - run: cargo build --release --target x86_64-apple-darwin -p vector-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-x86_64
+          path: target/x86_64-apple-darwin/release/vector-app
+
+  package:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-arm64, build-x86_64]
+    runs-on: macos-14
+    permissions:
+      contents: write   # for tip release publish
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: actions/download-artifact@v4
+        with:
+          name: vector-aarch64
+          path: artifacts/aarch64
+      - uses: actions/download-artifact@v4
+        with:
+          name: vector-x86_64
+          path: artifacts/x86_64
+      - name: Make per-arch binaries executable
+        run: |
+          chmod +x artifacts/aarch64/vector-app
+          chmod +x artifacts/x86_64/vector-app
+      - name: Pitfall-3 guard — verify per-arch Mach-O before merge
+        run: |
+          set -e
+          file artifacts/aarch64/vector-app | grep -q 'arm64'
+          file artifacts/x86_64/vector-app | grep -q 'x86_64'
+      - name: Install build tools
+        run: |
+          brew install create-dmg librsvg
+          cargo install cargo-bundle@0.10.0 --locked
+      - name: Build Universal DMG via xtask
+        run: |
+          cargo xtask dmg --universal \
+            --arm64 artifacts/aarch64/vector-app \
+            --x86_64 artifacts/x86_64/vector-app
+      - name: Pitfall-3 guard — verify bundled Mach-O is fat
+        run: |
+          set -e
+          BIN="target/release/bundle/osx/Vector.app/Contents/MacOS/vector-app"
+          INFO=$(lipo -info "$BIN")
+          echo "$INFO"
+          echo "$INFO" | grep -q 'x86_64'
+          echo "$INFO" | grep -q 'arm64'
+      - name: Upload Universal DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vector-universal-dmg
+          path: target/dmg/Vector-*-universal.dmg
+          retention-days: 90
+      - name: Publish tip release (overwrite)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          # Rename DMG to tip variant per D-28: Vector-{version}-tip-{shortsha}-universal.dmg
+          for f in target/dmg/Vector-*-universal.dmg; do
+            base=$(basename "$f" .dmg)
+            mv "$f" "target/dmg/${base/-universal/-tip-${SHORT_SHA}-universal}.dmg"
+          done
+          gh release delete tip --yes --cleanup-tag || true
+          NOW=$(date -u +'%Y-%m-%d %H:%M UTC')
+          NOTES=$'Built from `'"${SHORT_SHA}"$'` on '"${NOW}"$'.\n\nAfter installing, run once:\n\n```sh\nxattr -dr com.apple.quarantine /Applications/Vector.app\n```\n'
+          gh release create tip --prerelease --title "Tip build" \
+            --notes "$NOTES" \
+            target/dmg/Vector-*-tip-*-universal.dmg
