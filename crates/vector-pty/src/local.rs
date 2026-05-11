@@ -114,13 +114,7 @@ impl LocalPty {
         })
     }
 
-    pub fn resize(
-        &mut self,
-        rows: u16,
-        cols: u16,
-        px_w: u16,
-        px_h: u16,
-    ) -> Result<(), PtyError> {
+    pub fn resize(&mut self, rows: u16, cols: u16, px_w: u16, px_h: u16) -> Result<(), PtyError> {
         self.master
             .resize(PtySize {
                 rows,
