@@ -12,7 +12,7 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 
 ### Validated
 
-- [x] CI build pipeline that produces installable `.dmg` artifacts (Phase 1 — structural; first real CI run + first tagged release deferred to user's async push session)
+- [x] CI build pipeline that produces installable `.dmg` artifacts (Phase 1 — operationally validated 2026-05-11; CI tip + tagged v2026.5.10 Universal DMG both confirmed launching on macOS Sequoia)
 
 ### Active
 
@@ -27,7 +27,7 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 - [ ] Connect to a remote machine running `code tunnel` (Microsoft Dev Tunnels) using GitHub auth
 - [ ] Saved profiles (`my-cs-frontend`, `my-corp-box`, etc.) for one-click reconnect
 - [ ] Themes, fonts, ligatures (table-stakes terminal eye-candy)
-- [x] CI build pipeline that produces installable `.dmg` artifacts on every tag (ghostty-style "tip" + tagged releases) — landed in Phase 1; awaiting first real push/tag
+- [x] CI build pipeline that produces installable `.dmg` artifacts on every tag (ghostty-style "tip" + tagged releases) — Phase 1 operationally validated 2026-05-11: ci.yml DAG produces `tip` DMG on each master push; release.yml dual-trigger (CLI tag push OR GitHub UI Publish) produces tagged DMG with xattr install footer
 
 ### Out of Scope
 
@@ -99,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-11 after Phase 1 (Foundation & CI/DMG Pipeline) completion. Workspace + 14 crate stubs + winit/tokio threading skeleton + AppKit window + Universal DMG build path + ci.yml + release.yml + ADRs 0001..0006 all in place; real-world CI/release telemetry pending user's async push.*
+*Last updated: 2026-05-11 after Phase 1 operationally validated end-to-end on GitHub. Workspace + 14 crate stubs + winit/tokio threading skeleton + AppKit window + Universal DMG build path + ci.yml + release.yml + ADRs 0001..0006 all in place. CI-produced Vector-2026.5.10-tip-8e540ea-universal.dmg AND tagged Vector-2026.5.10-universal.dmg both confirmed launching on macOS Sequoia. Five Phase-1 divergences (cargo-bundle A5 invalidated, SemVer unpadded CalVer, annotated tags, master/main dual-trigger, deny on ubuntu) captured in ADRs 0004/0005/0006.*

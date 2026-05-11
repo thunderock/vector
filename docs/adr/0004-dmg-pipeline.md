@@ -61,3 +61,17 @@ Per D-25, D-22, D-17, D-18, D-19, D-26. Pipeline:
 - Wave-0 spike (Plan 01-04 SUMMARY) documented the cargo-bundle universal-binary
   path behavior — fallback path (cargo-bundle --bin + post-process) is on the
   bench if cargo-bundle ever regresses.
+
+## Amendment 2026-05-11: Assumption A5 invalidated; fallback now permanent
+
+First real CI run on `master @ 8e540ea` confirmed cargo-bundle 0.10 re-invokes
+`cargo build --release` host-arch only, overwriting any pre-merged universal
+binary staged at `target/release/vector-app` before bundling. The Pitfall-3
+guard caught a non-fat Mach-O after `cargo bundle` ran. The documented fallback
+is now the default code path, not a contingency: `xtask::dmg::finalize`
+post-processes by copying `target/universal-apple-darwin/release/vector-app`
+over `Vector.app/Contents/MacOS/vector-app` after `cargo bundle` completes.
+Conditional on the merged file existing — `dmg_local` (host-arch only) is
+unaffected. Validated by the `tip` release `Vector-2026.5.10-tip-8e540ea-universal.dmg`
+running on the user's Sequoia box (window titled "Vector — tick N", proving
+D-09/D-10/D-14 live).

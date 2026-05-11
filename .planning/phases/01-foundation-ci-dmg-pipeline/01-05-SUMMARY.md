@@ -246,6 +246,28 @@ After the first push, the user should walk the "Outstanding Verification Debt" c
 - `cargo fmt --all -- --check` exits 0 (no Rust files touched this plan).
 - The verification debt for the first real CI run is documented as explicitly outstanding — it is NOT claimed as complete. BUILD-02 / BUILD-04 are marked complete with the pending-real-CI caveat noted here and surfaced for `/gsd:progress` and `/gsd:audit-uat`.
 
+## Addendum 2026-05-11: first real CI run + three CI divergences
+
+CI fired on `master @ 8e540ea` and the full DAG (`lint`, `commitlint`, `test`,
+`deny`, `build-arm64`, `build-x86_64`, `package`) completed green. The `tip`
+pre-release was overwritten with `Vector-2026.5.10-tip-8e540ea-universal.dmg`
+(1.95 MB), and the user confirmed it launches on macOS Sequoia after the
+documented `xattr` step. Three divergences from the original Plan 01-05
+contract surfaced and are now in the codebase:
+
+1. **`deny` runs on `ubuntu-latest`, not `macos-14`.** `EmbarkStudios/cargo-deny-action@v2`
+   is a Docker container action; macOS runners can't host Docker.
+2. **CI triggers on `master` OR `main`.** Repo default is `master`; original
+   `branches: [main]` trigger never fired. Both push trigger and the three
+   push-gated job guards now accept either branch.
+3. **Cargo SemVer rejects leading zeros.** CalVer in `Cargo.toml` is
+   unpadded (`2026.5.10`). `xtask::release` uses chrono `%Y.%-m.%-d`;
+   `xtask::dmg::VERSION` updated to match.
+
+7-vs-4 branch-protection contract unchanged: `lint, commitlint, test, deny`
+are still the four PR-reachable required-status-check names. ADRs 0005 and
+0006 amended.
+
 ---
 *Phase: 01-foundation-ci-dmg-pipeline*
-*Completed: 2026-05-10*
+*Completed: 2026-05-10; first real CI run validated 2026-05-11*

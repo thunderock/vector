@@ -50,3 +50,22 @@ binary; matches our Rust-only stance — see RESEARCH.md §"Conventional Commits
   but won't appear in CHANGELOG sections.
 - `convco` is downloaded from GitHub Releases in CI (~5s); avoids dragging Node
   into the toolchain.
+
+## Amendment 2026-05-11: unpadded CalVer in Cargo.toml
+
+Cargo's SemVer parser rejects leading zeros in any version component
+(`error: invalid leading zero in minor version number`). The original
+`%Y.%m.%d` format produced `2026.05.10`, which fails to parse. Decision:
+use **unpadded** CalVer (`%Y.%-m.%-d` → `2026.5.10`) consistently in
+`Cargo.toml`, the git tag (`v2026.5.10`), and the DMG filename
+(`Vector-2026.5.10-universal.dmg`). One format, one source of truth.
+Sorting safety: use `git tag --sort=v:refname` (version-aware sort) when
+listing tags chronologically — string sort gets `2026.5.10` vs `2026.5.7`
+wrong, but version sort handles it correctly. Validated against the first
+real `cargo xtask release` invocation on 2026-05-11.
+
+Also: `git tag {name}` produces a lightweight tag, which is silently
+skipped by `git push --follow-tags`. `xtask::release` now uses `git tag -a`
+to produce annotated tags so the standard push flow ships them. The
+lightweight-tag misfire was caught when the user's first push reported
+"Everything up-to-date" with no tag on GitHub.

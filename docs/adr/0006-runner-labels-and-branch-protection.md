@@ -63,3 +63,22 @@ verbatim per Plan 01-05's branch-protection contract.
   `gh api repos/{owner}/vector/branches/main/protection` is the only way to
   verify it stayed configured. Add an entry to a future `docs/release-checklist.md`.
 - Commit signing is NOT required in v1 (solo dev). A v2 ADR will add it.
+
+## Amendment 2026-05-11: ubuntu runner for deny; master/main branch dual-trigger
+
+Two operational divergences caught on the first real CI run:
+
+1. **`deny` job runs on `ubuntu-latest`.** `EmbarkStudios/cargo-deny-action@v2`
+   is a Docker container action, which only executes on Linux runners
+   (`Error: Container action is only supported on Linux` on macos-14).
+   `cargo-deny` audits the dep graph — platform-agnostic — so Linux is fine.
+   Side benefit: Linux runners are cheaper and faster than macOS. Update
+   `docs/setup.md §3` if branch protection ever requires `deny` from a
+   specific runner label.
+
+2. **CI triggers on both `master` and `main`.** The repo's default branch
+   is `master`; original `branches: [main]` trigger never fired on push.
+   `ci.yml` `on.push.branches` is now `[master, main]` and the three
+   push-gated job guards accept `refs/heads/master || refs/heads/main`.
+   Branch-protection setup in `docs/setup.md §3` still lists `main` as
+   the example — applies equally to whichever branch is the default.

@@ -285,6 +285,35 @@ After the first push, the user should walk the "Outstanding Verification Debt" c
 - D-26 xattr literal byte-identity verified across 4 surfaces (README, ci.yml, release.yml, xtask/scripts/render-dmg-bg.sh) — single canonical form.
 - The verification debt for branch-protection state + first-tagged-release run is documented as explicitly outstanding — it is NOT claimed as complete. BUILD-02 / BUILD-04 / BUILD-05 are marked complete with the pending-real-tagged-release caveat noted here and surfaced for `/gsd:progress` and `/gsd:audit-uat`.
 
+## Addendum 2026-05-11: release.yml dual-trigger + first published release
+
+Two operational expansions landed during the first push session:
+
+1. **`release.yml` now triggers on BOTH `push: tags: ['v*']` and `release: published`.**
+   This makes the GitHub UI's "Draft a new release → Publish" flow work
+   alongside the CLI `git push --follow-tags` flow. The publish step
+   detects whether the release already exists (`gh release view`) and
+   either creates it (`gh release create`) or attaches assets to it
+   (`gh release upload --clobber` + `gh release edit`). A `concurrency:`
+   group keyed on the tag prevents wasted double-runs when the UI
+   creates tag+release in one click (which fires both events). All
+   three jobs check out `${{ github.event.release.tag_name || github.ref }}`
+   so a release-event run uses the tag's commit, not the default branch.
+
+2. **Branch protection remains a manual user step.** Setup was not
+   performed this session. `docs/setup.md §3` is still the canonical
+   procedure; the 4 PR-reachable required-status-check names (`lint`,
+   `commitlint`, `test`, `deny`) match `ci.yml` job names exactly.
+
+The first real tagged release (`v2026.5.10`) had a multi-attempt path
+(SemVer error → A5 cargo-bundle quirk → A5 fallback added → DMG built
+successfully). Final release-artifact pipeline:
+`tag push` → `release.yml` → matrix build → lipo merge → cargo-bundle →
+A5 post-process → Pitfall-3 guard → `gh release create v2026.5.10` with
+`Vector-2026.5.10-universal.dmg` attached + xattr install footer in body.
+
+ADRs 0004, 0005, 0006 carry the relevant amendments.
+
 ---
 *Phase: 01-foundation-ci-dmg-pipeline*
-*Completed: 2026-05-10*
+*Completed: 2026-05-10; first tagged release validated 2026-05-11*

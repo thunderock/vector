@@ -254,6 +254,24 @@ The xtask code already runs this guard internally; the CI repeat is a belt-and-b
 - PNG dimensions confirmed via `file`: `PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced` — matches UI-SPEC and acceptance criteria.
 - `cargo build --manifest-path xtask/Cargo.toml --release` exits 0; `cargo fmt --check` exits 0.
 
+## Addendum 2026-05-11: Wave-0 spike validated; Assumption A5 invalidated
+
+The Wave-0 cargo-bundle universal-binary spike ran end-to-end through CI on
+`master @ 8e540ea` and surfaced exactly what Plan 01-04 predicted: cargo-bundle
+0.10 re-invokes `cargo build --release` for the host arch, overwriting the
+pre-merged universal binary staged at `target/release/vector-app` BEFORE
+running its bundling step. The Pitfall-3 guard caught the resulting thin
+Mach-O.
+
+Fallback applied in `xtask::dmg::finalize` (commit `8e540ea`): after
+`cargo bundle --release -p vector-app` completes, copy
+`target/universal-apple-darwin/release/vector-app` over
+`Vector.app/Contents/MacOS/vector-app`. Conditional on the merged file
+existing, so `dmg_local` is unaffected. Validated by the `tip` release
+asset `Vector-2026.5.10-tip-8e540ea-universal.dmg` running on the user's
+macOS Sequoia box, window titled "Vector — tick N", proving D-09/D-10/D-14
+are live in the CI-produced Universal binary. ADR 0004 updated.
+
 ---
 *Phase: 01-foundation-ci-dmg-pipeline*
-*Completed: 2026-05-10*
+*Completed: 2026-05-10; Wave-0 operationally validated 2026-05-11*

@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
 status: Ready to plan
-stopped_at: Completed Plan 01-06 (release.yml + README + 6 ADRs + setup.md). Two task commits landed locally (4dd0c4e + 75b77b1); terminal human-action checkpoint user-approved without GitHub UI action — branch-protection state + first-tagged-release deferred. Phase 1 implementation complete (6/6 plans); phase verifier + regression gate next.
+stopped_at: Phase 1 complete and operationally validated. CI produced Vector-2026.5.10-tip-8e540ea-universal.dmg from master push; release.yml produced Vector-2026.5.10-universal.dmg from v2026.5.10 tag push; user confirmed both launch on macOS Sequoia (window "Vector — tick N" visible). Five Phase-1 divergences captured in ADRs 0004/0005/0006 and per-plan SUMMARY addenda. Branch-protection setup remains the only deferred item. Ready for Phase 2 (headless terminal core).
 last_updated: "2026-05-11T04:41:18.244Z"
 progress:
   total_phases: 10
@@ -14,13 +14,13 @@ progress:
 
 # Project State: Vector
 
-**Last updated:** 2026-05-10 (after Wave 6 — plan 01-06 complete, release.yml + README + 6 MADR ADRs + setup.md branch-protection guide authored + locally verified, human-action checkpoint user-approved without GitHub UI action; branch-protection state + first-tagged-release deferred. Phase 1 implementation complete; phase verifier next.)
+**Last updated:** 2026-05-11 (Phase 1 operationally validated end-to-end on GitHub: ci.yml DAG green; release.yml published `v2026.5.10` with Universal DMG; user-confirmed DMG launches on macOS Sequoia. Five divergences from original plans captured in ADRs 0004/0005/0006 and per-plan SUMMARY addenda. Phase 2 next.)
 
 ## Project Reference
 
 **Core value:** Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
 
-**Current focus:** Phase 01 verification (all 6 plans complete; phase verifier next)
+**Current focus:** Phase 2: Headless Terminal Core (Phase 1 complete + operationally validated; recommended entry: `/gsd:discuss-phase 2`)
 
 ## Current Position
 
@@ -31,7 +31,7 @@ Plan: Not started
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | Foundation & CI/DMG Pipeline | Implementation complete (6/6 plans); verifier next |
+| 1 | Foundation & CI/DMG Pipeline | Complete + operationally validated (2026-05-11) |
 | 2 | Headless Terminal Core | Not started |
 | 3 | GPU Renderer & First Paint | Not started |
 | 4 | Mux — Tabs & Splits | Not started |
@@ -47,10 +47,10 @@ Plan: Not started
 | Metric | Value |
 |--------|-------|
 | Phases planned | 10 |
-| Phases complete | 0 |
+| Phases complete | 1 |
 | Plans complete | 6 |
 | v1 requirements mapped | 51 / 51 (100%) |
-| v1 requirements completed | 6 / 51 (WIN-05, BUILD-01, BUILD-02*, BUILD-03, BUILD-04*, BUILD-05) — *BUILD-02 and BUILD-04 implemented and locally verified; pending first-real-CI-run telemetry (01-05) AND first-real-tagged-release run (01-06) per Outstanding Verification Debt blocks |
+| v1 requirements completed | 6 / 51 (WIN-05, BUILD-01, BUILD-02, BUILD-03, BUILD-04, BUILD-05) — all operationally validated end-to-end on GitHub on 2026-05-11 |
 | Phase 01-foundation-ci-dmg-pipeline P05 | 1 task commit + checkpoint approved no-push | 2 tasks | 1 files |
 | Phase 01-foundation-ci-dmg-pipeline P06 | 2 task commits + checkpoint approved no-action | 3 tasks | 10 files |
 
@@ -67,7 +67,12 @@ Plan: Not started
 - **`Domain` / `Pane` / `PtyTransport` seam** (WezTerm pattern) is the only boundary between terminal model and transport. Established in Phase 4; load-bearing for Phases 7, 8, 9.
 - **`winit::EventLoop` on the main thread, `tokio` multi-thread runtime on background threads, `EventLoopProxy::send_event` as the only cross-thread signal.** Established in Phase 1 skeleton.
 - **xtask separate workspace (D-04):** empty `[workspace]` table in `xtask/Cargo.toml` is the standard cargo idiom for opting OUT of the parent workspace. xtask deps don't pollute the main resolver graph and cargo-deny only audits shippable code.
-- **Wave-0 cargo-bundle universal-binary spike (A5):** cargo-bundle 0.10 honors the pre-merged universal binary at `target/release/vector-app`. No `cargo-bundle --bin` post-process fallback needed.
+- **Wave-0 cargo-bundle spike result (Assumption A5 INVALIDATED, 2026-05-11):** cargo-bundle 0.10 re-runs `cargo build --release` for the host arch before bundling, overwriting any pre-merged universal binary at `target/release/vector-app`. The documented fallback (post-process: copy `target/universal-apple-darwin/release/vector-app` over `Vector.app/Contents/MacOS/vector-app` after `cargo bundle` runs) is now the default code path in `xtask::dmg::finalize`. Conditional on the merged file existing, so `dmg_local` (host-arch) is unaffected. ADR 0004 amended.
+- **Cargo SemVer unpadded CalVer (2026-05-11):** Cargo's SemVer parser rejects leading zeros in any version component. CalVer in `Cargo.toml` is `2026.5.10` (unpadded), matching `xtask::release` `%Y.%-m.%-d` format and the tag `v2026.5.10` and the DMG filename `Vector-2026.5.10-universal.dmg`. ADR 0005 amended.
+- **Annotated tags (2026-05-11):** `xtask::release` uses `git tag -a` to produce annotated tags. Lightweight tags are silently skipped by `git push --follow-tags`.
+- **Default branch is `master`, not `main` (2026-05-11):** ci.yml triggers on `branches: [master, main]` and push-gated job guards accept either branch. ADR 0006 amended.
+- **`deny` job runs on `ubuntu-latest` (2026-05-11):** `EmbarkStudios/cargo-deny-action@v2` is a Docker action; macOS runners can't host Docker. cargo-deny is platform-agnostic. ADR 0006 amended.
+- **release.yml dual-trigger (2026-05-11):** triggers on both `push: tags: ['v*']` (CLI flow) AND `release: published` (GitHub UI flow). Publish step detects existing release via `gh release view` and either creates with `gh release create` or attaches with `gh release upload --clobber` + `gh release edit`. `concurrency:` group keyed on tag prevents double-runs.
 - **`cargo xtask` is the single DMG build code path for both local + CI (D-22):** CI passes pre-built per-arch binaries via `--arm64 PATH --x86_64 PATH`; local invocation builds them on the fly. Pitfall-3 (`lipo -info` guard) fires in both contexts.
 - **CalVer one-release-per-day (D-27):** `cargo xtask release` refuses to overwrite an existing tag for today's date; push-free per CLAUDE.md.
 - **CI pipeline (Plan 01-05):** `.github/workflows/ci.yml` is the single source of truth for what ships. 7-job PR-vs-push DAG with Pitfall-3 belt-and-braces; authored and committed (506b6bb) without push per CLAUDE.md. First-real-CI-run telemetry deferred as verification debt — surfaced in 01-05-SUMMARY for `/gsd:progress` and `/gsd:audit-uat` to chase.
@@ -100,11 +105,11 @@ Plan: Not started
 - [x] Wave 4 (plan 01-04) — DMG xtask pipeline complete (Wave-0 cargo-bundle spike approved on macOS)
 - [x] Wave 5 (plan 01-05) — GitHub Actions CI authored + committed (506b6bb); checkpoint approved without push (first-real-CI-run telemetry deferred)
 - [x] Wave 6 (plan 01-06) — release.yml + README install block + CHANGELOG seed + 6 MADR ADRs + docs/setup.md branch-protection guide committed (4dd0c4e + 75b77b1); checkpoint approved without GitHub UI action (branch-protection state + first-tagged-release deferred)
-- [ ] First real CI run telemetry capture (Outstanding Verification Debt from Plan 01-05) — user pushes asynchronously, then walks 01-05-SUMMARY §"Outstanding Verification Debt" checklist
-- [ ] Branch protection configured on `main` per docs/setup.md §3 with the 4 PR-required check names (lint, commitlint, test, deny); `gh api repos/colligo/vector/branches/main/protection` verifies the rule (Outstanding Verification Debt from Plan 01-06)
-- [ ] First tagged release exercised: `cargo xtask release` + `git push --follow-tags` triggers release.yml; `gh release view v{CalVer}` shows Vector-{CalVer}-universal.dmg asset + xattr footer in body (Outstanding Verification Debt from Plan 01-06)
-- [ ] Downloaded DMG smoke-test: mount + drag-install + xattr de-quarantine + double-click launches Vector.app (Outstanding Verification Debt from Plan 01-06)
-- [ ] Phase 1 verification + roadmap completion (handled by orchestrator)
+- [x] First real CI run telemetry: ci.yml DAG green on master @ 8e540ea; `tip` release `Vector-2026.5.10-tip-8e540ea-universal.dmg` (1.95 MB) published (2026-05-11)
+- [x] First tagged release exercised: `release.yml` produced `Vector-2026.5.10-universal.dmg` on `v2026.5.10` tag push (2026-05-11; multi-attempt path due to A5 fallback discovery)
+- [x] Downloaded DMG smoke-test: user-confirmed DMG launches on macOS Sequoia after `xattr -dr com.apple.quarantine` (window "Vector — tick N" visible)
+- [x] Phase 1 verification + roadmap completion (gsd-tools phase complete; ROADMAP/STATE/REQUIREMENTS auto-updated)
+- [ ] Branch protection configured per docs/setup.md §3 with the 4 PR-required check names (lint, commitlint, test, deny); `gh api repos/thunderock/vector/branches/master/protection` verifies the rule (only remaining Phase-1 deferred item)
 
 ### Blockers
 
