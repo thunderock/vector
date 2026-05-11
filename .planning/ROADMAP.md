@@ -57,7 +57,12 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   3. The grid renders 24-bit truecolor and 256-color SGR correctly for indexed and direct-color sequences, with grapheme-cluster cell width verified for emoji ZWJ + East Asian width samples.
   4. Resizing the headless window propagates `SIGWINCH` to the child process group, and closing the binary leaves no zombie shell processes (verified in `ps`).
   5. `TERM=xterm-256color` is advertised and 10,000+ lines of scrollback survive a regex search across history.
-**Plans**: TBD
+**Plans**: 5 plans
+  - [ ] 02-01-PLAN.md — Wave 0: workspace deps + new vector-headless crate scaffold + alacritty_terminal 0.26 API spike + 13 test-file #[ignore] stubs
+  - [ ] 02-02-PLAN.md — Wave 1: vector-term wrapper (Term::new/feed/resize/grid/cursor/mode/search) + 10 conformance test files filled (CORE-01/02/03/06)
+  - [ ] 02-03-PLAN.md — Wave 2: vector-pty LocalPty (portable-pty + spawn_blocking + bounded mpsc + drop(pair.slave) + Drop kill+wait) + 5 lifecycle/term-env tests (CORE-04/05)
+  - [ ] 02-04-PLAN.md — Wave 3: vector-mux PtyTransport + Domain traits (D-38 final shape) + LocalDomain full impl + Codespace/DevTunnel stubs + object-safety test
+  - [ ] 02-05-PLAN.md — Wave 4: vector-headless binary — raw-mode bridge + 30Hz ANSI repaint + SIGWINCH watcher + manual smoke checkpoint (vim/tmux/htop/less +F)
 **Stack additions**: `alacritty_terminal 0.26`, `vte 0.15` (transitive), `portable-pty 0.9`, `tokio::task::spawn_blocking` PTY bridge.
 **Risks & notes**:
   - **Never roll a custom VT parser.** Pitfall 1 — decided day 1 of this phase, irrevocable.
@@ -210,7 +215,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & CI/DMG Pipeline | 6/6 | Implementation complete; verifier next | 2026-05-10 |
-| 2. Headless Terminal Core | 0/0 | Not started | - |
+| 2. Headless Terminal Core | 0/5 | Plans created | - |
 | 3. GPU Renderer & First Paint | 0/0 | Not started | - |
 | 4. Mux — Tabs & Splits | 0/0 | Not started | - |
 | 5. Polish (Local Daily-Driver) | 0/0 | Not started | - |
