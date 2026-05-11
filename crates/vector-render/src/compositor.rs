@@ -517,19 +517,31 @@ pub struct OffscreenFrame {
     pub format: wgpu::TextureFormat,
 }
 
+/// Row-major selection test. Mirrors `vector_input::SelectionRange::cells` — intentional
+/// duplicate to avoid a vector-render → vector-input dep edge. Selection covers the partial
+/// first row (anchor→EOL), full intervening rows, and partial last row (BOL→cursor).
 fn is_cell_selected(selection: Option<((u16, u16), (u16, u16))>, col: u16, row: u16) -> bool {
     let Some(((a_col, a_row), (b_col, b_row))) = selection else {
         return false;
     };
-    let (lo, hi) = if (a_row, a_col) <= (b_row, b_col) {
-        ((a_col, a_row), (b_col, b_row))
+    // Normalize so (start_row, start_col) <= (end_row, end_col) in row-major order.
+    let (start_row, start_col, end_row, end_col) = if (a_row, a_col) <= (b_row, b_col) {
+        (a_row, a_col, b_row, b_col)
     } else {
-        ((b_col, b_row), (a_col, a_row))
+        (b_row, b_col, a_row, a_col)
     };
-    let pt = (row, col);
-    let lo_pt = (lo.1, lo.0);
-    let hi_pt = (hi.1, hi.0);
-    pt >= lo_pt && pt <= hi_pt
+    if row < start_row || row > end_row {
+        return false;
+    }
+    if start_row == end_row {
+        col >= start_col && col <= end_col
+    } else if row == start_row {
+        col >= start_col
+    } else if row == end_row {
+        col <= end_col
+    } else {
+        true
+    }
 }
 
 /// Resolve an alacritty `Color` into linear-ish [r,g,b,a] floats. Plan 03-03 uses sRGB-as-linear

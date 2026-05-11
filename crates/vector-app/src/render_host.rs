@@ -34,6 +34,13 @@ impl RenderHost {
         }
     }
 
+    /// (cell_width_px, cell_height_px) once the compositor is initialized. None before then.
+    pub fn cell_metrics_px(&self) -> Option<(u32, u32)> {
+        self.compositor
+            .as_ref()
+            .map(|c| (c.cell_width_px(), c.cell_height_px()))
+    }
+
     /// xterm-256 dark default — used as a fallback before the compositor exists or if its init failed.
     pub fn render_clear_default(&self) -> Result<()> {
         self.ctx.render_clear(&[0.06, 0.06, 0.06, 1.0])
