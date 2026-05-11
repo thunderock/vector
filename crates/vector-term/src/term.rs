@@ -70,6 +70,16 @@ impl Term {
         (self.cols, self.rows)
     }
 
+    /// Per-row damage iterator for the renderer. `&mut self` per alacritty 0.26 contract.
+    pub fn damage(&mut self) -> alacritty_terminal::term::TermDamage<'_> {
+        self.inner.damage()
+    }
+
+    /// Clear damage tracking after the renderer has consumed it.
+    pub fn reset_damage(&mut self) {
+        self.inner.reset_damage();
+    }
+
     pub(crate) fn inner(&self) -> &AlacrittyTerm<NoopListener> {
         &self.inner
     }

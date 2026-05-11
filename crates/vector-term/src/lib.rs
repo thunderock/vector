@@ -6,5 +6,6 @@ mod parser;
 mod search;
 mod term;
 
+pub use alacritty_terminal::term::{LineDamageBounds, TermDamage, TermDamageIterator};
 pub use search::Match;
 pub use term::Term;
