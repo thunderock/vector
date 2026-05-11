@@ -83,7 +83,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 **Plans**: 5 plans
   - [x] 03-01-PLAN.md — Wave 1: wgpu surface lifecycle + clear-color frame + Wave-0 test stubs + workspace deps + Term::damage wrapper
   - [x] 03-02-PLAN.md — Wave 2: crossfont rasterizer + bundled JetBrains Mono + two-atlas wgpu textures + bounded LRU eviction
-  - [ ] 03-03-PLAN.md — Wave 3: cell pipeline + cursor pipeline + Grid→quads compositor + truecolor/256-color + offscreen render harness
+  - [x] 03-03-PLAN.md — Wave 3: cell pipeline + cursor pipeline + Grid→quads compositor + truecolor/256-color + offscreen render harness
   - [ ] 03-04-PLAN.md — Wave 4: vector-input xterm keymap (≥80 cases) + Cmd-V bracketed paste + click-drag selection + write/resize mpsc into I/O actor
   - [ ] 03-05-PLAN.md — Wave 5: PTY coalesce + render-on-dirty + LPM throttle + DPR atlas clear + resize debounce + first-paint gate + manual smoke matrix (autonomous=false)
 **Stack additions**: `wgpu 29`, `winit 0.30`, `objc2-app-kit 0.3`, `crossfont 0.9`, `unicode-width 0.2`, `bytemuck 1`, `etagere 0.2`, `parking_lot 0.12`, `pollster 0.4`, `bytes 1`.

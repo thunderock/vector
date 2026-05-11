@@ -30,7 +30,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [ ] **RENDER-02**: Sustained `cat large.log` output reaches at least 60 fps on Apple Silicon at 1080p; ProMotion (120 Hz) is detected and honored
 - [x] **RENDER-03**: Idle CPU usage stays below 1% on Apple Silicon (no redraw when nothing is dirty)
 - [x] **RENDER-04**: Glyph atlas separates monochrome and emoji textures, evicts via bounded LRU, and survives mid-session scale changes (Retina ↔ external monitor)
-- [ ] **RENDER-05**: Cursor and selection overlays render correctly under the live text grid
+- [x] **RENDER-05**: Cursor and selection overlays render correctly under the live text grid
 
 ### Window & Mux
 
@@ -167,7 +167,7 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | RENDER-02 | Phase 3 | Pending |
 | RENDER-03 | Phase 3 | Complete |
 | RENDER-04 | Phase 3 | Complete |
-| RENDER-05 | Phase 3 | Pending |
+| RENDER-05 | Phase 3 | Complete |
 | WIN-01 | Phase 3 | Complete |
 | WIN-02 | Phase 4 | Pending |
 | WIN-03 | Phase 4 | Pending |
