@@ -47,3 +47,7 @@ with first-class GitHub Codespaces and Dev Tunnels support.
 """
 osx_minimum_system_version = "13.0"
 osx_info_plist_exts = ["resources/Info.plist.partial"]
+resources = [
+    "resources/Fonts/JetBrainsMono-Regular.ttf",
+    "resources/Fonts/LICENSE-JetBrainsMono.txt",
+]

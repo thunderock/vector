@@ -1,8 +1,9 @@
-//! Font discovery + shaping. Filled in Phase 3 atop `crossfont` / `cosmic-text`.
+//! Font discovery + rasterization. Phase 3: crossfont 0.9 + CoreText (D-40, D-50).
 
-use anyhow::Result;
+mod glyph;
+mod loader;
+mod width;
 
-#[allow(dead_code, unused_imports)]
-fn _force_anyhow_use() -> Result<()> {
-    Ok(())
-}
+pub use glyph::{BitmapKind, RasterizedGlyph};
+pub use loader::{CellMetrics, FontStack};
+pub use width::cell_width;
