@@ -90,8 +90,11 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(host) = self.render_host.as_mut() {
-                    if let Err(err) = host.render_clear_default() {
-                        tracing::warn!(?err, "render_clear failed");
+                    // Plan 03-03: no selection state machine yet — pass None.
+                    // Plan 03-04 replaces None with the selection range from the input bridge.
+                    let mut t = self.term.lock();
+                    if let Err(err) = host.render(&mut t, None) {
+                        tracing::warn!(?err, "render failed");
                     }
                 }
             }

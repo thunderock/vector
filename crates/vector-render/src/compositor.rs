@@ -19,6 +19,7 @@ use vector_term::{Term, TermDamage};
 
 use crate::atlas::{Atlas, AtlasSlot, GlyphKey};
 use crate::cell_pipeline::{CellInstance, CellPipeline};
+use crate::cursor_pipeline::CursorPipeline;
 use crate::pipeline::RenderContext;
 
 /// Recoverable surface acquisition states. `Outdated`/`Lost` mean we reconfigured the surface
@@ -42,9 +43,12 @@ const SELECTION_TINT: [f32; 4] = [0.27, 0.48, 0.78, 0.40];
 const DEFAULT_BG: [f32; 4] = [0.06, 0.06, 0.06, 1.0];
 /// Light gray foreground.
 const DEFAULT_FG: [f32; 4] = [0.85, 0.85, 0.85, 1.0];
+/// Block-cursor color. Plan 03-05 may promote to a theme uniform; blink also lands there.
+const CURSOR_COLOR: [f32; 4] = [0.85, 0.85, 0.85, 1.0];
 
 pub struct Compositor {
     cell_pipeline: CellPipeline,
+    cursor_pipeline: CursorPipeline,
     atlas: Atlas,
     font_stack: FontStack,
     cell_metrics: CellMetrics,
@@ -52,6 +56,7 @@ pub struct Compositor {
     default_fg: [f32; 4],
     default_bg: [f32; 4],
     selection_tint: [f32; 4],
+    cursor_color: [f32; 4],
     surface_format: wgpu::TextureFormat,
     viewport_size_px: [f32; 2],
     instance_scratch: Vec<CellInstance>,
@@ -59,22 +64,41 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new(render_ctx: &RenderContext, font_stack: FontStack) -> Result<Self> {
-        let cell_metrics = font_stack.cell_metrics;
-        let atlas = Atlas::new(&render_ctx.device);
-        let cell_pipeline = CellPipeline::new(
+        Self::new_with(
             &render_ctx.device,
+            &render_ctx.queue,
             render_ctx.config.format,
+            render_ctx.config.width,
+            render_ctx.config.height,
+            font_stack,
+        )
+    }
+
+    /// Build a Compositor against a raw device + queue + surface format. Plan 03-03 tests use
+    /// `RenderContext::new_offscreen` to get the device/queue pair without a window.
+    pub fn new_with(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface_format: wgpu::TextureFormat,
+        width: u32,
+        height: u32,
+        font_stack: FontStack,
+    ) -> Result<Self> {
+        let cell_metrics = font_stack.cell_metrics;
+        let atlas = Atlas::new(device);
+        let cell_pipeline = CellPipeline::new(
+            device,
+            surface_format,
             atlas.mono_view(),
             atlas.color_view(),
             16_000,
         );
-        let viewport_size_px = [
-            render_ctx.config.width as f32,
-            render_ctx.config.height as f32,
-        ];
+        let cursor_pipeline = CursorPipeline::new(device, surface_format);
+        let viewport_size_px = [width as f32, height as f32];
         let palette_256 = xterm_256_palette();
         let me = Self {
             cell_pipeline,
+            cursor_pipeline,
             atlas,
             font_stack,
             cell_metrics,
@@ -82,12 +106,13 @@ impl Compositor {
             default_fg: DEFAULT_FG,
             default_bg: DEFAULT_BG,
             selection_tint: SELECTION_TINT,
-            surface_format: render_ctx.config.format,
+            cursor_color: CURSOR_COLOR,
+            surface_format,
             viewport_size_px,
             instance_scratch: Vec::new(),
         };
         me.cell_pipeline.update_uniforms(
-            &render_ctx.queue,
+            queue,
             [cell_metrics.width_px as f32, cell_metrics.height_px as f32],
             viewport_size_px,
             me.selection_tint,
@@ -139,19 +164,189 @@ impl Compositor {
         term: &mut Term,
         selection: Option<((u16, u16), (u16, u16))>,
     ) -> Result<(), CompositorError> {
-        // 1. Snapshot grid under a brief lock-equivalent scope (caller already holds the Term lock).
+        self.prepare_frame(render_ctx, term, selection);
+        let frame = match render_ctx.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                render_ctx
+                    .surface
+                    .configure(&render_ctx.device, &render_ctx.config);
+                return Err(CompositorError::Outdated);
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                render_ctx
+                    .surface
+                    .configure(&render_ctx.device, &render_ctx.config);
+                return Err(CompositorError::Lost);
+            }
+            wgpu::CurrentSurfaceTexture::Timeout => return Err(CompositorError::Timeout),
+            wgpu::CurrentSurfaceTexture::Occluded => return Ok(()),
+            wgpu::CurrentSurfaceTexture::Validation => {
+                tracing::error!("surface validation error");
+                return Err(CompositorError::Validation);
+            }
+        };
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        self.encode_passes(render_ctx, &view);
+        frame.present();
+        Ok(())
+    }
+
+    /// Render to an internally-owned offscreen Rgba8Unorm texture and read back pixel bytes.
+    /// Used by Plan 03-03 Task 2 pixel-snapshot tests. Does NOT acquire the surface — tests can
+    /// build the compositor against a `RenderContext` with any (or no real) surface.
+    pub fn render_offscreen(
+        &mut self,
+        render_ctx: &RenderContext,
+        term: &mut Term,
+        selection: Option<((u16, u16), (u16, u16))>,
+    ) -> anyhow::Result<OffscreenFrame> {
+        self.render_offscreen_with(
+            &render_ctx.device,
+            &render_ctx.queue,
+            render_ctx.config.width,
+            render_ctx.config.height,
+            term,
+            selection,
+        )
+    }
+
+    /// Surface-free variant of `render_offscreen`. Lets headless tests build a Device + Queue
+    /// (via `Adapter::request_device`) and run the compositor without instantiating a window.
+    pub fn render_offscreen_with(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        term: &mut Term,
+        selection: Option<((u16, u16), (u16, u16))>,
+    ) -> anyhow::Result<OffscreenFrame> {
+        let width = width.max(1);
+        let height = height.max(1);
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("compositor-offscreen"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.surface_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.prepare_frame_raw(device, queue, width, height, term, selection);
+        self.encode_passes_raw(device, queue, &view);
+
+        // Copy out via padded staging buffer (256-byte row alignment per wgpu spec).
+        let bytes_per_pixel: u32 = 4;
+        let unpadded_bpr = width * bytes_per_pixel;
+        let align: u32 = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bpr = unpadded_bpr.div_ceil(align) * align;
+        let buf_size = u64::from(padded_bpr) * u64::from(height);
+        let staging = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("offscreen-staging"),
+            size: buf_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("offscreen-copy"),
+        });
+        enc.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &staging,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bpr),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.submit(Some(enc.finish()));
+
+        let slice = staging.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r);
+        });
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|e| anyhow::anyhow!("device poll: {e:?}"))?;
+        rx.recv()
+            .map_err(|e| anyhow::anyhow!("map_async channel: {e}"))?
+            .map_err(|e| anyhow::anyhow!("map_async: {e:?}"))?;
+        let data = slice.get_mapped_range();
+
+        // De-pad rows.
+        let mut pixels = Vec::with_capacity((unpadded_bpr * height) as usize);
+        for row in 0..height {
+            let off = (row * padded_bpr) as usize;
+            pixels.extend_from_slice(&data[off..off + unpadded_bpr as usize]);
+        }
+        drop(data);
+        staging.unmap();
+        Ok(OffscreenFrame {
+            width,
+            height,
+            pixels,
+            format: self.surface_format,
+        })
+    }
+
+    fn prepare_frame(
+        &mut self,
+        render_ctx: &RenderContext,
+        term: &mut Term,
+        selection: Option<((u16, u16), (u16, u16))>,
+    ) {
+        self.prepare_frame_raw(
+            &render_ctx.device,
+            &render_ctx.queue,
+            render_ctx.config.width,
+            render_ctx.config.height,
+            term,
+            selection,
+        );
+    }
+
+    fn prepare_frame_raw(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        term: &mut Term,
+        selection: Option<((u16, u16), (u16, u16))>,
+    ) {
         let (cols, rows) = term.dims();
-        let viewport = [
-            render_ctx.config.width as f32,
-            render_ctx.config.height as f32,
-        ];
+        let cursor = term.cursor();
+        let viewport = [width as f32, height as f32];
         #[allow(clippy::float_cmp)]
         let viewport_changed =
             viewport[0] != self.viewport_size_px[0] || viewport[1] != self.viewport_size_px[1];
         if viewport_changed {
             self.viewport_size_px = viewport;
             self.cell_pipeline.update_uniforms(
-                &render_ctx.queue,
+                queue,
                 [
                     self.cell_metrics.width_px as f32,
                     self.cell_metrics.height_px as f32,
@@ -161,11 +356,10 @@ impl Compositor {
             );
         }
         let needed = usize::from(cols) * usize::from(rows);
-        self.cell_pipeline
-            .ensure_capacity(&render_ctx.device, needed);
+        self.cell_pipeline.ensure_capacity(device, needed);
 
-        // Snapshot damage; drop the damage borrow before any GPU work.
-        let damage_rows: Vec<(u16, u16, u16)> = match term.damage() {
+        // Snapshot damage + reset; full rebuild for Plan 03-03 simplicity.
+        let _damage_rows: Vec<(u16, u16, u16)> = match term.damage() {
             TermDamage::Full => (0..rows)
                 .map(|r| (r, 0u16, cols.saturating_sub(1)))
                 .collect(),
@@ -181,21 +375,11 @@ impl Compositor {
         };
         term.reset_damage();
 
-        // 2. Build CellInstances. For partial damage we still rewrite by row; capacity is
-        //    cols * rows but writes are scoped to dirty rows.
-        // Always rebuild the whole frame's instance set so depth-order is stable. This is the
-        // simplest correct path for Plan 03-03; partial buffer slice rewrites land in Plan 03-05's
-        // pacing pass if profiling demands it.
-        let _ = damage_rows; // damage is consumed for reset bookkeeping; full rebuild below.
         self.instance_scratch.clear();
         self.instance_scratch
             .reserve(usize::from(cols) * usize::from(rows));
-
         let grid = term.grid();
-        let total_lines = grid.total_lines();
-        let display_offset = grid.display_offset();
-        let _ = total_lines;
-        let _ = display_offset;
+        let _ = grid.total_lines();
         for r in 0..rows {
             for c in 0..cols {
                 let point = Point::new(Line(i32::from(r)), Column(usize::from(c)));
@@ -226,7 +410,7 @@ impl Compositor {
                                 character: cell.c,
                                 dpr_bucket: 1,
                             };
-                            match self.atlas.slot_for(&render_ctx.queue, key, &glyph) {
+                            match self.atlas.slot_for(queue, key, &glyph) {
                                 AtlasSlot::Mono { uv, .. } => (0u32, uv),
                                 AtlasSlot::Color { uv, .. } => (1u32, uv),
                                 AtlasSlot::Fallback => (2u32, [0.0; 4]),
@@ -248,46 +432,38 @@ impl Compositor {
                 });
             }
         }
-
         self.cell_pipeline
-            .upload_instances(&render_ctx.queue, &self.instance_scratch, 0);
+            .upload_instances(queue, &self.instance_scratch, 0);
+        self.cursor_pipeline.update(
+            queue,
+            [u32::from(cursor.0), u32::from(cursor.1)],
+            [
+                self.cell_metrics.width_px as f32,
+                self.cell_metrics.height_px as f32,
+            ],
+            self.viewport_size_px,
+            self.cursor_color,
+        );
+    }
 
-        // 3. Acquire surface + draw.
-        let frame = match render_ctx.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                render_ctx
-                    .surface
-                    .configure(&render_ctx.device, &render_ctx.config);
-                return Err(CompositorError::Outdated);
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                render_ctx
-                    .surface
-                    .configure(&render_ctx.device, &render_ctx.config);
-                return Err(CompositorError::Lost);
-            }
-            wgpu::CurrentSurfaceTexture::Timeout => return Err(CompositorError::Timeout),
-            wgpu::CurrentSurfaceTexture::Occluded => return Ok(()),
-            wgpu::CurrentSurfaceTexture::Validation => {
-                tracing::error!("surface validation error");
-                return Err(CompositorError::Validation);
-            }
-        };
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut enc = render_ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("cell-encoder"),
-            });
+    fn encode_passes(&self, render_ctx: &RenderContext, view: &wgpu::TextureView) {
+        self.encode_passes_raw(&render_ctx.device, &render_ctx.queue, view);
+    }
+
+    fn encode_passes_raw(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        view: &wgpu::TextureView,
+    ) {
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("compositor-encoder"),
+        });
         {
             let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("cell-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -305,15 +481,40 @@ impl Compositor {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            let count = self.instance_scratch.len();
-            // Truncate to u32 for the draw instance count; tested grids stay well under u32::MAX.
-            let count_u32 = u32::try_from(count).unwrap_or(u32::MAX);
-            self.cell_pipeline.draw(&mut rpass, count_u32);
+            let count = u32::try_from(self.instance_scratch.len()).unwrap_or(u32::MAX);
+            self.cell_pipeline.draw(&mut rpass, count);
         }
-        render_ctx.queue.submit(Some(enc.finish()));
-        frame.present();
-        Ok(())
+        {
+            let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("cursor-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            self.cursor_pipeline.draw(&mut rpass);
+        }
+        queue.submit(Some(enc.finish()));
     }
+}
+
+/// Read-back result from `Compositor::render_offscreen`.
+#[derive(Debug, Clone)]
+pub struct OffscreenFrame {
+    pub width: u32,
+    pub height: u32,
+    /// Tightly-packed pixels in the surface format (typically `Bgra8UnormSrgb` or `Rgba8Unorm`).
+    pub pixels: Vec<u8>,
+    pub format: wgpu::TextureFormat,
 }
 
 fn is_cell_selected(selection: Option<((u16, u16), (u16, u16))>, col: u16, row: u16) -> bool {

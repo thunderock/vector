@@ -10,6 +10,18 @@ use wgpu::{
 };
 use winit::window::Window;
 
+/// Test-only headless device + queue. No surface; tests bring their own offscreen texture.
+#[doc(hidden)]
+pub struct Offscreen {
+    _instance: Instance,
+    _adapter: Adapter,
+    pub device: Device,
+    pub queue: Queue,
+    pub format: wgpu::TextureFormat,
+    pub width: u32,
+    pub height: u32,
+}
+
 /// wgpu Metal surface + device/queue, configured for PresentMode::Fifo (D-45).
 pub struct RenderContext {
     _instance: Instance,
@@ -70,6 +82,39 @@ impl RenderContext {
         self.config.width = width.max(1);
         self.config.height = height.max(1);
         self.surface.configure(&self.device, &self.config);
+    }
+
+    /// Test-only: build a Device+Queue without a window-backed surface. Public for use by Plan
+    /// 03-03's offscreen snapshot tests; production callers continue to use `new()`.
+    #[doc(hidden)]
+    pub fn new_offscreen(width: u32, height: u32) -> Result<Offscreen> {
+        let mut desc = InstanceDescriptor::new_without_display_handle();
+        desc.backends = wgpu::Backends::METAL;
+        let instance = Instance::new(desc);
+        let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
+            power_preference: PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .map_err(|e| anyhow!("no wgpu adapter: {e}"))?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: Limits::default(),
+                label: Some("vector-render-offscreen"),
+                memory_hints: MemoryHints::Performance,
+                experimental_features: ExperimentalFeatures::disabled(),
+                trace: Trace::Off,
+            }))?;
+        Ok(Offscreen {
+            _instance: instance,
+            _adapter: adapter,
+            device,
+            queue,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            width: width.max(1),
+            height: height.max(1),
+        })
     }
 
     /// Acquire-clear-present. Suboptimal/Outdated/Lost are recoverable and logged; we skip the
