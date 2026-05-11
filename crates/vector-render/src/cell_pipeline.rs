@@ -17,7 +17,7 @@ use wgpu::{
     VertexState, VertexStepMode,
 };
 
-/// One quad per terminal cell. Repr-C, Pod for `queue.write_buffer`. 16-byte aligned (size = 80).
+/// One quad per terminal cell. Repr-C, Pod for `queue.write_buffer`. 72 bytes per instance.
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
 #[allow(clippy::pub_underscore_fields)]

@@ -623,7 +623,7 @@ pub(crate) fn xterm_256_palette() -> [[f32; 4]; 256] {
     out
 }
 
-const _: () = {
-    // Repr-check: CellInstance ends on a 16-byte boundary.
-    let _ = [(); size_of::<CellInstance>() % 16];
-};
+// CellInstance is 72 bytes (8+16+16+16+4+4+4+4) — divisible by 8, naga accepts the layout.
+// WGSL needs each instance attribute aligned to its component size; locations are u32x2 / f32x4
+// / u32 — all within naga's relaxed instance-stride rules at 72 bytes/instance.
+const _: () = assert!(size_of::<CellInstance>() == 72);
