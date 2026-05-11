@@ -20,8 +20,8 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [x] **CORE-01**: VT parser passes a basic xterm conformance corpus (CSI / OSC / DCS dispatch, partial-UTF-8 reads, alternate screen DECSET 1049, scroll regions DECSTBM, tab stops, ED/EL erase semantics)
 - [x] **CORE-02**: Terminal grid supports 24-bit truecolor and 256-color modes, with grapheme-cluster-aware cell width (East Asian width tables, emoji ZWJ sequences)
 - [x] **CORE-03**: Scrollback buffer holds at least 10,000 lines and supports regex search across history
-- [ ] **CORE-04**: A local PTY can spawn a user's login shell, propagate `SIGWINCH` on resize, and survive child-process exit cleanly
-- [ ] **CORE-05**: `TERM=xterm-256color` (or equivalent) is advertised; `terminfo` quirks specific to Vector are kept zero in v1
+- [x] **CORE-04**: A local PTY can spawn a user's login shell, propagate `SIGWINCH` on resize, and survive child-process exit cleanly
+- [x] **CORE-05**: `TERM=xterm-256color` (or equivalent) is advertised; `terminfo` quirks specific to Vector are kept zero in v1
 - [x] **CORE-06**: Bracketed paste (mode 2004), mouse modes 1000/1002/1003 with SGR 1006 encoding, and DECSCUSR cursor-shape escapes work end-to-end
 
 ### Rendering
@@ -160,8 +160,8 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | CORE-01 | Phase 2 | Complete |
 | CORE-02 | Phase 2 | Complete |
 | CORE-03 | Phase 2 | Complete |
-| CORE-04 | Phase 2 | Pending |
-| CORE-05 | Phase 2 | Pending |
+| CORE-04 | Phase 2 | Complete |
+| CORE-05 | Phase 2 | Complete |
 | CORE-06 | Phase 2 | Complete |
 | RENDER-01 | Phase 3 | Pending |
 | RENDER-02 | Phase 3 | Pending |
