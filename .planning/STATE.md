@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed Phase 02 Plan 04 (vector-mux Domain + PtyTransport traits + LocalDomain + stubs); ready for Plan 02-05 (vector-headless pass-through proxy)
-last_updated: "2026-05-11T16:35:47.454Z"
+status: Phase complete — ready for verification
+stopped_at: Completed Phase 02 Plan 05 (vector-headless pass-through proxy); user-approved 5-step smoke matrix; Phase 2 implementation complete and ready for phase verifier (/gsd-execute-phase 2)
+last_updated: "2026-05-11T16:58:56.390Z"
 progress:
   total_phases: 10
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State: Vector
@@ -24,15 +24,15 @@ progress:
 
 ## Current Position
 
-Phase: 02 (headless-terminal-core) — EXECUTING
-Plan: 5 of 5
+Phase: 02 (headless-terminal-core) — IMPLEMENTATION COMPLETE; awaiting phase verifier
+Plan: 5 of 5 (all plans complete; SUMMARY.md files: 02-01, 02-02, 02-03, 02-04, 02-05)
 
 ## Phase Map
 
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | Foundation & CI/DMG Pipeline | Complete + operationally validated (2026-05-11) |
-| 2 | Headless Terminal Core | In progress (Plans 02-01..04 complete: Wave 0 scaffolds + Wave 1 vector-term + Wave 2 vector-pty + Wave 3 vector-mux Domain/PtyTransport traits; Plan 02-05 vector-headless next) |
+| 2 | Headless Terminal Core | Implementation complete; awaiting phase verifier (Plans 02-01..05 all green: Wave 0 scaffolds + Wave 1 vector-term + Wave 2 vector-pty + Wave 3 vector-mux + Wave 4 vector-headless pass-through proxy; user-approved smoke matrix 2026-05-11) |
 | 3 | GPU Renderer & First Paint | Not started |
 | 4 | Mux — Tabs & Splits | Not started |
 | 5 | Polish (Local Daily-Driver) | Not started |
@@ -57,6 +57,8 @@ Plan: 5 of 5
 | Phase 02-headless-terminal-core P02 | 7min | 2 tasks | 16 files |
 | Phase 02-headless-terminal-core P03 | 4min | 2 tasks | 7 files |
 | Phase 02-headless-terminal-core P04 | 4min | 2 tasks | 9 files |
+| Phase 02-headless-terminal-core P05 | 15min | 3 tasks (2 commits + 1 manual UAT) | 6 files |
+| Phase 02 P05 | 15min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -86,6 +88,7 @@ Plan: 5 of 5
 - **Phase 1 implementation complete (Plan 01-06):** release.yml + README install block (D-26 place 2 of 3) + CHANGELOG seed + 6 MADR ADRs (D-01..D-35 documented) + docs/setup.md branch-protection guide all committed (4dd0c4e + 75b77b1). xattr literal byte-identical across 4 surfaces (README, ci.yml tip body, release.yml tag body, DMG bg PNG). Terminal human-action checkpoint user-approved without GitHub UI action — branch-protection state + first-tagged-release deferred to user's async push per CLAUDE.md `do not push`.
 - **Phase 2 Plan 01 (Wave 0) complete (2026-05-11):** vector-headless added as 15th workspace member; 4 deps (`alacritty_terminal 0.26`, `portable-pty 0.9`, `regex 1`, `async-trait 0.1`) declared at workspace level; 13 `#[ignore]` test scaffolds created (10 vector-term + 2 vector-pty + 1 vector-mux) covering CORE-01..06 + D-38; alacritty_terminal 0.26 API spike resolved Open Questions 1–3 (`Processor` at `vte::ansi` re-exported via root, `Color::Spec(Rgb)`, `Config.scrolling_history: usize` default 10000); hand-rolled `VectorDims` impl of `grid::Dimensions` chosen over `term::test::TermSize`; `_api_probe` module in vector-term/src/lib.rs is the load-bearing compile check that catches future API drift (replaced by Plan 02-02). Three task commits: 70dd49b + c565208 + 6ea3131. Auto-fixed 2 clippy/fmt lints during Task 3 verification (Rule 1).
 - **Phase 2 Plan 03 (Wave 2) complete (2026-05-11):** `vector-pty` ships concrete `LocalPty` (`spawn / resize / write / take_reader / wait`) + `SpawnCommand` + `PtyError`. portable-pty 0.9 wired at crate level; two `spawn_blocking` tasks per LocalPty + bounded `mpsc::channel::<Vec<u8>>(64)` with `blocking_send` backpressure (Pitfall 7); `drop(pair.slave)` + `impl Drop { kill + wait }` (Pitfall 3 — zombie test passes); `TERM=xterm-256color` advertised (CORE-05); `MasterPty::resize()` → kernel SIGWINCH (CORE-04 — verified end-to-end against bash 3.2). 5 integration tests pass against real `/bin/sh` in ~2.6s wall-clock, non-flaky over 3 consecutive runs. Phase-1 stub `PtyTransport` trait in `vector-pty/src/lib.rs` RETIRED — that trait surface is owned by `vector-mux` per Plan 02-04 (D-38). Two task commits: 615e1c8 + 4aa4b72. Auto-fixed 5 deviations (1 test-script bug — bash 3.2 does NOT interrupt `sleep` on trapped SIGWINCH, fixed with a 100ms polling loop; 4 clippy/fmt lints, all Rule 1).
+- **Phase 2 Plan 05 (Wave 4) complete (2026-05-11):** `vector-headless` binary ships — pass-through proxy that spawns `$SHELL` via `LocalDomain`, bridges parent stdin (raw mode, scopeguard-restored on panic) to PTY, pumps PTY output through `Term` (`parking_lot::Mutex` lock-mutate-drop, never across `.await`), repaints the grid at 30Hz with hide-cursor bracketing + 24-bit truecolor + 256-color emit. **Actor pattern over `Box<dyn PtyTransport>`**: `transport_actor` is sole owner of the transport, `biased` `tokio::select!` prioritizes resize over write so SIGWINCH is never starved, `transport.wait()` called exactly once AFTER both command channels close. Eliminates the held-Mutex-across-await pattern entirely — no `tokio::sync::Mutex` over the transport; `clippy::await_holding_lock = "deny"` (D-11) holds at compile time. User-approved 5-step smoke matrix on host parent terminal: `echo hello` / vim / tmux+split / htop / `less +F` — all PASS. CORE-04 verified live (parent terminal resize reflowed tmux pane + htop layout within ~1s). Two task commits: `ab50bf1` + `4a107b0`; Task 3 is a manual UAT checkpoint per VALIDATION.md §"Manual-Only Verifications" (no commit; user "approved" reply 2026-05-11T16:55Z is the gate). Three auto-fixed code deviations: Rule 2 (hide-cursor `\x1b[?25l ... \x1b[?25h` bracketing each frame to kill the 30Hz strobe of cursor positioning), Rule 3 (best-effort raw mode — skip `enable_raw_mode()` when stdin isn't a tty so CI / `< /dev/null` smokes work), Rule 3 (added `alacritty_terminal` as direct binary-local dep for `Color`/`Cell`/`Point` types in `render.rs`; re-export via vector-term would have polluted that crate's public API). One documented-not-fixed shell-side behavior: zsh in `/dev/null` mode holds its prompt on lone EOT (acceptable per plan acceptance criteria — interactive smokes all exit cleanly with `exit` keystroke). Phase 2 closes; Phase 3 (GPU renderer) inherits the Term + PTY + transport plumbing untouched and only swaps `render.rs` for a wgpu glyph atlas (actor pattern, SharedTerm `Arc<parking_lot::Mutex<Term>>`, SIGWINCH watcher, scopeguard discipline all carry forward).
 - **Phase 2 Plan 04 (Wave 3) complete (2026-05-11):** `vector-mux` ships `PtyTransport` + `Domain` traits in their FINAL D-38 shape (`async_trait` boxed futures; `Send + 'static` / `Send + Sync` respectively). `LocalDomain` fully implemented: `$SHELL` → `/etc/passwd` (keyed by `id -un`) → `/bin/zsh` → `/bin/bash` resolution chain; `LocalDomain::spawn(SpawnCommand)` returns `Box<dyn PtyTransport>` wrapping `LocalPty` via the `LocalTransport` newtype (the newtype lives in vector-mux, NOT in vector-pty, to avoid a vector-pty → vector-mux dep cycle while keeping the trait surface in the consumer crate per D-38). `CodespaceDomain::spawn` `unimplemented!("Phase 7")`; `DevTunnelDomain::spawn` `unimplemented!("Phase 8")`; both `reconnect` bodies `unimplemented!("Phase 9: Persistence + reconnect")`. 8 tests pass: 2 compile-time object-safety, 3 label/alive, 2 should_panic phase markers, and **1 end-to-end CORE-04/05 reachability proof** (`LocalDomain::spawn` of `sh -c "echo hi"` through `Box<dyn PtyTransport>` collects "hi" via `take_reader()` and gets `Ok(Some(0))` from `wait()` — proving the trait surface, not just direct LocalPty, carries CORE-04 clean-exit and CORE-05 TERM env). One surface change in vector-pty: `LocalPty::write(&self)` → `LocalPty::write(&mut self)` (Rule 3 blocking fix — `Box<dyn portable_pty::MasterPty + Send>` is `!Sync` so the trait-object Send-future bound forced `&mut self` borrow; no vector-pty caller invokes `.write` in Plan 02-03's tests so the change is zero-risk to existing contracts). Two task commits: b88a02d + c0ad634. Four auto-fixed deviations: 1 Rule 3 (LocalPty::write signature) + 3 Rule 1 (clippy `no_effect_underscore_binding`, `while_let_loop`, rustfmt long-line wrapping).
 - **Phase 2 Plan 02 (Wave 1) complete (2026-05-11):** `vector-term` ships its full public API — `Term::new/feed/resize/grid/cursor/mode/dims/search` + `Match` struct — backed by `alacritty_terminal 0.26`. 26 conformance tests pass in 0.34s wall-clock (D-37 budget was 1s). CORE-01 (CSI/OSC/DCS/partial-UTF-8/alt-screen-1049/DECSTBM/ED/EL), CORE-02 (24-bit + 256-color SGR via `Color::Spec(Rgb)` / `Color::Indexed(u8)` + CJK/emoji-ZWJ `WIDE_CHAR + WIDE_CHAR_SPACER` flags), CORE-03 (10k+ scrollback regex via streaming `RegexSearch`+`RegexIter`, ~150ms — Pitfall 7 honored), CORE-06 (BRACKETED_PASTE + MOUSE_REPORT_CLICK + SGR_MOUSE bit toggles) all covered. search.rs ships with Task 1 (c4bb201) because the ED-2-vs-scrollback test consumes it; Task 2 (5a1fc48) lands CORE-02/03 fixtures. Four auto-fixed deviations (clippy cast lints + manual_let_else + rustfmt assert wrap + the discovery that `\b` doesn't fire in regex_automata's hybrid DFA — substring patterns are our search contract). No `unsafe`, no `from_utf8` in feed path (Pitfall 4), no string materialization in search (Pitfall 7). `_api_probe` retired; the real wrapper is now the load-bearing compile check.
 
@@ -126,22 +129,25 @@ Plan: 5 of 5
 
 ## Session Continuity
 
-**Last session:** 2026-05-11T16:35:47.451Z
+**Last session:** 2026-05-11T16:58:56.386Z
 
-**Stopped at:** Completed Phase 02 Plan 04 (vector-mux Domain + PtyTransport traits + LocalDomain + stubs); ready for Plan 02-05 (vector-headless pass-through proxy)
+**Stopped at:** Completed Phase 02 Plan 05 (vector-headless pass-through proxy); user-approved 5-step smoke matrix; Phase 2 implementation complete and ready for phase verifier (/gsd-execute-phase 2)
 
 **Next action:**
 
 ```bash
 
-# Phase 1 implementation is complete. The orchestrator runs phase verification next.
+# Phase 2 implementation is complete. The orchestrator runs phase verification next.
 
-/gsd-execute-phase 1
+/gsd-execute-phase 2
 ```
 
-The `/gsd-execute-phase` workflow detects all 6 plan SUMMARY.md files exist and
-transitions to phase-verification mode (regression gate + verifier + ROADMAP /
-Phase-Map close-out).
+The `/gsd-execute-phase` workflow detects all 5 Phase 2 plan SUMMARY.md files
+exist (02-01..02-05) and transitions to phase-verification mode (regression
+gate + verifier + ROADMAP / Phase-Map close-out). After Phase 2 verifier closes,
+Phase 3 (GPU Renderer & First Paint) is the next plannable phase — it inherits
+the Term + PTY + transport plumbing unchanged and only swaps `render.rs` for a
+wgpu glyph atlas.
 
 **Asynchronous user work (CLAUDE.md `do not push` — user pushes asynchronously):**
 
@@ -172,3 +178,4 @@ After reviewing the Phase 1 commits (4dd0c4e, 75b77b1, plus all prior commits si
 *Plan 01-05 completed: 2026-05-10 (committed locally; user pushes asynchronously)*
 *Plan 01-06 completed: 2026-05-10 (committed locally 4dd0c4e + 75b77b1; user-approved checkpoint no-action; branch protection + first tagged release deferred to user's async push)*
 *Phase 1 implementation complete: 2026-05-10 — verifier runs next*
+*Phase 2 Plan 02-05 completed: 2026-05-11 (ab50bf1 + 4a107b0; user-approved smoke matrix; Phase 2 implementation complete — verifier runs next)*
