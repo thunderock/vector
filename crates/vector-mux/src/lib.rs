@@ -1,16 +1,18 @@
-//! Mux tree (Window/Tab/Pane) and Domain trait. Filled in Phase 4.
+//! Mux trait surface (D-38). Phase 2 ships:
+//!   - `PtyTransport` + `Domain` traits in FINAL shape (Phases 7/8/9 only fill bodies).
+//!   - `LocalDomain` fully implemented atop `vector_pty::LocalPty`.
+//!   - `CodespaceDomain` + `DevTunnelDomain` stubs that `unimplemented!()` at runtime.
+//!
+//! `Pane` / `Tab` / `Window` types land in Phase 4.
 
-use anyhow::Result;
+pub use codespace_domain::CodespaceDomain;
+pub use devtunnel_domain::DevTunnelDomain;
+pub use domain::{Domain, SpawnCommand};
+pub use local_domain::{LocalDomain, LocalTransport};
+pub use transport::{PtyTransport, TransportKind};
 
-pub trait Domain: Send + Sync {
-    fn label(&self) -> String {
-        unimplemented!("Phase 4")
-    }
-}
-
-pub trait Pane: Send + Sync {}
-
-#[allow(dead_code, unused_imports)]
-fn _force_anyhow_use() -> Result<()> {
-    Ok(())
-}
+mod codespace_domain;
+mod devtunnel_domain;
+mod domain;
+mod local_domain;
+mod transport;

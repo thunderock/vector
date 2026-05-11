@@ -125,7 +125,10 @@ impl LocalPty {
             .map_err(|e| PtyError::Resize(e.to_string()))
     }
 
-    pub async fn write(&self, bytes: &[u8]) -> Result<(), PtyError> {
+    // Takes `&mut self` so the trait-object wrapper's `async fn write(&mut self)`
+    // future is Send (LocalPty itself is !Sync because `Box<dyn MasterPty + Send>`
+    // is not Sync — but &mut LocalPty is Send via LocalPty: Send).
+    pub async fn write(&mut self, bytes: &[u8]) -> Result<(), PtyError> {
         self.writer_tx
             .send(bytes.to_vec())
             .await
