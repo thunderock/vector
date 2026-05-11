@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
 status: Executing Phase 01
-stopped_at: "Plan 01-04 — Tasks 1+2 committed (d247be1, 5df48f6); paused at Task 3 (Wave-0 cargo-bundle universal-DMG human-verify checkpoint). Resume signal: user types 'approved' after running cargo xtask dmg --universal locally on macOS."
-last_updated: "2026-05-11T01:53:12.305Z"
+stopped_at: Completed Plan 01-04 (xtask DMG pipeline + CalVer release subcommand + Wave-0 cargo-bundle spike approved). Ready for Plan 01-05 (GitHub Actions CI).
+last_updated: "2026-05-11T02:33:07.298Z"
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State: Vector
 
-**Last updated:** 2026-05-10 (after Wave 3 — plan 01-03 complete)
+**Last updated:** 2026-05-10 (after Wave 4 — plan 01-04 complete, Wave-0 cargo-bundle spike approved)
 
 ## Project Reference
 
@@ -25,13 +25,13 @@ progress:
 ## Current Position
 
 Phase: 01 (foundation-ci-dmg-pipeline) — EXECUTING
-Plan: 4 of 6 (Tasks 1+2 committed; paused at Task 3 human-verify checkpoint)
+Plan: 5 of 6 (01-01..01-04 complete; next is 01-05 GitHub Actions CI)
 
 ## Phase Map
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | Foundation & CI/DMG Pipeline | In progress (3/6 plans) |
+| 1 | Foundation & CI/DMG Pipeline | In progress (4/6 plans) |
 | 2 | Headless Terminal Core | Not started |
 | 3 | GPU Renderer & First Paint | Not started |
 | 4 | Mux — Tabs & Splits | Not started |
@@ -48,9 +48,9 @@ Plan: 4 of 6 (Tasks 1+2 committed; paused at Task 3 human-verify checkpoint)
 |--------|-------|
 | Phases planned | 10 |
 | Phases complete | 0 |
-| Plans complete | 3 |
+| Plans complete | 4 |
 | v1 requirements mapped | 51 / 51 (100%) |
-| v1 requirements completed | 2 / 51 (WIN-05, BUILD-01) |
+| v1 requirements completed | 3 / 51 (WIN-05, BUILD-01, BUILD-03) |
 
 ## Accumulated Context
 
@@ -64,6 +64,10 @@ Plan: 4 of 6 (Tasks 1+2 committed; paused at Task 3 human-verify checkpoint)
 - **TOML config only.** No Lua, no DSL. Hot-reload via `notify` (FSEvents).
 - **`Domain` / `Pane` / `PtyTransport` seam** (WezTerm pattern) is the only boundary between terminal model and transport. Established in Phase 4; load-bearing for Phases 7, 8, 9.
 - **`winit::EventLoop` on the main thread, `tokio` multi-thread runtime on background threads, `EventLoopProxy::send_event` as the only cross-thread signal.** Established in Phase 1 skeleton.
+- **xtask separate workspace (D-04):** empty `[workspace]` table in `xtask/Cargo.toml` is the standard cargo idiom for opting OUT of the parent workspace. xtask deps don't pollute the main resolver graph and cargo-deny only audits shippable code.
+- **Wave-0 cargo-bundle universal-binary spike (A5):** cargo-bundle 0.10 honors the pre-merged universal binary at `target/release/vector-app`. No `cargo-bundle --bin` post-process fallback needed.
+- **`cargo xtask` is the single DMG build code path for both local + CI (D-22):** CI passes pre-built per-arch binaries via `--arm64 PATH --x86_64 PATH`; local invocation builds them on the fly. Pitfall-3 (`lipo -info` guard) fires in both contexts.
+- **CalVer one-release-per-day (D-27):** `cargo xtask release` refuses to overwrite an existing tag for today's date; push-free per CLAUDE.md.
 
 ### Open Questions / Risk Register
 
@@ -86,7 +90,7 @@ Plan: 4 of 6 (Tasks 1+2 committed; paused at Task 3 human-verify checkpoint)
 - [x] Wave 1 (plan 01-01) — workspace scaffold complete
 - [x] Wave 2 (plan 01-02) — architectural invariants complete
 - [x] Wave 3 (plan 01-03) — AppKit window + threading skeleton complete (on macOS, user-approved checkpoint)
-- [ ] Wave 4 (plan 01-04) — DMG xtask pipeline (REQUIRES macOS)
+- [x] Wave 4 (plan 01-04) — DMG xtask pipeline complete (Wave-0 cargo-bundle spike approved on macOS)
 - [ ] Wave 5 (plan 01-05) — GitHub Actions CI
 - [ ] Wave 6 (plan 01-06) — release pipeline + README + ADRs
 - [ ] Phase 1 verification + roadmap completion
@@ -98,21 +102,21 @@ Plan: 4 of 6 (Tasks 1+2 committed; paused at Task 3 human-verify checkpoint)
 
 ## Session Continuity
 
-**Last session:** 2026-05-11T01:53:12.302Z
+**Last session:** 2026-05-11T02:33:07.295Z
 
-**Stopped at:** Plan 01-04 — Tasks 1+2 committed (d247be1, 5df48f6); paused at Task 3 (Wave-0 cargo-bundle universal-DMG human-verify checkpoint). Resume signal: user types 'approved' after running cargo xtask dmg --universal locally on macOS.
+**Stopped at:** Completed Plan 01-04 (xtask DMG pipeline + CalVer release subcommand + Wave-0 cargo-bundle spike approved). Ready for Plan 01-05 (GitHub Actions CI).
 
 **Next action:**
 
 ```bash
 
-# Continue execution from Wave 4 on macOS (hdiutil + cargo-bundle available)
+# Continue execution from Wave 5 (GitHub Actions CI) on macOS
 
 /gsd-execute-phase 1
 ```
 
-The `/gsd-execute-phase` workflow auto-skips plans 01-01 / 01-02 / 01-03 (their SUMMARY.md
-files exist) and resumes from 01-04.
+The `/gsd-execute-phase` workflow auto-skips plans 01-01 / 01-02 / 01-03 / 01-04
+(their SUMMARY.md files exist) and resumes from 01-05.
 
 **Files to re-read on resume:**
 
@@ -122,7 +126,8 @@ files exist) and resumes from 01-04.
 4. `.planning/phases/01-foundation-ci-dmg-pipeline/01-01-SUMMARY.md` — workspace scaffold details
 5. `.planning/phases/01-foundation-ci-dmg-pipeline/01-02-SUMMARY.md` — lints + cargo-deny + arch-lint details
 6. `.planning/phases/01-foundation-ci-dmg-pipeline/01-03-SUMMARY.md` — threading skeleton + AppKit window + menu + overlay details
+7. `.planning/phases/01-foundation-ci-dmg-pipeline/01-04-SUMMARY.md` — xtask DMG pipeline + CalVer release subcommand + Wave-0 cargo-bundle spike details (incl. brew/cargo-install prereqs hand-off to Plan 01-05's CI YAML)
 
 ---
 *State initialized: 2026-05-10*
-*Plan 01-03 completed: 2026-05-10*
+*Plan 01-04 completed: 2026-05-10*
