@@ -61,7 +61,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 02-01-PLAN.md — Wave 0: workspace deps + new vector-headless crate scaffold + alacritty_terminal 0.26 API spike + 13 test-file #[ignore] stubs
   - [x] 02-02-PLAN.md — Wave 1: vector-term wrapper (Term::new/feed/resize/grid/cursor/mode/search) + 10 conformance test files filled (CORE-01/02/03/06)
   - [x] 02-03-PLAN.md — Wave 2: vector-pty LocalPty (portable-pty + spawn_blocking + bounded mpsc + drop(pair.slave) + Drop kill+wait) + 5 lifecycle/term-env tests (CORE-04/05)
-  - [ ] 02-04-PLAN.md — Wave 3: vector-mux PtyTransport + Domain traits (D-38 final shape) + LocalDomain full impl + Codespace/DevTunnel stubs + object-safety test
+  - [x] 02-04-PLAN.md — Wave 3: vector-mux PtyTransport + Domain traits (D-38 final shape) + LocalDomain full impl + Codespace/DevTunnel stubs + object-safety test
   - [ ] 02-05-PLAN.md — Wave 4: vector-headless binary — raw-mode bridge + 30Hz ANSI repaint + SIGWINCH watcher + manual smoke checkpoint (vim/tmux/htop/less +F)
 **Stack additions**: `alacritty_terminal 0.26`, `vte 0.15` (transitive), `portable-pty 0.9`, `tokio::task::spawn_blocking` PTY bridge.
 **Risks & notes**:
