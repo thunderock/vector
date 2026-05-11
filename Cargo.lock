@@ -2322,6 +2322,7 @@ dependencies = [
 name = "vector-render"
 version = "2026.5.10"
 dependencies = [
+ "alacritty_terminal",
  "anyhow",
  "bytemuck",
  "etagere",

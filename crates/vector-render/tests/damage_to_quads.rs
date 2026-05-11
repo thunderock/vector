@@ -1,8 +1,14 @@
-//! Wave-0 stub: damage_to_quads. Filled by Plan 03-03.
-//! Tracks: RENDER-01.
+//! Plan 03-03 Task 1: smoke that Term reports damage after `feed`. Task 2 upgrades to a
+//! pixel-level offscreen render assertion.
 
 #[test]
-#[ignore = "Wave-0 stub"]
-fn damage_to_quads() {
-    unimplemented!("Wave-0 stub — Plan 03-03 fills this");
+fn term_reports_damage_after_feed() {
+    let mut term = vector_term::Term::new(40, 10, 1_000);
+    term.feed(b"\x1b[31mA\x1b[0m");
+    match term.damage() {
+        vector_term::TermDamage::Full => {}
+        vector_term::TermDamage::Partial(iter) => {
+            assert!(iter.count() > 0, "expected at least one damaged row");
+        }
+    }
 }
