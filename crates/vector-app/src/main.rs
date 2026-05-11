@@ -10,11 +10,15 @@ use winit::event_loop::{ControlFlow, EventLoop};
 mod app;
 mod menu;
 mod overlay;
+mod pty_actor;
+mod render_host;
+#[allow(dead_code)]
 mod tick;
 
 #[derive(Debug, Clone)]
 pub enum UserEvent {
     Tick(u64),
+    PtyOutput(Vec<u8>),
 }
 
 fn main() -> Result<()> {
@@ -42,7 +46,7 @@ fn main() -> Result<()> {
                 .thread_name("tokio-worker")
                 .build()
                 .expect("build tokio runtime");
-            rt.block_on(tick::io_main(proxy));
+            rt.block_on(pty_actor::io_main(proxy));
         })?;
 
     let mut application = app::App::new();

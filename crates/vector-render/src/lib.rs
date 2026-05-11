@@ -1,8 +1,5 @@
-//! wgpu pipeline + glyph atlas + damage tracking. Filled in Phase 3.
+//! wgpu pipeline + glyph atlas + damage tracking. Phase 3.
 
-use anyhow::Result;
+mod pipeline;
 
-#[allow(dead_code, unused_imports)]
-fn _force_anyhow_use() -> Result<()> {
-    Ok(())
-}
+pub use pipeline::RenderContext;

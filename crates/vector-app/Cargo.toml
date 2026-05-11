@@ -12,16 +12,21 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+parking_lot.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tokio.workspace = true
+wgpu.workspace = true
 winit.workspace = true
 objc2.workspace = true
 objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 objc2-quartz-core.workspace = true
 raw-window-handle.workspace = true
+vector-mux = { path = "../vector-mux" }
+vector-render = { path = "../vector-render" }
+vector-term = { path = "../vector-term" }
 
 [dev-dependencies]
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
