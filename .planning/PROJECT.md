@@ -13,12 +13,12 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 ### Validated
 
 - [x] CI build pipeline that produces installable `.dmg` artifacts (Phase 1 — operationally validated 2026-05-11; CI tip + tagged v2026.5.10 Universal DMG both confirmed launching on macOS Sequoia)
+- [x] xterm-compatible terminal core (parser + grid + scrollback) suitable as a daily-driver local shell (Phase 2 — `vector-headless` proxy ran vim/tmux/htop/less cleanly on 2026-05-11; CORE-01..06 backed by 53 passing tests, conformance suite 0.326s vs 1s D-37 budget)
 
 ### Active
 
 - [ ] Native macOS app distributed as an unsigned `.dmg` (right-click → Open), Universal binary
 - [ ] GPU-accelerated terminal rendering on Mac (Metal via wgpu) — performance comparable to Alacritty/WezTerm/ghostty
-- [ ] xterm-compatible terminal core (parser + grid + scrollback) suitable as a daily-driver local shell
 - [ ] Tabs and splits (horizontal/vertical), multiple sessions per window
 - [ ] Session persistence + transparent reconnect — wifi drop should not lose Codespace state
 - [ ] tmux pass-through that "just works" — no double-multiplex visual glitches when remote tmux is running
@@ -99,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-11 after Phase 1 operationally validated end-to-end on GitHub. Workspace + 14 crate stubs + winit/tokio threading skeleton + AppKit window + Universal DMG build path + ci.yml + release.yml + ADRs 0001..0006 all in place. CI-produced Vector-2026.5.10-tip-8e540ea-universal.dmg AND tagged Vector-2026.5.10-universal.dmg both confirmed launching on macOS Sequoia. Five Phase-1 divergences (cargo-bundle A5 invalidated, SemVer unpadded CalVer, annotated tags, master/main dual-trigger, deny on ubuntu) captured in ADRs 0004/0005/0006.*
+*Last updated: 2026-05-11 after Phase 2 complete — `vector-headless` pass-through proxy ships with locked D-38 `PtyTransport`/`Domain` trait shapes ready for Phases 4/7/8/9 to plug into. `vector-term` (alacritty_terminal 0.26 wrapper, 26 conformance tests in 0.326s), `vector-pty` (portable-pty 0.9 + tokio blocking-thread bridge), `vector-mux` (LocalDomain full impl + Codespace/DevTunnel `unimplemented!()` stubs), and the binary itself all green; user-approved smoke matrix (echo, vim, tmux, htop, less) passed. CORE-01..06 satisfied.*
