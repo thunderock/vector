@@ -1,8 +1,11 @@
-//! Keymap, IME, mouse encoding. Filled in Phase 5.
+//! Keymap + paste + selection state. Phase 3 (D-52, D-53, D-54).
 
-use anyhow::Result;
+mod keymap;
+mod mods;
+mod paste;
+mod selection;
 
-#[allow(dead_code, unused_imports)]
-fn _force_anyhow_use() -> Result<()> {
-    Ok(())
-}
+pub use keymap::{encode, encode_key};
+pub use mods::ModState;
+pub use paste::wrap_bracketed_paste;
+pub use selection::{SelectionRange, SelectionState};

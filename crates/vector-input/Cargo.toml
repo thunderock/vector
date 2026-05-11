@@ -4,12 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Keymap + IME + mouse encoding — Phase 5."
+description = "Keymap + paste + selection state — Phase 3 (D-52, D-53, D-54)."
 
 [dependencies]
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+winit.workspace = true
 
 [lints]
 workspace = true
