@@ -61,9 +61,18 @@ fn finalize(sh: &Shell, version: &str, tip: bool, _staged_bin: &str) -> Result<(
     super::icon::generate_icns(sh).context("generate icon.icns")?;
     cmd!(sh, "cargo bundle --release -p vector-app").run()?;
     let app_path = "target/release/bundle/osx/Vector.app";
+    let bundled_bin = format!("{app_path}/Contents/MacOS/vector-app");
+
+    // Assumption A5 fallback: cargo-bundle 0.10 re-runs `cargo build` host-arch
+    // and overwrites any pre-merged binary we staged. Restore by copying the
+    // canonical universal binary over Vector.app's Mach-O when it exists.
+    let merged = "target/universal-apple-darwin/release/vector-app";
+    if std::path::Path::new(merged).exists() {
+        sh.copy_file(merged, &bundled_bin)?;
+    }
 
     // Pitfall 3 — secret-thin guard at the bundled Mach-O level.
-    let info = cmd!(sh, "lipo -info {app_path}/Contents/MacOS/vector-app").read()?;
+    let info = cmd!(sh, "lipo -info {bundled_bin}").read()?;
     println!("Bundled Mach-O: {info}");
 
     let dmg_name = if tip {
