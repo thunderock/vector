@@ -1942,6 +1942,7 @@ dependencies = [
  "async-trait",
  "clap",
  "crossterm",
+ "parking_lot",
  "regex",
  "scopeguard",
  "tokio",

@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Headless pass-through proxy binary — Phase 2 (Plan 02-05 fills body)."
+description = "Headless pass-through proxy binary (D-36) — bridges parent stdin/stdout to a $SHELL PTY via vector-term + vector-mux."
 
 [[bin]]
 name = "vector-headless"
@@ -16,7 +16,7 @@ path = "src/main.rs"
 vector-term = { path = "../vector-term" }
 vector-pty = { path = "../vector-pty" }
 vector-mux = { path = "../vector-mux" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "signal", "io-std", "io-util"] }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -25,6 +25,7 @@ regex = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29"
 scopeguard = "1"
+parking_lot = "0.12"
 
 [lints]
 workspace = true
