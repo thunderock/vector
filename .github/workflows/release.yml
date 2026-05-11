@@ -3,6 +3,12 @@ name: release
 on:
   push:
     tags: ['v*']
+  release:
+    types: [published]
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
 
 env:
   MACOSX_DEPLOYMENT_TARGET: "13.0"
@@ -14,6 +20,8 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-apple-darwin
@@ -31,6 +39,8 @@ jobs:
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: x86_64-apple-darwin
@@ -51,7 +61,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
           fetch-depth: 0
+      - name: Resolve release tag
+        id: tag
+        run: |
+          TAG="${{ github.event.release.tag_name || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-apple-darwin
@@ -100,11 +116,12 @@ jobs:
           fi
       - name: Append xattr install footer to release notes
         run: |
+          DMG_NAME=$(basename "$(ls target/dmg/Vector-*-universal.dmg | head -1)")
           cat >> RELEASE_NOTES.md <<EOF
 
           ## Install
 
-          Download \`Vector-${{ github.ref_name }}-universal.dmg\` from this release page, open it, and drag \`Vector.app\` to \`/Applications\`.
+          Download \`$DMG_NAME\` from this release page, open it, and drag \`Vector.app\` to \`/Applications\`.
 
           The first time you launch, macOS will block the unsigned app. Run this once:
 
@@ -114,11 +131,17 @@ jobs:
 
           Built from commit \`${{ github.sha }}\` on macOS 13+ (Ventura). Apple Silicon and Intel both supported (Universal binary).
           EOF
-      - name: Publish GitHub Release
+      - name: Publish or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "Vector ${{ github.ref_name }}" \
-            --notes-file RELEASE_NOTES.md \
-            target/dmg/Vector-*-universal.dmg
+          TAG="${{ steps.tag.outputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" target/dmg/Vector-*-universal.dmg --clobber
+            gh release edit "$TAG" --title "Vector $TAG" --notes-file RELEASE_NOTES.md
+          else
+            gh release create "$TAG" \
+              --title "Vector $TAG" \
+              --notes-file RELEASE_NOTES.md \
+              target/dmg/Vector-*-universal.dmg
+          fi
