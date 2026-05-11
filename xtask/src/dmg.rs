@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use xshell::{cmd, Shell};
 
 // Workspace CalVer; kept in sync with [workspace.package].version.
-const VERSION: &str = "2026.05.10";
+const VERSION: &str = "2026.5.10";
 
 pub fn dmg_local(sh: &Shell) -> Result<()> {
     // Host-arch only — for local Apple Silicon dev box.

@@ -5,7 +5,9 @@ use toml_edit::{value, DocumentMut};
 use xshell::{cmd, Shell};
 
 pub fn release(sh: &Shell) -> Result<()> {
-    let version = Local::now().format("%Y.%m.%d").to_string();
+    // Cargo SemVer rejects leading zeros in any version component, so months
+    // and days must be unpadded: `2026.5.10`, not `2026.05.10`.
+    let version = Local::now().format("%Y.%-m.%-d").to_string();
     let tag = format!("v{version}");
 
     // CalVer permits one release per day (D-27). Refuse to overwrite an
