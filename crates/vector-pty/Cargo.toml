@@ -7,9 +7,11 @@ license.workspace = true
 description = "Local PTY pair + child spawn — Phase 2 (portable-pty wrapper)."
 
 [dependencies]
-anyhow.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
+portable-pty = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "process"] }

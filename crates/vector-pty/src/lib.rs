@@ -1,14 +1,8 @@
-//! Local PTY transport (read/write/resize). Filled in Phase 2 via `portable-pty`.
+//! Local PTY: spawns a child shell, bridges blocking read/write to tokio mpsc.
+//! Trait impls (`PtyTransport`, `Domain`) live in `vector-mux` per Plan 02-04.
 
-use anyhow::Result;
+pub use error::PtyError;
+pub use local::{LocalPty, SpawnCommand};
 
-pub trait PtyTransport: Send + 'static {
-    fn resize(&mut self, _rows: u16, _cols: u16, _px_w: u16, _px_h: u16) -> Result<()> {
-        unimplemented!("Phase 2")
-    }
-}
-
-#[allow(dead_code, unused_imports)]
-fn _force_anyhow_use() -> Result<()> {
-    Ok(())
-}
+mod error;
+mod local;
