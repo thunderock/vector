@@ -12,8 +12,8 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [x] **BUILD-01**: A cargo workspace skeleton compiles on macOS 13+ with Rust 1.88+ (pinned via `rust-toolchain.toml`)
 - [x] **BUILD-02**: GitHub Actions CI builds Universal binaries (arm64 + x86_64 via `lipo`) on every push to main and on every tag _(implemented + locally verified in Plan 01-05 commit 506b6bb; pending first-real-CI-run telemetry capture per `01-05-SUMMARY.md §Outstanding Verification Debt` — user pushes asynchronously per CLAUDE.md)_
 - [x] **BUILD-03**: An `xtask dmg` command produces an unsigned `Vector.dmg` locally, identical to what CI ships
-- [x] **BUILD-04**: Tagged releases publish the unsigned `.dmg` to GitHub Releases (ghostty-style "tip" + tagged release pattern) _(tip-release half implemented in Plan 01-05 ci.yml commit 506b6bb; tagged-release half lands in Plan 01-06's release.yml; pending first-real-CI-run telemetry capture per `01-05-SUMMARY.md §Outstanding Verification Debt`)_
-- [ ] **BUILD-05**: README documents the `xattr -dr com.apple.quarantine /Applications/Vector.app` Gatekeeper bypass for teammates
+- [x] **BUILD-04**: Tagged releases publish the unsigned `.dmg` to GitHub Releases (ghostty-style "tip" + tagged release pattern) _(tip-release half implemented in Plan 01-05 ci.yml commit 506b6bb; tagged-release half implemented in Plan 01-06 release.yml commit 4dd0c4e; pending first-real-CI-run telemetry capture per `01-05-SUMMARY.md §Outstanding Verification Debt` AND first-real-tagged-release run per `01-06-SUMMARY.md §Outstanding Verification Debt`)_
+- [x] **BUILD-05**: README documents the `xattr -dr com.apple.quarantine /Applications/Vector.app` Gatekeeper bypass for teammates _(implemented in Plan 01-06 README.md commit 4dd0c4e; D-26 closed at artifact level — xattr literal byte-identical across 4 surfaces: README install block, ci.yml tip-release body, release.yml tagged-release body, DMG background PNG via xtask/scripts/render-dmg-bg.sh)_
 
 ### Terminal Core
 
@@ -155,7 +155,7 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | BUILD-02 | Phase 1 | Complete |
 | BUILD-03 | Phase 1 | Complete |
 | BUILD-04 | Phase 1 | Complete |
-| BUILD-05 | Phase 1 | Pending |
+| BUILD-05 | Phase 1 | Complete |
 | WIN-05 | Phase 1 | Complete |
 | CORE-01 | Phase 2 | Pending |
 | CORE-02 | Phase 2 | Pending |
@@ -210,4 +210,4 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 
 ---
 *Requirements defined: 2026-05-10*
-*Last updated: 2026-05-10 — roadmapper filled traceability; mapped 51 / 51 v1 REQs to 10 phases*
+*Last updated: 2026-05-10 — Plan 01-06 closed: BUILD-04 (tagged-release half) and BUILD-05 (xattr in README) complete in commits 4dd0c4e + 75b77b1; BUILD-02 / BUILD-04 retain pending-real-CI-run / pending-real-tagged-release caveat per 01-05 + 01-06 Outstanding Verification Debt blocks*

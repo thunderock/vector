@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Executing Phase 01
-stopped_at: Completed Plan 01-05 (GitHub Actions CI). Workflow authored + committed (506b6bb); checkpoint approved by user without push — first real CI run telemetry deferred. Ready for Plan 01-06 (release.yml + README + ADRs + branch protection).
-last_updated: "2026-05-11T03:45:17.873Z"
+status: Phase 01 verification pending
+stopped_at: Completed Plan 01-06 (release.yml + README + ADRs + branch protection). Two task commits landed (4dd0c4e + 75b77b1); terminal human-action checkpoint user-approved without GitHub UI action. Phase 1 implementation complete (6/6 plans); phase verifier + close-out next.
+last_updated: "2026-05-10T22:00:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State: Vector
 
-**Last updated:** 2026-05-10 (after Wave 5 — plan 01-05 complete, ci.yml authored + locally verified, checkpoint approved without push; first-real-CI-run telemetry deferred)
+**Last updated:** 2026-05-10 (after Wave 6 — plan 01-06 complete, release.yml + README + 6 MADR ADRs + setup.md branch-protection guide authored + locally verified, human-action checkpoint user-approved without GitHub UI action; branch-protection state + first-tagged-release deferred. Phase 1 implementation complete; phase verifier next.)
 
 ## Project Reference
 
 **Core value:** Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
 
-**Current focus:** Phase 01 — foundation-ci-dmg-pipeline
+**Current focus:** Phase 01 verification (all 6 plans complete; phase verifier next)
 
 ## Current Position
 
-Phase: 01 (foundation-ci-dmg-pipeline) — EXECUTING
-Plan: 6 of 6 (01-01..01-05 complete; next is 01-06 release pipeline + README + ADRs + branch protection)
+Phase: 01 (foundation-ci-dmg-pipeline) — IMPLEMENTATION COMPLETE; verification pending
+Plan: 6 of 6 (01-01..01-06 all complete; next is the phase verifier + regression gate + close-out, handled by the orchestrator)
 
 ## Phase Map
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | Foundation & CI/DMG Pipeline | In progress (5/6 plans) |
+| 1 | Foundation & CI/DMG Pipeline | Implementation complete (6/6 plans); verifier next |
 | 2 | Headless Terminal Core | Not started |
 | 3 | GPU Renderer & First Paint | Not started |
 | 4 | Mux — Tabs & Splits | Not started |
@@ -48,10 +48,11 @@ Plan: 6 of 6 (01-01..01-05 complete; next is 01-06 release pipeline + README + A
 |--------|-------|
 | Phases planned | 10 |
 | Phases complete | 0 |
-| Plans complete | 5 |
+| Plans complete | 6 |
 | v1 requirements mapped | 51 / 51 (100%) |
-| v1 requirements completed | 6 / 51 (WIN-05, BUILD-01, BUILD-02*, BUILD-03, BUILD-04*) — *implemented and locally verified; pending first-real-CI-run telemetry capture per 01-05-SUMMARY Outstanding Verification Debt |
+| v1 requirements completed | 6 / 51 (WIN-05, BUILD-01, BUILD-02*, BUILD-03, BUILD-04*, BUILD-05) — *BUILD-02 and BUILD-04 implemented and locally verified; pending first-real-CI-run telemetry (01-05) AND first-real-tagged-release run (01-06) per Outstanding Verification Debt blocks |
 | Phase 01-foundation-ci-dmg-pipeline P05 | 1 task commit + checkpoint approved no-push | 2 tasks | 1 files |
+| Phase 01-foundation-ci-dmg-pipeline P06 | 2 task commits + checkpoint approved no-action | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Plan: 6 of 6 (01-01..01-05 complete; next is 01-06 release pipeline + README + A
 - **CI pipeline (Plan 01-05):** `.github/workflows/ci.yml` is the single source of truth for what ships. 7-job PR-vs-push DAG with Pitfall-3 belt-and-braces; authored and committed (506b6bb) without push per CLAUDE.md. First-real-CI-run telemetry deferred as verification debt — surfaced in 01-05-SUMMARY for `/gsd:progress` and `/gsd:audit-uat` to chase.
 - **Plan 01-05 textual deviation:** the macos-15-intel runner comment in ci.yml line 111 was reworded to drop the literal `macos-13` token (plan's verify clause asserts `! grep -q 'macos-13'`). D-21-amendment context preserved as "previous Intel runner retired Dec 2025". Same intent, no `macos-13` substring.
 - **Branch-protection contract for Plan 01-06:** the 7 required-status-check job names are `lint, commitlint, test, deny, build-arm64, build-x86_64, package`. Plan 01-06's setup script must list these exactly; any rename in ci.yml requires a lock-step update or branch protection silently no-ops.
+- **Plan 01-06 reconciliation:** docs/setup.md §3 enumerates only the 4 PR-reachable required-status-check names (lint, commitlint, test, deny). The 3 push-gated jobs (build-arm64, build-x86_64, package) cannot be required because they never run on PRs (per ci.yml D-17 conditional gate) — listing them would deadlock PR merges. ADR 0006 records the rationale; this reconciles Plan 01-05's overstated hand-off with CONTEXT D-34 ("Universal-DMG build is intentionally NOT a required check").
+- **Phase 1 implementation complete (Plan 01-06):** release.yml + README install block (D-26 place 2 of 3) + CHANGELOG seed + 6 MADR ADRs (D-01..D-35 documented) + docs/setup.md branch-protection guide all committed (4dd0c4e + 75b77b1). xattr literal byte-identical across 4 surfaces (README, ci.yml tip body, release.yml tag body, DMG bg PNG). Terminal human-action checkpoint user-approved without GitHub UI action — branch-protection state + first-tagged-release deferred to user's async push per CLAUDE.md `do not push`.
 
 ### Open Questions / Risk Register
 
@@ -96,9 +99,12 @@ Plan: 6 of 6 (01-01..01-05 complete; next is 01-06 release pipeline + README + A
 - [x] Wave 3 (plan 01-03) — AppKit window + threading skeleton complete (on macOS, user-approved checkpoint)
 - [x] Wave 4 (plan 01-04) — DMG xtask pipeline complete (Wave-0 cargo-bundle spike approved on macOS)
 - [x] Wave 5 (plan 01-05) — GitHub Actions CI authored + committed (506b6bb); checkpoint approved without push (first-real-CI-run telemetry deferred)
-- [ ] Wave 6 (plan 01-06) — release pipeline + README + ADRs + branch protection
+- [x] Wave 6 (plan 01-06) — release.yml + README install block + CHANGELOG seed + 6 MADR ADRs + docs/setup.md branch-protection guide committed (4dd0c4e + 75b77b1); checkpoint approved without GitHub UI action (branch-protection state + first-tagged-release deferred)
 - [ ] First real CI run telemetry capture (Outstanding Verification Debt from Plan 01-05) — user pushes asynchronously, then walks 01-05-SUMMARY §"Outstanding Verification Debt" checklist
-- [ ] Phase 1 verification + roadmap completion
+- [ ] Branch protection configured on `main` per docs/setup.md §3 with the 4 PR-required check names (lint, commitlint, test, deny); `gh api repos/colligo/vector/branches/main/protection` verifies the rule (Outstanding Verification Debt from Plan 01-06)
+- [ ] First tagged release exercised: `cargo xtask release` + `git push --follow-tags` triggers release.yml; `gh release view v{CalVer}` shows Vector-{CalVer}-universal.dmg asset + xattr footer in body (Outstanding Verification Debt from Plan 01-06)
+- [ ] Downloaded DMG smoke-test: mount + drag-install + xattr de-quarantine + double-click launches Vector.app (Outstanding Verification Debt from Plan 01-06)
+- [ ] Phase 1 verification + roadmap completion (handled by orchestrator)
 
 ### Blockers
 
@@ -107,26 +113,33 @@ Plan: 6 of 6 (01-01..01-05 complete; next is 01-06 release pipeline + README + A
 
 ## Session Continuity
 
-**Last session:** 2026-05-11T03:42:16.629Z
+**Last session:** 2026-05-10T22:00:00.000Z
 
-**Stopped at:** Completed Plan 01-05 (GitHub Actions CI). Workflow authored + committed (506b6bb); checkpoint approved by user without push — first real CI run telemetry deferred. Ready for Plan 01-06 (release.yml + README + ADRs + branch protection).
+**Stopped at:** Completed Plan 01-06 (release.yml + README + 6 ADRs + setup.md). Two task commits landed locally (4dd0c4e + 75b77b1); terminal human-action checkpoint user-approved without GitHub UI action — branch-protection state + first-tagged-release deferred. Phase 1 implementation complete (6/6 plans); phase verifier + regression gate next.
 
 **Next action:**
 
 ```bash
 
-# Continue execution from Wave 6 (release pipeline + README + ADRs + branch protection)
+# Phase 1 implementation is complete. The orchestrator runs phase verification next.
 
 /gsd-execute-phase 1
 ```
 
-The `/gsd-execute-phase` workflow auto-skips plans 01-01..01-05
-(their SUMMARY.md files exist) and resumes from 01-06.
+The `/gsd-execute-phase` workflow detects all 6 plan SUMMARY.md files exist and
+transitions to phase-verification mode (regression gate + verifier + ROADMAP /
+Phase-Map close-out).
 
 **Asynchronous user work (CLAUDE.md `do not push` — user pushes asynchronously):**
-After reviewing 506b6bb diff, push `.github/workflows/ci.yml` to GitHub and walk the
-`.planning/phases/01-foundation-ci-dmg-pipeline/01-05-SUMMARY.md §"Outstanding
-Verification Debt"` checklist to close the first-real-CI-run debt for BUILD-02 / BUILD-04.
+
+After reviewing the Phase 1 commits (4dd0c4e, 75b77b1, plus all prior commits since 506b6bb), the user should:
+
+1. Push to GitHub: `git push origin master`.
+2. Walk `01-05-SUMMARY.md §"Outstanding Verification Debt"` to close the first-real-CI-run debt for BUILD-02 / BUILD-04.
+3. Configure branch protection on `main` per `docs/setup.md §3` (4 required checks: lint, commitlint, test, deny; linear history; no force-push) and verify via `gh api repos/colligo/vector/branches/main/protection`.
+4. Cut the first tagged release: `cargo xtask release` + `git push --follow-tags`; watch via `gh run watch`; confirm `gh release view v{CalVer}` shows the Vector-{CalVer}-universal.dmg asset with xattr footer in body.
+5. Smoke-test the published DMG: download → mount → drag → xattr de-quarantine → launch.
+6. Walk `01-06-SUMMARY.md §"Outstanding Verification Debt"` to close items (1)–(5) for BUILD-04 / BUILD-05.
 
 **Files to re-read on resume:**
 
@@ -138,8 +151,11 @@ Verification Debt"` checklist to close the first-real-CI-run debt for BUILD-02 /
 6. `.planning/phases/01-foundation-ci-dmg-pipeline/01-03-SUMMARY.md` — threading skeleton + AppKit window + menu + overlay details
 7. `.planning/phases/01-foundation-ci-dmg-pipeline/01-04-SUMMARY.md` — xtask DMG pipeline + CalVer release subcommand + Wave-0 cargo-bundle spike details (incl. brew/cargo-install prereqs hand-off to Plan 01-05's CI YAML)
 8. `.planning/phases/01-foundation-ci-dmg-pipeline/01-05-SUMMARY.md` — `.github/workflows/ci.yml` 7-job PR-vs-push DAG + Pitfall-3 belt-and-braces + Outstanding Verification Debt (first-real-CI-run telemetry deferred); hand-off block enumerates the 7 required-status-check job names Plan 01-06 must register in branch protection.
+9. `.planning/phases/01-foundation-ci-dmg-pipeline/01-06-SUMMARY.md` — release.yml + README install block + CHANGELOG seed + 6 MADR ADRs (0001..0006 documenting D-01..D-35) + docs/setup.md branch-protection guide; D-26 closed at the artifact level (xattr literal byte-identical across 4 surfaces); reconciles Plan 01-05's 7-check hand-off down to 4 PR-reachable checks per CONTEXT D-34; Outstanding Verification Debt for branch-protection state + first-tagged-release run; Phase 1 close-out hand-off block enumerates 4 cross-plan integrity invariants the phase verifier should re-check.
 
 ---
 *State initialized: 2026-05-10*
 *Plan 01-04 completed: 2026-05-10*
 *Plan 01-05 completed: 2026-05-10 (committed locally; user pushes asynchronously)*
+*Plan 01-06 completed: 2026-05-10 (committed locally 4dd0c4e + 75b77b1; user-approved checkpoint no-action; branch protection + first tagged release deferred to user's async push)*
+*Phase 1 implementation complete: 2026-05-10 — verifier runs next*
