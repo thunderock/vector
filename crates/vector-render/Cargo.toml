@@ -9,10 +9,12 @@ description = "GPU pipeline, glyph atlas, damage tracking — Phase 3 (wgpu, Met
 [dependencies]
 anyhow.workspace = true
 bytemuck.workspace = true
+etagere.workspace = true
 parking_lot.workspace = true
 pollster.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+vector-fonts = { path = "../vector-fonts" }
 vector-term = { path = "../vector-term" }
 wgpu.workspace = true
 winit.workspace = true
