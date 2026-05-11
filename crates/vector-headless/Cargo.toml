@@ -16,6 +16,7 @@ path = "src/main.rs"
 vector-term = { path = "../vector-term" }
 vector-pty = { path = "../vector-pty" }
 vector-mux = { path = "../vector-mux" }
+alacritty_terminal = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "signal", "io-std", "io-util"] }
 anyhow = { workspace = true }
 tracing = { workspace = true }

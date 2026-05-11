@@ -60,13 +60,17 @@ fn main() -> Result<()> {
 }
 
 async fn run(cols: u16, rows: u16, scrollback: usize) -> Result<()> {
-    // Raw mode on parent; restore on every exit path including panic (Pitfall 4).
-    crossterm::terminal::enable_raw_mode().context("enable_raw_mode")?;
-    let _raw_guard = scopeguard::guard((), |()| {
-        let _ = crossterm::terminal::disable_raw_mode();
-        // Best-effort: clear screen + home cursor so the parent prompt isn't trashed.
-        print!("\x1b[2J\x1b[H");
-        let _ = std::io::stdout().flush();
+    // Raw mode on parent — best-effort: if stdin isn't a tty (CI, pipes,
+    // `< /dev/null` smoke tests) we skip it and just pass bytes through.
+    // Restore on every exit path including panic (Pitfall 4).
+    let raw_mode_active = crossterm::terminal::enable_raw_mode().is_ok();
+    let _raw_guard = scopeguard::guard(raw_mode_active, |active| {
+        if active {
+            let _ = crossterm::terminal::disable_raw_mode();
+            // Best-effort: clear screen + home cursor so the parent prompt isn't trashed.
+            print!("\x1b[2J\x1b[H");
+            let _ = std::io::stdout().flush();
+        }
     });
 
     // Construct LocalDomain + spawn PtyTransport. take_reader BEFORE handing

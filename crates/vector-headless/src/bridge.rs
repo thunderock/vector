@@ -46,7 +46,9 @@ pub async fn pump_pty_to_term(
 
 /// Pump raw stdin bytes to `write_tx`. stdin is read on a blocking thread
 /// because tokio's `AsyncRead` on stdin doesn't play with raw mode reliably
-/// on macOS. Drops `write_tx` on EOF.
+/// on macOS. On stdin EOF, sends one `\x04` (EOT/Ctrl-D) so the child shell
+/// running in canonical mode sees end-of-input and exits cleanly. Then
+/// drops `write_tx` so `transport_actor` can call `wait()`.
 pub async fn pump_stdin_to_pty(write_tx: mpsc::Sender<Vec<u8>>) -> Result<()> {
     let (chunk_tx, mut chunk_rx) = mpsc::channel::<Vec<u8>>(64);
     tokio::task::spawn_blocking(move || {
@@ -69,6 +71,11 @@ pub async fn pump_stdin_to_pty(write_tx: mpsc::Sender<Vec<u8>>) -> Result<()> {
             break;
         }
     }
+    // stdin closed — send EOT so the shell exits canonical-mode read().
+    // Shell-specific: zsh in ZLE raw mode treats Ctrl-D as `delete-char-or-list-or-eof`
+    // which on an empty line should exit. If that doesn't fire (rare), the
+    // user / smoke-test harness has 5s to time out (acceptable per plan).
+    let _ = write_tx.send(vec![0x04]).await;
     Ok(())
 }
 

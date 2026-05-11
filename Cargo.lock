@@ -1938,6 +1938,7 @@ dependencies = [
 name = "vector-headless"
 version = "2026.5.10"
 dependencies = [
+ "alacritty_terminal",
  "anyhow",
  "async-trait",
  "clap",
