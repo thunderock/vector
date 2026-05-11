@@ -1,0 +1,124 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  MACOSX_DEPLOYMENT_TARGET: "13.0"
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "1"
+  RUST_BACKTRACE: short
+
+jobs:
+  build-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rel-arm64
+      - run: cargo build --release --target aarch64-apple-darwin -p vector-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-aarch64
+          path: target/aarch64-apple-darwin/release/vector-app
+
+  build-x86_64:
+    # AMENDMENT to D-21: previous Intel runner retired Dec 2025; macos-15-intel until Aug 2027.
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rel-x86_64
+      - run: cargo build --release --target x86_64-apple-darwin -p vector-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-x86_64
+          path: target/x86_64-apple-darwin/release/vector-app
+
+  release:
+    needs: [build-arm64, build-x86_64]
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: actions/download-artifact@v4
+        with:
+          name: vector-aarch64
+          path: artifacts/aarch64
+      - uses: actions/download-artifact@v4
+        with:
+          name: vector-x86_64
+          path: artifacts/x86_64
+      - name: Make per-arch binaries executable
+        run: |
+          chmod +x artifacts/aarch64/vector-app
+          chmod +x artifacts/x86_64/vector-app
+      - name: Pitfall-3 guard — verify per-arch Mach-O before merge
+        run: |
+          set -e
+          file artifacts/aarch64/vector-app | grep -q 'arm64'
+          file artifacts/x86_64/vector-app | grep -q 'x86_64'
+      - name: Install build tools
+        run: |
+          brew install create-dmg librsvg git-cliff
+          cargo install cargo-bundle@0.10.0 --locked
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Build Universal DMG
+        run: |
+          cargo xtask dmg --universal \
+            --arm64 artifacts/aarch64/vector-app \
+            --x86_64 artifacts/x86_64/vector-app
+      - name: Pitfall-3 guard — verify bundled Mach-O is fat
+        run: |
+          set -e
+          BIN="target/release/bundle/osx/Vector.app/Contents/MacOS/vector-app"
+          INFO=$(lipo -info "$BIN")
+          echo "$INFO"
+          echo "$INFO" | grep -q 'x86_64'
+          echo "$INFO" | grep -q 'arm64'
+      - name: Generate release notes
+        run: git-cliff --latest -o RELEASE_NOTES.md
+      - name: Verify release notes are non-empty
+        run: |
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::git-cliff produced empty RELEASE_NOTES.md"
+            exit 1
+          fi
+      - name: Append xattr install footer to release notes
+        run: |
+          cat >> RELEASE_NOTES.md <<EOF
+
+          ## Install
+
+          Download \`Vector-${{ github.ref_name }}-universal.dmg\` from this release page, open it, and drag \`Vector.app\` to \`/Applications\`.
+
+          The first time you launch, macOS will block the unsigned app. Run this once:
+
+          \`\`\`sh
+          xattr -dr com.apple.quarantine /Applications/Vector.app
+          \`\`\`
+
+          Built from commit \`${{ github.sha }}\` on macOS 13+ (Ventura). Apple Silicon and Intel both supported (Universal binary).
+          EOF
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Vector ${{ github.ref_name }}" \
+            --notes-file RELEASE_NOTES.md \
+            target/dmg/Vector-*-universal.dmg
