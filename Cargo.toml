@@ -31,6 +31,7 @@ alacritty_terminal = "0.26"
 anyhow = "1"
 async-trait = "0.1"
 bytemuck = { version = "1", features = ["derive"] }
+bytes = "1"
 crossfont = "0.9"
 etagere = "0.2"
 objc2 = "0.6.4"

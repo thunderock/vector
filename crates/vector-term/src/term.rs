@@ -80,6 +80,17 @@ impl Term {
         self.inner.reset_damage();
     }
 
+    /// Scroll the display by `delta` lines; positive = into scrollback history.
+    pub fn scroll_display(&mut self, delta: i32) {
+        use alacritty_terminal::grid::Scroll;
+        self.inner.scroll_display(Scroll::Delta(delta));
+    }
+
+    /// Current display offset; 0 = live grid, >0 = looking at scrollback.
+    pub fn scrollback_offset(&self) -> usize {
+        self.inner.grid().display_offset()
+    }
+
     pub(crate) fn inner(&self) -> &AlacrittyTerm<NoopListener> {
         &self.inner
     }

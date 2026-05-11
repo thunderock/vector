@@ -22,6 +22,7 @@ winit.workspace = true
 
 [dev-dependencies]
 alacritty_terminal.workspace = true
+bytes.workspace = true
 
 [lints]
 workspace = true

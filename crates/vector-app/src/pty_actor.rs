@@ -1,26 +1,32 @@
-//! I/O-thread actor: owns LocalDomain + Box<dyn PtyTransport>; reads → main thread,
+//! I/O-thread actor: owns LocalDomain + Box<dyn PtyTransport>; reads → coalesce buffer,
 //! writes ← main thread, resizes ← main thread. Plan 02-05 actor pattern;
-//! Plan 03-04 adds the write + resize branches via `biased tokio::select!`.
+//! Plan 03-04 added the write + resize branches via `biased tokio::select!`;
+//! Plan 03-05 routes reads through a shared `CoalesceBuffer` drained by frame_tick.
+
+use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::mpsc;
 use vector_mux::{Domain, LocalDomain, SpawnCommand};
 use winit::event_loop::EventLoopProxy;
 
+use crate::frame_tick::CoalesceBuffer;
 use crate::UserEvent;
 
 pub async fn io_main(
     proxy: EventLoopProxy<UserEvent>,
+    coalesce: Arc<CoalesceBuffer>,
     write_rx: mpsc::Receiver<Vec<u8>>,
     resize_rx: mpsc::Receiver<(u16, u16)>,
 ) {
-    if let Err(err) = run(proxy, write_rx, resize_rx).await {
+    if let Err(err) = run(proxy, coalesce, write_rx, resize_rx).await {
         tracing::error!(?err, "pty actor exited with error");
     }
 }
 
 async fn run(
     proxy: EventLoopProxy<UserEvent>,
+    coalesce: Arc<CoalesceBuffer>,
     mut write_rx: mpsc::Receiver<Vec<u8>>,
     mut resize_rx: mpsc::Receiver<(u16, u16)>,
 ) -> Result<()> {
@@ -61,10 +67,8 @@ async fn run(
             }
             maybe_read = reader.recv() => {
                 let Some(chunk) = maybe_read else { break; };
-                if proxy.send_event(UserEvent::PtyOutput(chunk)).is_err() {
-                    tracing::info!("event loop closed; pty actor exiting");
-                    break;
-                }
+                // D-47: append to the coalesce buffer; frame_tick drains every ~8 ms.
+                coalesce.push(&chunk);
             }
         }
     }

@@ -12,15 +12,36 @@ pub struct RenderHost {
     ctx: RenderContext,
     compositor: Option<Compositor>,
     compositor_failed: bool,
+    dpr: f32,
 }
 
 impl RenderHost {
     pub fn new(window: &Arc<Window>) -> Result<Self> {
+        #[allow(clippy::cast_possible_truncation)]
+        let dpr = window.scale_factor() as f32;
         Ok(Self {
             ctx: RenderContext::new(window)?,
             compositor: None,
             compositor_failed: false,
+            dpr,
         })
+    }
+
+    /// D-48: clear both atlases; next frame lazy-rasterizes glyphs at the new DPR.
+    pub fn clear_atlases(&mut self) {
+        if let Some(comp) = self.compositor.as_mut() {
+            comp.clear_atlases();
+        }
+    }
+
+    /// Record the current device-pixel ratio; future re-rasterization uses this bucket.
+    pub fn set_dpr(&mut self, dpr: f32) {
+        self.dpr = dpr.max(1.0);
+    }
+
+    #[allow(dead_code)]
+    pub fn dpr(&self) -> f32 {
+        self.dpr
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {

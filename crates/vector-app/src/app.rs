@@ -1,4 +1,6 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
@@ -13,6 +15,9 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::{input_bridge::InputBridge, menu, overlay, render_host::RenderHost, UserEvent};
 
+/// Window size threshold for debouncing `Term::resize` (D-49).
+const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
+
 pub struct App {
     window: Option<Arc<Window>>,
     overlay: Option<overlay::Overlay>,
@@ -22,10 +27,18 @@ pub struct App {
     input_bridge: InputBridge,
     mods: ModState,
     cursor_px: PhysicalPosition<f64>,
+    lpm_flag: Arc<AtomicBool>,
+    first_paint_ready: bool,
+    last_resize_at: Option<Instant>,
+    pending_resize: Option<(u16, u16)>,
 }
 
 impl App {
-    pub fn new(write_tx: mpsc::Sender<Vec<u8>>, resize_tx: mpsc::Sender<(u16, u16)>) -> Self {
+    pub fn new(
+        write_tx: mpsc::Sender<Vec<u8>>,
+        resize_tx: mpsc::Sender<(u16, u16)>,
+        lpm_flag: Arc<AtomicBool>,
+    ) -> Self {
         Self {
             window: None,
             overlay: None,
@@ -35,6 +48,10 @@ impl App {
             input_bridge: InputBridge::new(write_tx, resize_tx),
             mods: ModState::default(),
             cursor_px: PhysicalPosition::new(0.0, 0.0),
+            lpm_flag,
+            first_paint_ready: false,
+            last_resize_at: None,
+            pending_resize: None,
         }
     }
 
@@ -53,6 +70,17 @@ impl App {
     fn request_redraw(&self) {
         if let Some(w) = self.window.as_ref() {
             w.request_redraw();
+        }
+    }
+
+    /// D-49 debounce: if a pending resize is ≥ 50 ms old, flush it now.
+    fn flush_pending_resize_if_quiescent(&mut self) {
+        if let (Some(at), Some((rows, cols))) = (self.last_resize_at, self.pending_resize) {
+            if at.elapsed() >= RESIZE_DEBOUNCE {
+                self.input_bridge.send_resize(rows, cols);
+                self.pending_resize = None;
+                self.last_resize_at = None;
+            }
         }
     }
 }
@@ -81,8 +109,10 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
-            UserEvent::Tick(_) => {}
             UserEvent::PtyOutput(bytes) => {
+                if bytes.is_empty() {
+                    return;
+                }
                 {
                     let mut t = self.term.lock();
                     t.feed(&bytes);
@@ -90,6 +120,11 @@ impl ApplicationHandler<UserEvent> for App {
                 if !self.overlay_dropped {
                     self.overlay = None;
                     self.overlay_dropped = true;
+                }
+                // D-51: first non-empty drain flips the first-paint gate.
+                if !self.first_paint_ready {
+                    self.first_paint_ready = true;
+                    tracing::info!("first PTY byte received; first-paint gate open (D-51)");
                 }
                 self.request_redraw();
             }
@@ -100,9 +135,13 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 self.request_redraw();
             }
+            UserEvent::LpmChanged(enabled) => {
+                self.lpm_flag.store(enabled, Ordering::Relaxed);
+            }
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -124,6 +163,7 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 if let Some(bytes) = encode_key(&event, self.mods) {
                     self.input_bridge.send_bytes(bytes);
+                    self.request_redraw();
                 }
             }
             WindowEvent::MouseInput {
@@ -152,16 +192,46 @@ impl ApplicationHandler<UserEvent> for App {
                 delta: MouseScrollDelta::LineDelta(_, y),
                 ..
             } => {
-                // Plan 03-05 ratifies scrollback wiring; vector-term doesn't expose scroll_display yet.
-                tracing::debug!(y_lines = y, "scrollback offset deferred to Plan 03-05");
+                #[allow(clippy::cast_possible_truncation)]
+                let delta = y.round() as i32;
+                if delta != 0 {
+                    {
+                        let mut t = self.term.lock();
+                        t.scroll_display(delta);
+                    }
+                    self.request_redraw();
+                }
             }
             WindowEvent::MouseWheel {
                 delta: MouseScrollDelta::PixelDelta(pos),
                 ..
             } => {
-                tracing::debug!(y_px = pos.y, "scrollback offset deferred to Plan 03-05");
+                if let Some(host) = self.render_host.as_ref() {
+                    if let Some((_cw, ch)) = host.cell_metrics_px() {
+                        #[allow(clippy::cast_possible_truncation)]
+                        let lines = (pos.y / f64::from(ch.max(1))) as i32;
+                        if lines != 0 {
+                            {
+                                let mut t = self.term.lock();
+                                t.scroll_display(lines);
+                            }
+                            self.request_redraw();
+                        }
+                    }
+                }
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                if let Some(host) = self.render_host.as_mut() {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let dpr = scale_factor as f32;
+                    host.clear_atlases();
+                    host.set_dpr(dpr);
+                }
+                self.request_redraw();
+                tracing::info!(scale_factor, "DPR change; cleared atlases (D-48)");
             }
             WindowEvent::Resized(size) => {
+                // wgpu surface reconfigures on every event (cheap); Term::resize debounces 50ms.
                 if let Some(host) = self.render_host.as_mut() {
                     host.resize(size.width, size.height);
                 }
@@ -174,11 +244,19 @@ impl ApplicationHandler<UserEvent> for App {
                             u16::try_from((size.width / cell_w.max(1)).max(1)).unwrap_or(u16::MAX);
                         let rows =
                             u16::try_from((size.height / cell_h.max(1)).max(1)).unwrap_or(u16::MAX);
-                        self.input_bridge.send_resize(rows, cols);
+                        self.pending_resize = Some((rows, cols));
+                        self.last_resize_at = Some(Instant::now());
                     }
                 }
+                self.request_redraw();
             }
             WindowEvent::RedrawRequested => {
+                // D-51: gate first paint until shell + PTY + font + dirty row ready.
+                if !self.first_paint_ready {
+                    return;
+                }
+                // D-49: flush pending Term::resize if quiescent.
+                self.flush_pending_resize_if_quiescent();
                 if let Some(host) = self.render_host.as_mut() {
                     let sel = self
                         .input_bridge

@@ -137,6 +137,15 @@ impl Compositor {
         &mut self.atlas
     }
 
+    /// D-48: clear both atlases on DPR change; lazy re-rasterize on next frame.
+    pub fn clear_atlases(&mut self) {
+        self.atlas.clear_all();
+    }
+
+    /// Record the DPR bucket for future glyph re-rasterization. Cell metrics are
+    /// already in pixel units; this is a forward hook for Plan 04+ multi-DPR.
+    pub fn set_dpr(&mut self, _dpr: f32) {}
+
     pub fn resize(&mut self, render_ctx: &RenderContext, cols: u16, rows: u16) {
         self.viewport_size_px = [
             render_ctx.config.width as f32,

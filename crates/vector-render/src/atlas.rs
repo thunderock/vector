@@ -260,6 +260,14 @@ impl Atlas {
         self.mono.clear();
         self.color.clear();
     }
+
+    pub fn mono_has_entries(&self) -> bool {
+        !self.mono.slots.is_empty()
+    }
+
+    pub fn color_has_entries(&self) -> bool {
+        !self.color.slots.is_empty()
+    }
 }
 
 /// crossfont mono = 3-channel RGB alphamask. Expand to RGBA (alpha = max(r,g,b)) for Rgba8Unorm.

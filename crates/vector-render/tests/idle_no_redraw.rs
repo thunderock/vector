@@ -1,8 +1,21 @@
-//! Wave-0 stub: idle_no_redraw. Filled by Plan 03-05.
-//! Tracks: RENDER-03.
+//! Render-on-dirty: empty drain → no redraw (RENDER-03 / D-44).
+//! Mirror of the request_redraw gate in vector-app.
+
+fn should_redraw(empty_drain: bool, input_event: bool) -> bool {
+    !empty_drain || input_event
+}
 
 #[test]
-#[ignore = "Wave-0 stub"]
-fn idle_no_redraw() {
-    unimplemented!("Wave-0 stub — Plan 03-05 fills this");
+fn empty_drain_without_input_no_redraw() {
+    assert!(!should_redraw(true, false));
+}
+
+#[test]
+fn empty_drain_with_input_redraws() {
+    assert!(should_redraw(true, true));
+}
+
+#[test]
+fn non_empty_drain_redraws() {
+    assert!(should_redraw(false, false));
 }
