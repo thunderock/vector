@@ -10,9 +10,9 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 ### Build & Distribution
 
 - [x] **BUILD-01**: A cargo workspace skeleton compiles on macOS 13+ with Rust 1.88+ (pinned via `rust-toolchain.toml`)
-- [ ] **BUILD-02**: GitHub Actions CI builds Universal binaries (arm64 + x86_64 via `lipo`) on every push to main and on every tag
+- [x] **BUILD-02**: GitHub Actions CI builds Universal binaries (arm64 + x86_64 via `lipo`) on every push to main and on every tag _(implemented + locally verified in Plan 01-05 commit 506b6bb; pending first-real-CI-run telemetry capture per `01-05-SUMMARY.md §Outstanding Verification Debt` — user pushes asynchronously per CLAUDE.md)_
 - [x] **BUILD-03**: An `xtask dmg` command produces an unsigned `Vector.dmg` locally, identical to what CI ships
-- [ ] **BUILD-04**: Tagged releases publish the unsigned `.dmg` to GitHub Releases (ghostty-style "tip" + tagged release pattern)
+- [x] **BUILD-04**: Tagged releases publish the unsigned `.dmg` to GitHub Releases (ghostty-style "tip" + tagged release pattern) _(tip-release half implemented in Plan 01-05 ci.yml commit 506b6bb; tagged-release half lands in Plan 01-06's release.yml; pending first-real-CI-run telemetry capture per `01-05-SUMMARY.md §Outstanding Verification Debt`)_
 - [ ] **BUILD-05**: README documents the `xattr -dr com.apple.quarantine /Applications/Vector.app` Gatekeeper bypass for teammates
 
 ### Terminal Core
@@ -152,9 +152,9 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | BUILD-01 | Phase 1 | Complete |
-| BUILD-02 | Phase 1 | Pending |
+| BUILD-02 | Phase 1 | Complete |
 | BUILD-03 | Phase 1 | Complete |
-| BUILD-04 | Phase 1 | Pending |
+| BUILD-04 | Phase 1 | Complete |
 | BUILD-05 | Phase 1 | Pending |
 | WIN-05 | Phase 1 | Complete |
 | CORE-01 | Phase 2 | Pending |
