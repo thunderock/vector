@@ -21,10 +21,12 @@ pub fn release(sh: &Shell) -> Result<()> {
     cmd!(sh, "git add Cargo.toml CHANGELOG.md").run()?;
     let msg = format!("chore(release): {tag}");
     cmd!(sh, "git commit -m {msg}").run()?;
-    cmd!(sh, "git tag {tag}").run()?;
+    let tag_msg = format!("Release {tag}");
+    // Annotated tag — lightweight tags are silently skipped by `git push --follow-tags`.
+    cmd!(sh, "git tag -a {tag} -m {tag_msg}").run()?;
     // NEVER invoke the push command here — per CLAUDE.md the user reviews
     // diffs and pushes asynchronously.
-    println!("Tagged {tag}. Run the push command with --follow-tags when ready.");
+    println!("Tagged {tag} (annotated). Run the push command with --follow-tags when ready.");
     Ok(())
 }
 
