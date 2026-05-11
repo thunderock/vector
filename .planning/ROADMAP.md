@@ -264,5 +264,31 @@ Phase 1 (Foundation/CI/DMG, threading)
 
 At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Every researcher flagged scope creep as the project's biggest non-technical risk; the discipline is to keep saying no.
 
+## Backlog
+
+### Phase 999.1: AI autocomplete + command-history-aware suggestions (BACKLOG)
+
+**Goal:** Claude API-powered inline command suggestions, drawing on shell history (`~/.zsh_history` / `~/.bash_history`) plus Vector's own per-session history. Real differentiator vs Warp/Wave/Tabby.
+
+**Requirements:** TBD (likely a new `AI-*` family in REQUIREMENTS.md when promoted)
+
+**Plans:** 0 plans
+
+**Trigger:** After milestone v1.0.0 ships (Phase 10 release). Per PROJECT.md key decision: "must not gate terminal-core work."
+
+**Depends on (for context, not phase ordering):**
+- Phase 3 (GPU renderer) — needed to render dim/ghost-text suggestion overlays inline
+- Phase 4 (mux) — per-tab/per-pane history isolation
+- Phase 6 (GitHub auth) — auth-flow pattern reference for Claude API key handling (or reuse Keychain pattern from CORE-secrets)
+
+**Open questions (for /gsd:discuss-phase when promoted):**
+- Local Claude (`claude` CLI on PATH) vs Anthropic API direct? Latter needs API-key storage; former piggybacks on user's existing auth.
+- History scope: last N commands, or semantic search over full history with embeddings?
+- Streaming vs blocking suggestions — what's the keystroke-latency budget?
+- Privacy: opt-in only, never send history without explicit toggle.
+
+Plans:
+- [ ] TBD (promote with `/gsd:review-backlog` when ready)
+
 ---
 *Roadmap created: 2026-05-10*
