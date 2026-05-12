@@ -34,6 +34,7 @@ bytemuck = { version = "1", features = ["derive"] }
 bytes = "1"
 crossfont = "0.9"
 etagere = "0.2"
+libproc = "0.14"
 objc2 = "0.6.4"
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"

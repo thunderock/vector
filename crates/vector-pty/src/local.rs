@@ -1,4 +1,5 @@
 use std::io::{self, Read, Write};
+use std::os::fd::RawFd;
 use std::path::{Path, PathBuf};
 
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
@@ -137,6 +138,23 @@ impl LocalPty {
 
     pub fn take_reader(&mut self) -> Option<mpsc::Receiver<Vec<u8>>> {
         self.reader_rx.take()
+    }
+
+    /// Child shell PID. Returns None after `wait()` consumes the child.
+    #[must_use]
+    pub fn child_pid(&self) -> Option<i32> {
+        self.child
+            .as_ref()
+            .and_then(|c| c.process_id())
+            .and_then(|u| i32::try_from(u).ok())
+    }
+
+    /// Raw fd of the master PTY for `tcgetpgrp` / SIGWINCH ioctls.
+    /// Fd is owned by LocalPty (closed on Drop); callers must NOT close it.
+    /// Returns None on platforms where portable-pty cannot expose the fd.
+    #[must_use]
+    pub fn master_raw_fd(&self) -> Option<RawFd> {
+        self.master.as_raw_fd()
     }
 
     pub async fn wait(&mut self) -> Result<Option<i32>, PtyError> {

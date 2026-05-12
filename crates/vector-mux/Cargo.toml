@@ -9,6 +9,8 @@ description = "PtyTransport + Domain traits + LocalDomain — Phase 2 (D-38)."
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+libproc = { workspace = true }
+parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

@@ -6,6 +6,7 @@ use tokio::sync::mpsc;
 use vector_pty::{LocalPty, SpawnCommand as PtySpawnCommand};
 
 use crate::domain::{Domain, SpawnCommand};
+use crate::spawned_pane::SpawnedPane;
 use crate::transport::{PtyTransport, TransportKind};
 
 pub struct LocalDomain {
@@ -21,6 +22,29 @@ impl LocalDomain {
 
     pub fn with_shell(shell: PathBuf) -> Self {
         Self { shell }
+    }
+
+    /// Phase-4 extension: spawn locally and return SpawnedPane (transport + pid + master_fd).
+    /// Trait `Domain::spawn` stays D-38-final; this is an inherent method.
+    /// `async` mirrors `Domain::spawn` so callers can await uniformly across domains.
+    #[allow(clippy::unused_async)]
+    pub async fn spawn_local(&self, cmd: SpawnCommand) -> Result<SpawnedPane> {
+        let pty_cmd = PtySpawnCommand {
+            argv: cmd.argv,
+            cwd: cmd.cwd,
+            rows: cmd.rows,
+            cols: cmd.cols,
+            env: cmd.env,
+        };
+        let pty = LocalPty::spawn(&self.shell, pty_cmd).context("LocalPty::spawn")?;
+        let pid = pty.child_pid();
+        let master_fd = pty.master_raw_fd();
+        let transport: Box<dyn PtyTransport> = Box::new(LocalTransport(pty));
+        Ok(SpawnedPane {
+            transport,
+            pid,
+            master_fd,
+        })
     }
 }
 
