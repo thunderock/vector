@@ -104,7 +104,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   3. Resizing the window propagates new sizes to all panes and child shells; `tput cols` in any pane reports the correct width.
   4. The `Domain / Pane / PtyTransport` abstraction is the only seam between the terminal model and the transport — verified by a grep that finds zero `enum PaneSource` discriminations inside `vector-term`.
 **Plans**: 5 plans
-  - [ ] 04-01-PLAN.md — Wave 0: workspace deps + 13 Wave-0 test stubs + SpawnedPane struct + LocalPty child_pid/master_fd accessors (preserves D-38)
+  - [x] 04-01-PLAN.md — Wave 0: workspace deps + 13 Wave-0 test stubs + SpawnedPane struct + LocalPty child_pid/master_fd accessors (preserves D-38)
   - [ ] 04-02-PLAN.md — Wave 1: Mux singleton + Window/Tab/PaneNode tree + split mutation + close cascade + directional focus + resize-nudge + WIN-04 grep arch-lint live
   - [ ] 04-03-PLAN.md — Wave 2: per-pane PTY actor router (JoinSet<PaneId>) + UserEvent migration + Mux async helpers + cwd inheritance (libproc::pidcwd) + foreground-process tracking (D-57) + real-PTY integration tests
   - [ ] 04-04-PLAN.md — Wave 3: vector-input EncodedKey enum + 14 Mux shortcuts + multi-window NSWindowTabbingMode + per-pane Compositor + active-pane border (D-66) + inactive cursor outline
