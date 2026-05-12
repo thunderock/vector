@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Plan 05-05 complete — OSC sniffer + ForwardingListener landed (POLISH-04 D-78/D-79/D-70)
-last_updated: "2026-05-12T18:40:10.797Z"
+stopped_at: Completed Plan 05-06 — POLISH-05 OSC 52 inbound + outbound + tmux smoke harness
+last_updated: "2026-05-12T18:48:27.723Z"
 progress:
   total_phases: 11
   completed_phases: 4
   total_plans: 32
-  completed_plans: 26
+  completed_plans: 27
 ---
 
 # Project State: Vector
@@ -25,7 +25,7 @@ progress:
 ## Current Position
 
 Phase: 05 (polish-local-daily-driver) — EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 
 ## Phase Map
 
@@ -73,11 +73,13 @@ Plan: 4 of 10
 | Phase 05-polish-local-daily-driver P03 | 12min | 2 tasks | 11 files |
 | Phase 05-polish-local-daily-driver P01 | 9min | 3 tasks | 17 files |
 | Phase 05-polish-local-daily-driver P05 | 25min | 2 tasks | 8 files |
+| Phase 05-polish-local-daily-driver P06 | 38min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
 ### Key Decisions
 
+- **Phase 5 Plan 06 (POLISH-05 OSC 52) complete (2026-05-12):** `vector_input::osc52_outbound(&[u8]) -> Vec<u8>` ships with raw OSC 52 emission and 58-byte chunking per envelope (`MAX_CHUNK_BASE64 = 58` const, D-71 locked, Pitfall 5 tmux-passthrough safety margin). 3 inbound tests green via Plan-05-05's `Term::with_channels` + `ForwardingListener`: `raw_clipboard_store` (alacritty native dispatch), `dcs_wrapped_round_trip` (DCS envelope auto-peeled by alacritty 0.26 — Open Question #1 resolved empirically; no DCS-unwrap shim required in `osc_sniff.rs`), `read_denied` (alacritty's default `Osc52::OnlyCopy` mode denies reads silently at `term/mod.rs:1727-1728` — neither clipboard event nor PTY write reply fires; test asserts the *absence* of any event within 50ms). Real-tmux integration test body `dcs_round_trip_through_tmux` landed in `crates/vector-term/tests/osc52_tmux.rs` — tmux 3.4+ version gate, `allow-passthrough on`, `pbpaste` verification; `#[ignore]`-gated for Plan-05-09 CI tmux-smoke job. Empirical clarification: alacritty 0.26 base64-DECODES OSC 52 payloads before dispatching `Event::ClipboardStore` (consumers receive plaintext, not base64) — Plan 05-08 clipboard router will write plaintext directly to NSPasteboard. 4 Rule-1 auto-fixes (2 plan-body test-design errors against empirical alacritty behavior — base64 payload contract + silent read-denial path; 2 mechanical clippy lints — `match_wildcard_for_single_variants` + `trim_split_whitespace` + `items_after_statements`). Two task commits: `cb2a4fd` (Task 2 — outbound emitter + tests/clipboard.rs, executed FIRST because self-contained) + `7f23320` (Task 1 — tests/osc52.rs + tests/osc52_tmux.rs, executed AFTER Plan-05-05's `Term::with_channels` + `ForwardingListener` landed via parallel-agent commits cb05d0c + 2127fb0). **POLISH-05 lands.** All clippy + tests green on vector-input + vector-term.
 - **Build fresh in Rust** (not fork ghostty/VS Code). Rationale: ghostty is Zig, VS Code is Electron; the Rust ecosystem (`alacritty_terminal`, `wgpu`, `tokio`, `russh`, `octocrab`) is mature enough to build cleanly without a fork.
 - **Codespaces SSH v1 transport = subprocess `gh codespace ssh --stdio`.** Native `russh + tonic` over the port-16634 gRPC management API is v1.x. This eliminates the gnarliest protocol work from the v1 critical path while delivering the full user-facing feature.
 - **Dev Tunnels Phase 8 is spike-gated.** Day 1 of Phase 8 is a 1–2 day spike that commits a decision document among (a) subprocess `code tunnel client`, (b) vendor `microsoft/dev-tunnels/rs/` at pinned SHA, (c) defer to v2. Defer-to-v2 is an acceptable outcome.
@@ -152,9 +154,9 @@ Plan: 4 of 10
 
 ## Session Continuity
 
-**Last session:** 2026-05-12T18:40:10.793Z
+**Last session:** 2026-05-12T18:48:27.719Z
 
-**Stopped at:** Plan 05-05 complete — OSC sniffer + ForwardingListener landed (POLISH-04 D-78/D-79/D-70)
+**Stopped at:** Completed Plan 05-06 — POLISH-05 OSC 52 inbound + outbound + tmux smoke harness
 
 **Next action:**
 
