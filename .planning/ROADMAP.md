@@ -129,7 +129,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 **Plans**: 10 plans (revision iteration 2 — waves rebalanced after dependency analysis; 05-10 now wave 4, 05-09 now wave 5)
   - [ ] 05-01-PLAN.md — Wave 0: D-83 hardening (workspace lints + path-dep arch-lint + cargo-deny pre-commit + cargo-machete CI) + 22 Wave-0 test stubs + 10 workspace deps
   - [x] 05-02-PLAN.md — Wave 1: vector-config schema + loader (ConfigFile / ProfileBlock / Kind / FontCfg / KeyBind / Action / cwd_override) + line/col errors + flat-overlay resolve_profile (POLISH-01, POLISH-07)
-  - [ ] 05-03-PLAN.md — Wave 1: vector-theme palette + chrome tokens (UI-SPEC §9.1) + Vector Light/Dark builtins + .itermcolors importer + appearance resolver (POLISH-03)
+  - [x] 05-03-PLAN.md — Wave 1: vector-theme palette + chrome tokens (UI-SPEC §9.1) + Vector Light/Dark builtins + .itermcolors importer + appearance resolver (POLISH-03)
   - [ ] 05-04-PLAN.md — Wave 2: notify-debouncer-full watcher (150 ms + parent-dir + themes-dir) + apply pipeline diff_config + parse-error keep-last-good (POLISH-01, POLISH-02 restart classification)
   - [ ] 05-05-PLAN.md — Wave 1: OSC sniffer (OSC 7 cwd + OSC 133 prompt marks) + ForwardingListener (OSC 10/11/12 PtyWrite reply) + OSC 8 hyperlink grouping + scheme allowlist (POLISH-04)
   - [ ] 05-06-PLAN.md — Wave 1: OSC 52 raw + DCS-wrapped inbound (Open Question #1 resolution) + 58-byte outbound chunking + tmux smoke (POLISH-05)
