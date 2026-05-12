@@ -8,7 +8,7 @@ use anyhow::Result;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tracing_subscriber::{fmt, EnvFilter};
-use vector_app::{app, lpm, pty_actor, UserEvent, DEFAULT_CONFIG_TOML};
+use vector_app::{app, lpm, pty_actor, ske, UserEvent, DEFAULT_CONFIG_TOML};
 use vector_mux::{LocalDomain, Mux};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 
@@ -25,6 +25,10 @@ fn main() -> Result<()> {
         sha = env!("VECTOR_BUILD_SHA"),
         "vector starting"
     );
+
+    // POLISH-08 / D-80 / Pitfall 6: panic hook disables SKE on unwind so a
+    // crash mid-secure-input doesn't orphan the process-level flag.
+    ske::install_panic_hook();
 
     let event_loop: EventLoop<UserEvent> = EventLoop::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);

@@ -24,6 +24,7 @@ use crate::mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDEN
 use crate::overlay::Overlay;
 use crate::pty_actor::PtyActorRouter;
 use crate::render_host::RenderHost;
+use crate::ske::SecureInputGuard;
 use crate::toast::{ToastBanner, ToastStack};
 use crate::{menu, overlay, UserEvent};
 
@@ -84,6 +85,9 @@ pub struct App {
     /// Plan 05-10 Task 3 — current ConfigFile applied. Populated by the watcher
     /// thread via UserEvent::ConfigReloaded.
     current_config: Option<std::sync::Arc<vector_config::ConfigFile>>,
+    /// Plan 05-09 / POLISH-08 / D-80 — RAII guard for Carbon SKE. Drop on
+    /// app exit disables the flag (Pitfall 6).
+    ske_guard: SecureInputGuard,
 }
 
 impl App {
@@ -105,6 +109,7 @@ impl App {
             toasts: ToastStack::default(),
             hover_uri: None,
             current_config: None,
+            ske_guard: SecureInputGuard::new(),
         }
     }
 
@@ -763,7 +768,11 @@ impl ApplicationHandler<UserEvent> for App {
                 tracing::info!("ToggleSearch (Plan 05-10 — search bar overlay pass deferred)");
             }
             UserEvent::ToggleSecureKeyboardEntry => {
-                tracing::info!("ToggleSecureKeyboardEntry");
+                // POLISH-08 / D-80 — toggle Carbon SKE; menu state mirrors via
+                // a future binding (UI-SPEC §5.8). Pitfall 6 RAII guarantees
+                // disable on app exit even if the user leaves it on.
+                let now_on = self.ske_guard.toggle();
+                tracing::info!(secure_keyboard_entry = now_on, "ToggleSecureKeyboardEntry");
             }
             UserEvent::SpawnNewWindow => {
                 // D-82 Cmd-N — spawn a fresh ungrouped NSWindow with default profile.

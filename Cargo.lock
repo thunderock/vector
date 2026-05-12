@@ -2562,6 +2562,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "vector-app",
  "vector-config",
  "vector-fonts",
  "vector-input",

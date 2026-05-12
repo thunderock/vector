@@ -24,6 +24,7 @@ pub mod profile_picker;
 pub mod pty_actor;
 pub mod render_host;
 pub mod search_bar;
+pub mod ske;
 pub mod tab_window;
 pub mod toast;
 

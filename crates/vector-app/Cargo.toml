@@ -39,6 +39,15 @@ vector-term = { path = "../vector-term", version = "2026.5.10" }
 [dev-dependencies]
 async-trait = { workspace = true }
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
+# Re-enter our own crate with `test-hooks` so integration tests in `tests/` see
+# the cfg(test)-style mock for SKE Carbon FFI (POLISH-08 / D-80).
+vector-app = { path = ".", features = ["test-hooks"] }
+
+[features]
+default = []
+# POLISH-08 / D-80 — replace Carbon SKE FFI with atomic counters so integration
+# tests can assert enable/disable without orphaning the test runner's terminal.
+test-hooks = []
 
 # vector-app cannot use `[lints] workspace = true` because it must override
 # the workspace's `unsafe_code = "deny"` to permit AppKit FFI: NSTextInputClient
