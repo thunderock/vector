@@ -9,17 +9,22 @@ use vector_mux::{Domain, LocalDomain, SpawnCommand};
 /// (Plan 05-10 will wire it from the picker selection); test inlines the
 /// helper to avoid app-layer coupling.
 fn spawn_command_for_profile(p: &ProfileBlock) -> SpawnCommand {
-    let mut cmd = SpawnCommand::default();
-    cmd.rows = 24;
-    cmd.cols = 80;
-    if let Some(c) = &p.startup_command {
-        cmd.argv = Some(vec!["/bin/sh".to_owned(), "-c".to_owned(), c.clone()]);
+    let argv = p
+        .startup_command
+        .as_ref()
+        .map(|c| vec!["/bin/sh".to_owned(), "-c".to_owned(), c.clone()]);
+    let env = p
+        .env
+        .as_ref()
+        .map(|e| e.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+    SpawnCommand {
+        argv,
+        cwd: p.cwd_override.clone(),
+        rows: 24,
+        cols: 80,
+        env,
     }
-    if let Some(env) = &p.env {
-        cmd.env = env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-    }
-    cmd.cwd = p.cwd_override.clone();
-    cmd
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -58,7 +63,6 @@ async fn profile_local_spawn() {
     }
     assert!(
         combined.contains("hi"),
-        "Local profile end-to-end: expected 'hi' in output, got {:?}",
-        combined
+        "Local profile end-to-end: expected 'hi' in output, got {combined:?}"
     );
 }
