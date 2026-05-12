@@ -32,6 +32,7 @@ vector-render = { path = "../vector-render" }
 vector-term = { path = "../vector-term" }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
 
 [lints]

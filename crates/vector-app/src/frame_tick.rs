@@ -10,6 +10,7 @@ use bytes::BytesMut;
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 use tokio::time::{interval, MissedTickBehavior};
+use vector_mux::PaneId;
 use winit::event_loop::EventLoopProxy;
 
 use crate::UserEvent;
@@ -71,10 +72,12 @@ pub fn frame_period_ms(lpm: &Arc<AtomicBool>) -> u64 {
     }
 }
 
-/// Frame-tick loop: drains the coalesce buffer every ~8 ms (or ~33 ms under LPM)
-/// and emits exactly one `PtyOutput` per non-empty drain. Empty drains emit nothing
-/// — that's how idle CPU stays near zero (RENDER-03).
+/// Per-pane frame-tick loop: drains this pane's coalesce buffer every ~8 ms
+/// (or ~33 ms under LPM) and emits one `PaneOutput { pane_id, bytes }` per
+/// non-empty drain. Empty drains emit nothing — idle CPU stays near zero
+/// (RENDER-03). Plan 04-03 generalizes Phase 3's single-pane version.
 pub async fn frame_tick_loop(
+    pane_id: PaneId,
     coalesce: Arc<CoalesceBuffer>,
     proxy: EventLoopProxy<UserEvent>,
     lpm: Arc<AtomicBool>,
@@ -94,8 +97,12 @@ pub async fn frame_tick_loop(
         }
         let bytes = coalesce.drain();
         last_drain_at = Instant::now();
-        if !bytes.is_empty() && proxy.send_event(UserEvent::PtyOutput(bytes)).is_err() {
-            tracing::info!("event loop closed; frame_tick exiting");
+        if !bytes.is_empty()
+            && proxy
+                .send_event(UserEvent::PaneOutput { pane_id, bytes })
+                .is_err()
+        {
+            tracing::info!(?pane_id, "event loop closed; frame_tick exiting");
             return;
         }
     }

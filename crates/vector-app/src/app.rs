@@ -109,7 +109,9 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
-            UserEvent::PtyOutput(bytes) => {
+            UserEvent::PaneOutput { pane_id, bytes } => {
+                // Plan 04-03 shim: single-pane semantics — Plan 04-04 routes by PaneId.
+                let _ = pane_id;
                 if bytes.is_empty() {
                     return;
                 }
@@ -128,12 +130,23 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 self.request_redraw();
             }
-            UserEvent::Resized { rows, cols } => {
+            UserEvent::PaneResized {
+                pane_id,
+                rows,
+                cols,
+            } => {
+                let _ = pane_id;
                 {
                     let mut t = self.term.lock();
                     t.resize(cols, rows);
                 }
                 self.request_redraw();
+            }
+            UserEvent::PaneExited(pane_id) => {
+                tracing::info!(?pane_id, "pane exited (Plan 04-04 will render sentinel)");
+            }
+            UserEvent::PaneTitleChanged { pane_id, label } => {
+                tracing::info!(?pane_id, %label, "pane title changed (Plan 04-04 will route to tab)");
             }
             UserEvent::LpmChanged(enabled) => {
                 self.lpm_flag.store(enabled, Ordering::Relaxed);

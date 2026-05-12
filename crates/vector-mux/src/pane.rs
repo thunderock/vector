@@ -118,6 +118,18 @@ impl Pane {
     pub fn take_transport(&self) -> Option<Box<dyn PtyTransport>> {
         self.transport.lock().take()
     }
+
+    /// Child shell PID (None for non-local transports or after wait()).
+    #[must_use]
+    pub fn shell_pid(&self) -> Option<i32> {
+        self.pid
+    }
+
+    /// Master PTY fd (None for non-local transports).
+    #[must_use]
+    pub fn master_fd(&self) -> Option<RawFd> {
+        self.master_fd
+    }
 }
 
 impl std::fmt::Debug for Pane {

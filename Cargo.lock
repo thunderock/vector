@@ -2310,6 +2310,7 @@ name = "vector-app"
 version = "2026.5.10"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "cargo-husky",
  "objc2 0.6.4",
@@ -2397,6 +2398,7 @@ version = "2026.5.10"
 dependencies = [
  "anyhow",
  "async-trait",
+ "libc",
  "libproc",
  "parking_lot",
  "thiserror 2.0.18",

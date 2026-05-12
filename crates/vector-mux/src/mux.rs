@@ -2,10 +2,14 @@
 
 use std::collections::HashMap;
 use std::os::fd::RawFd;
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
-use parking_lot::RwLock;
+use anyhow::Result;
+use parking_lot::{Mutex, RwLock};
 
+use crate::cwd::inherit_cwd;
+use crate::domain::SpawnCommand;
 use crate::ids::{
     CloseResult, Direction, IdAllocator, NudgeError, PaneId, SplitDirection, SplitError, TabId,
     WindowId, MIN_PANE_COLS, MIN_PANE_ROWS,
@@ -314,5 +318,110 @@ impl Mux {
         let window = windows.get(&window_id)?;
         let tab = window.tabs.iter().find(|t| t.id == tab_id)?;
         Some(f(tab))
+    }
+
+    /// Plan-04-03 async helper: drives `LocalDomain::spawn_local` and installs
+    /// the resulting Pane as the first leaf of a new tab on `window_id`.
+    ///
+    /// Pitfall B: the `.await` happens BEFORE any RwLock write — no held lock
+    /// across await points. install_tab takes the lock synchronously.
+    pub async fn create_tab_async(
+        &self,
+        window_id: WindowId,
+        cwd: Option<PathBuf>,
+        rows: u16,
+        cols: u16,
+    ) -> Result<(TabId, PaneId)> {
+        let cwd = cwd.or_else(|| Some(inherit_cwd(None)));
+        let spawned = self
+            .default_domain
+            .spawn_local(SpawnCommand {
+                argv: None,
+                cwd,
+                rows,
+                cols,
+                env: vec![],
+            })
+            .await?;
+        let pane_id = self.allocate_pane_id();
+        let term = Arc::new(Mutex::new(vector_term::Term::new(cols, rows, 10_000)));
+        let pane = Arc::new(Pane::new(
+            pane_id,
+            term,
+            spawned.transport,
+            spawned.pid,
+            spawned.master_fd,
+        ));
+        Ok(self.install_tab(window_id, pane, rows, cols))
+    }
+
+    /// Plan-04-03 async helper: split the given pane, spawning a sibling shell
+    /// in the inherited cwd of the focused pane (D-63).
+    pub async fn split_pane_async(
+        &self,
+        pane_id: PaneId,
+        dir: SplitDirection,
+        cwd: Option<PathBuf>,
+    ) -> Result<PaneId> {
+        let parent_pid = self.pane(pane_id).and_then(|p| p.shell_pid());
+        // viewport size for the new pane: inherit the tab's current size.
+        let (rows, cols) = self
+            .locate_pane(pane_id)
+            .and_then(|(wid, tid)| self.with_tab(wid, tid, |t| (t.last_rows, t.last_cols)))
+            .unwrap_or((24, 80));
+        let cwd = cwd.or_else(|| Some(inherit_cwd(parent_pid)));
+        let spawned = self
+            .default_domain
+            .spawn_local(SpawnCommand {
+                argv: None,
+                cwd,
+                rows,
+                cols,
+                env: vec![],
+            })
+            .await?;
+        let new_pane_id = self.allocate_pane_id();
+        let term = Arc::new(Mutex::new(vector_term::Term::new(cols, rows, 10_000)));
+        let pane = Arc::new(Pane::new(
+            new_pane_id,
+            term,
+            spawned.transport,
+            spawned.pid,
+            spawned.master_fd,
+        ));
+        self.split_pane(pane_id, dir, pane).map_err(Into::into)
+    }
+
+    /// Window-resize hook: update each tab's viewport, redistribute split ratios,
+    /// and return (PaneId, rows, cols) tuples so the App layer can push the new
+    /// dims through each pane's resize channel. CORE-04 reuse — kernel SIGWINCH
+    /// reaches child shells through `PtyTransport::resize`.
+    pub fn resize_window(
+        &self,
+        window_id: WindowId,
+        rows: u16,
+        cols: u16,
+    ) -> Vec<(PaneId, u16, u16)> {
+        let mut out = Vec::new();
+        let mut windows = self.windows.write();
+        let Some(window) = windows.get_mut(&window_id) else {
+            return out;
+        };
+        for tab in &mut window.tabs {
+            tab.last_rows = rows;
+            tab.last_cols = cols;
+            let viewport = Rect {
+                x: 0,
+                y: 0,
+                w: cols,
+                h: rows,
+            };
+            split_tree::redistribute(&mut tab.root, viewport);
+            let layout = split_tree::compute_layout(&tab.root, viewport);
+            for (pane_id, rect) in layout {
+                out.push((pane_id, rect.h, rect.w));
+            }
+        }
+        out
     }
 }
