@@ -45,7 +45,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [x] **POLISH-01**: TOML configuration with hot-reload via `notify` (FSEvents); profile inheritance (`[default]` + named overrides) without a scripting language
 - [ ] **POLISH-02**: Bring-your-own-font from system or `~/Library/Fonts`; opt-in ligatures; Nerd Font glyphs render correctly
 - [x] **POLISH-03**: Built-in light + dark themes plus an importer for `.itermcolors` palettes
-- [ ] **POLISH-04**: OSC 7 (cwd), OSC 8 (hyperlinks), OSC 10/11/12 (color queries), and OSC 133 (semantic prompt marks) are implemented
+- [x] **POLISH-04**: OSC 7 (cwd), OSC 8 (hyperlinks), OSC 10/11/12 (color queries), and OSC 133 (semantic prompt marks) are implemented
 - [ ] **POLISH-05**: OSC 52 clipboard copy works in both raw and DCS-wrapped forms (tmux pass-through compatibility)
 - [ ] **POLISH-06**: Scrollback regex search with match highlighting and next/prev navigation
 - [x] **POLISH-07**: Profiles — saved targets named `local`, `codespace`, `dev_tunnel` with per-profile env, theme, tint, and startup command
@@ -175,7 +175,7 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | POLISH-01 | Phase 5 | Complete |
 | POLISH-02 | Phase 5 | Pending |
 | POLISH-03 | Phase 5 | Complete |
-| POLISH-04 | Phase 5 | Pending |
+| POLISH-04 | Phase 5 | Complete |
 | POLISH-05 | Phase 5 | Pending |
 | POLISH-06 | Phase 5 | Pending |
 | POLISH-07 | Phase 5 | Complete |
