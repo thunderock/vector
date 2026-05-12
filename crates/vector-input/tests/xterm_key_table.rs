@@ -616,3 +616,91 @@ fn released_char_returns_none() {
 fn unmapped_named_returns_none() {
     assert_eq!(named(NamedKey::Hyper, ModState::default()), None);
 }
+
+// ── Wave-0 stubs: Plan 04-04 Mux keybindings (D-59/60/61/62) ────────────────
+// Stub bodies panic until Plan 04-04 rewrites each to assert
+// `encode(...) == Some(EncodedKey::Mux(MuxCommand::*))`.
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_t_returns_mux_new_tab() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_d_returns_mux_split_horizontal() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_shift_d_returns_mux_split_vertical() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_w_returns_mux_close_pane() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_shift_close_bracket_returns_mux_next_tab() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_shift_open_bracket_returns_mux_prev_tab() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_opt_left_returns_mux_focus_left() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_opt_right_returns_mux_focus_right() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_opt_up_returns_mux_focus_up() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_opt_down_returns_mux_focus_down() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_shift_left_returns_mux_resize_nudge_left() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_shift_right_returns_mux_resize_nudge_right() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_shift_up_returns_mux_resize_nudge_up() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
+
+#[test]
+#[ignore = "Wave-0 stub: Plan 04-04"]
+fn cmd_shift_down_returns_mux_resize_nudge_down() {
+    panic!("Wave-0 stub — implemented by Plan 04-04");
+}
