@@ -14,8 +14,7 @@ impl GridAccess for MockGrid {
         self.rows
             .get(row)
             .and_then(|r| r.get(col))
-            .map(|c| c.1)
-            .unwrap_or(false)
+            .is_some_and(|c| c.1)
     }
     fn cols(&self) -> usize {
         self.rows.first().map_or(0, Vec::len)
