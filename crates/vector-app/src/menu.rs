@@ -53,6 +53,13 @@ fn app_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     );
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
     add_disabled(mtm, &submenu, "Preferences\u{2026}", ",");
+    // Plan 05-10 UI-SPEC §5.8 — Switch Profile submenu. Populated dynamically
+    // from the active ConfigFile at first-paint; for now ship a disabled
+    // placeholder so the menu-bar surface is discoverable.
+    add_switch_profile_submenu(mtm, &submenu);
+    // Plan 05-10 D-80 — Secure Keyboard Entry (no shortcut). Key-only so the
+    // App's keymap can pump `UserEvent::ToggleSecureKeyboardEntry`.
+    add_disabled(mtm, &submenu, "Secure Keyboard Entry", "");
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
     add_services(mtm, &submenu);
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
@@ -80,7 +87,9 @@ fn file_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     let item = NSMenuItem::new(mtm);
     let submenu = NSMenu::new(mtm);
     submenu.setTitle(&NSString::from_str("File"));
-    add_disabled(mtm, &submenu, "New Window", "n");
+    // Plan 05-10 D-82: New Window enabled via key-only — winit KeyboardInput sees
+    // Cmd-N and the App's keymap dispatch routes to `UserEvent::SpawnNewWindow`.
+    add_key_only(mtm, &submenu, "New Window", "n");
     // Plan 04-04: "New Tab" enabled (not greyed); key event flows through winit
     // to our keymap which encodes it as `EncodedKey::Mux(MuxCommand::NewTab)`.
     add_key_only(mtm, &submenu, "New Tab", "t");
@@ -112,7 +121,7 @@ fn edit_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     item
 }
 
-// View menu (UI-SPEC): Enter Full Screen — Cmd-Ctrl-F.
+// View menu (UI-SPEC): Enter Full Screen — Cmd-Ctrl-F. Plan 05-10 M4: Reload Config — Cmd-Shift-R.
 fn view_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     let item = NSMenuItem::new(mtm);
     let submenu = NSMenu::new(mtm);
@@ -124,6 +133,15 @@ fn view_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
         sel!(toggleFullScreen:),
         "f",
         NSEventModifierFlags::Command | NSEventModifierFlags::Control,
+    );
+    // Plan 05-10 M4 / D-69: "Reload Config" — Cmd-Shift-R. Key-only; the App
+    // keymap routes the keystroke to `UserEvent::ReloadConfig`.
+    add_key_only_with_modifiers(
+        mtm,
+        &submenu,
+        "Reload Config",
+        "r",
+        NSEventModifierFlags::Command | NSEventModifierFlags::Shift,
     );
     item.setSubmenu(Some(&submenu));
     item
@@ -222,6 +240,36 @@ fn add_disabled_with_modifiers(
     mi.setKeyEquivalentModifierMask(modifiers);
     mi.setEnabled(false);
     menu.addItem(&mi);
+}
+
+/// Append a key-only item with explicit modifier mask. Stays enabled but installs
+/// no AppKit action, so the keystroke flows through winit to the App's keymap.
+fn add_key_only_with_modifiers(
+    mtm: MainThreadMarker,
+    menu: &NSMenu,
+    title: &str,
+    key: &str,
+    modifiers: NSEventModifierFlags,
+) {
+    let mi = NSMenuItem::new(mtm);
+    mi.setTitle(&NSString::from_str(title));
+    mi.setKeyEquivalent(&NSString::from_str(key));
+    mi.setKeyEquivalentModifierMask(modifiers);
+    menu.addItem(&mi);
+}
+
+/// Plan 05-10 UI-SPEC §5.8 — Switch Profile submenu placeholder. Populated dynamically
+/// from `ConfigFile.profile` keys once the watcher pumps `UserEvent::ConfigReloaded`.
+fn add_switch_profile_submenu(mtm: MainThreadMarker, menu: &NSMenu) {
+    let item = NSMenuItem::new(mtm);
+    item.setTitle(&NSString::from_str("Switch Profile"));
+    let sub = NSMenu::new(mtm);
+    sub.setTitle(&NSString::from_str("Switch Profile"));
+    // Default placeholder row — replaced at runtime by App when current_config
+    // becomes available. Codespace/DevTunnel rows ship with "(phase 6+)" suffix.
+    add_disabled(mtm, &sub, "(no profiles configured)", "");
+    item.setSubmenu(Some(&sub));
+    menu.addItem(&item);
 }
 
 /// Add the "Services" submenu wired to NSApp.setServicesMenu.

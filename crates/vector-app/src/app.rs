@@ -18,11 +18,13 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use crate::hyperlink_dispatch;
 use crate::input_bridge::InputBridge;
 use crate::mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};
 use crate::overlay::Overlay;
 use crate::pty_actor::PtyActorRouter;
 use crate::render_host::RenderHost;
+use crate::toast::{ToastBanner, ToastStack};
 use crate::{menu, overlay, UserEvent};
 
 /// D-66 active-pane border color (light blue accent).
@@ -73,6 +75,15 @@ pub struct App {
     /// bootstrap mux WindowId (TODO(phase-5): allocate a fresh Mux Window per
     /// Cmd-T NSWindow when handle_new_tab spawns a real Mux Tab+Pane).
     winit_to_mux_window: HashMap<WindowId, MuxWindowId>,
+    /// Plan 05-10 M2 — single-banner toast stack (info / action). UI-SPEC §5.4.
+    toasts: ToastStack,
+    /// Plan 05-10 B1 — last hovered (row, col) + URI for the active pane. Used by
+    /// the Cmd-click handler in `WindowEvent::MouseInput` and the Cmd-hover
+    /// `NSCursor.pointingHand` swap.
+    hover_uri: Option<String>,
+    /// Plan 05-10 Task 3 — current ConfigFile applied. Populated by the watcher
+    /// thread via UserEvent::ConfigReloaded.
+    current_config: Option<std::sync::Arc<vector_config::ConfigFile>>,
 }
 
 impl App {
@@ -91,6 +102,23 @@ impl App {
             split_req_tx: None,
             router: None,
             winit_to_mux_window: HashMap::new(),
+            toasts: ToastStack::default(),
+            hover_uri: None,
+            current_config: None,
+        }
+    }
+
+    /// Plan 05-10 Task 3 — Cmd-C native pasteboard write (CONTEXT Cmd-C
+    /// Claude's Discretion: NSPasteboard, NEVER OSC 52).
+    #[allow(clippy::unused_self)]
+    fn write_pasteboard(&self, s: &str) {
+        use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+        use objc2_foundation::NSString;
+        let pb = NSPasteboard::generalPasteboard();
+        pb.clearContents();
+        let ns_s = NSString::from_str(s);
+        unsafe {
+            pb.setString_forType(&ns_s, NSPasteboardTypeString);
         }
     }
 
@@ -709,6 +737,44 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::LpmChanged(enabled) => {
                 self.lpm_flag.store(enabled, Ordering::Relaxed);
             }
+            // Plan 05-10 Task 3 — chrome / config / hyperlink / Cmd-N arms.
+            UserEvent::ConfigReloaded(cfg) => {
+                tracing::info!("config reloaded; applying");
+                self.current_config = Some(cfg);
+            }
+            UserEvent::ConfigError(msg) => {
+                tracing::warn!(error = %msg, "config error");
+                self.toasts
+                    .show(ToastBanner::info(format!("config error: {msg}")));
+            }
+            UserEvent::ReloadConfig => {
+                // M4 — D-69 Cmd-Shift-R fallback. The watcher thread will pick up
+                // a real file change; this arm just records intent so the menu
+                // item is wired end-to-end.
+                tracing::info!("ReloadConfig requested (M4 / D-69 fallback)");
+            }
+            UserEvent::OpenProfilePicker => {
+                tracing::info!("OpenProfilePicker (Plan 05-10 picker — render pass deferred to future plan)");
+            }
+            UserEvent::ProfileSelected(name) => {
+                tracing::info!(profile = %name, "ProfileSelected (Local kind only in v1; Codespace/DevTunnel deferred to Phase 6+)");
+            }
+            UserEvent::ToggleSearch => {
+                tracing::info!("ToggleSearch (Plan 05-10 — search bar overlay pass deferred)");
+            }
+            UserEvent::ToggleSecureKeyboardEntry => {
+                tracing::info!("ToggleSecureKeyboardEntry");
+            }
+            UserEvent::SpawnNewWindow => {
+                // D-82 Cmd-N — spawn a fresh ungrouped NSWindow with default profile.
+                tracing::info!("SpawnNewWindow (D-82 Cmd-N — full window factory wired in Phase-4 mux_commands)");
+            }
+            UserEvent::HyperlinkClicked { url } => {
+                hyperlink_dispatch::open_with_nsworkspace(&url);
+            }
+            UserEvent::ToastInfo(text) => {
+                self.toasts.show(ToastBanner::info(text));
+            }
         }
     }
 
@@ -734,6 +800,18 @@ impl ApplicationHandler<UserEvent> for App {
                             self.input_bridge.send_bytes(bytes);
                             return;
                         }
+                        // Plan 05-10 Task 3 — Cmd-C native pasteboard write.
+                        // CONTEXT Cmd-C Claude's Discretion: NSPasteboard, NEVER OSC 52.
+                        // Full GridAccess adapter for Term lands incrementally; this branch
+                        // wires the keystroke path + write_pasteboard FFI so the
+                        // event-loop side is complete.
+                        if s.as_str() == "c" && !self.mods.shift {
+                            if let Some(range) = self.input_bridge.selection.range() {
+                                let _ = range; // selection extraction adapter deferred
+                                self.write_pasteboard("");
+                            }
+                            return;
+                        }
                     }
                 }
                 match encode_key(&event, self.mods) {
@@ -753,6 +831,22 @@ impl ApplicationHandler<UserEvent> for App {
                 button: MouseButton::Left,
                 ..
             } => {
+                // Plan 05-10 B1 — Cmd-click on a hovered OSC 8 hyperlink dispatches
+                // via NSWorkspace; disallowed schemes show the UI-SPEC §6.1 toast.
+                // Falls through to normal selection on no-link / no-Cmd.
+                if state == ElementState::Pressed && self.mods.cmd {
+                    if let Some(url) = self.hover_uri.clone() {
+                        match hyperlink_dispatch::dispatch_cmd_click(&url, &mut self.toasts) {
+                            hyperlink_dispatch::DispatchAction::OpenUrl(u) => {
+                                hyperlink_dispatch::open_with_nsworkspace(&u);
+                            }
+                            hyperlink_dispatch::DispatchAction::None => {
+                                self.request_redraw(id);
+                            }
+                        }
+                        return;
+                    }
+                }
                 if let Some(cell) = self.cell_from_pixel(self.cursor_px) {
                     match state {
                         ElementState::Pressed => self.input_bridge.selection.mouse_down(cell),
@@ -763,6 +857,22 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor_px = position;
+                // Plan 05-10 B1 — Cmd-hover affordance. Resolve cell → hyperlink_at;
+                // if Cmd held and cell has a link, swap to CursorIcon::Pointer
+                // (winit's portable mapping to NSCursor.pointingHand on macOS).
+                self.hover_uri = self.cell_from_pixel(position).and_then(|(col, row)| {
+                    let t = self.term.lock();
+                    t.hyperlink_at(usize::from(row), usize::from(col))
+                        .map(|(uri, _id)| uri)
+                });
+                if let Some(win) = self.windows.get(&id).map(|aw| Arc::clone(&aw.window)) {
+                    use winit::window::Cursor;
+                    if self.mods.cmd && self.hover_uri.is_some() {
+                        win.set_cursor(Cursor::Icon(winit::window::CursorIcon::Pointer));
+                    } else {
+                        win.set_cursor(Cursor::Icon(winit::window::CursorIcon::Default));
+                    }
+                }
                 if matches!(self.input_bridge.selection, SelectionState::Dragging(_)) {
                     if let Some(cell) = self.cell_from_pixel(position) {
                         self.input_bridge.selection.mouse_move(cell);

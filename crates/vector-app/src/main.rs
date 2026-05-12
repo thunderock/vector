@@ -8,9 +8,9 @@ use anyhow::Result;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tracing_subscriber::{fmt, EnvFilter};
-use vector_app::{app, lpm, pty_actor, UserEvent};
+use vector_app::{app, lpm, pty_actor, UserEvent, DEFAULT_CONFIG_TOML};
 use vector_mux::{LocalDomain, Mux};
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<()> {
@@ -29,6 +29,10 @@ fn main() -> Result<()> {
     let event_loop: EventLoop<UserEvent> = EventLoop::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
+
+    // Plan 05-10 Task 3 — config watcher pumped on a dedicated I/O thread.
+    // FSEvents → debounced → ConfigReloaded on the main thread via EventLoopProxy.
+    let _watcher_thread = spawn_config_watcher_thread(proxy.clone());
 
     let (write_tx, write_rx) = mpsc::channel::<Vec<u8>>(64);
     let (resize_tx, resize_rx) = mpsc::channel::<(u16, u16)>(8);
@@ -143,4 +147,77 @@ fn main() -> Result<()> {
     application.set_router(router_main);
     event_loop.run_app(&mut application)?;
     Ok(())
+}
+
+/// Plan 05-10 Task 3 — spawn the config-file watcher on a dedicated thread and
+/// forward `ConfigEvent::Dirty` flushes to the main thread as `UserEvent::ConfigReloaded`.
+/// Seeds `~/.config/vector/config.toml` from `DEFAULT_CONFIG_TOML` on first run
+/// (M4 / D-69: bundled Cmd-Shift-R reload-config keybind).
+fn spawn_config_watcher_thread(proxy: EventLoopProxy<UserEvent>) -> Option<thread::JoinHandle<()>> {
+    let home = std::env::var_os("HOME")?;
+    let config_dir = std::path::PathBuf::from(&home).join(".config").join("vector");
+    let config_path = config_dir.join("config.toml");
+    let themes_dir = config_dir.join("themes");
+
+    // Seed default config on first launch so the Cmd-Shift-R keybind is live.
+    if !config_path.exists() {
+        if let Err(e) = std::fs::create_dir_all(&config_dir) {
+            tracing::warn!(?e, "could not create ~/.config/vector");
+            return None;
+        }
+        if let Err(e) = std::fs::write(&config_path, DEFAULT_CONFIG_TOML) {
+            tracing::warn!(?e, "could not write default config.toml");
+        }
+    }
+
+    Some(
+        thread::Builder::new()
+            .name("config-watcher".into())
+            .spawn(move || {
+                let (tx, rx) = std::sync::mpsc::channel::<vector_config::ConfigEvent>();
+                let _debouncer = match vector_config::spawn_watcher(&config_path, &themes_dir, tx) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::warn!(?e, "spawn_watcher failed; config hot-reload disabled");
+                        return;
+                    }
+                };
+                let mut last_good: Option<vector_config::ConfigFile> =
+                    std::fs::read_to_string(&config_path)
+                        .ok()
+                        .and_then(|s| vector_config::parse(&s).ok());
+                if let Some(cfg) = &last_good {
+                    let _ = proxy.send_event(UserEvent::ConfigReloaded(Arc::new(cfg.clone())));
+                }
+                for ev in rx {
+                    match ev {
+                        vector_config::ConfigEvent::Dirty { .. } => {
+                            match std::fs::read_to_string(&config_path) {
+                                Ok(src) => match vector_config::parse(&src) {
+                                    Ok(cfg) => {
+                                        last_good = Some(cfg.clone());
+                                        let _ = proxy
+                                            .send_event(UserEvent::ConfigReloaded(Arc::new(cfg)));
+                                    }
+                                    Err(e) => {
+                                        let _ = proxy.send_event(UserEvent::ConfigError(
+                                            e.to_string(),
+                                        ));
+                                    }
+                                },
+                                Err(e) => {
+                                    let _ =
+                                        proxy.send_event(UserEvent::ConfigError(e.to_string()));
+                                }
+                            }
+                        }
+                        vector_config::ConfigEvent::Error(msg) => {
+                            let _ = proxy.send_event(UserEvent::ConfigError(msg));
+                        }
+                    }
+                }
+                drop(last_good);
+            })
+            .expect("spawn config-watcher thread"),
+    )
 }
