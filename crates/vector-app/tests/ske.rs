@@ -1,9 +1,38 @@
-//! Wave 0 stubs — implemented in Plan 05-09. POLISH-08 Secure Keyboard Entry.
+//! POLISH-08 / D-80 / Pitfall 6 — Secure Keyboard Entry RAII guard tests.
+
+use std::sync::atomic::Ordering;
+use vector_app::ske::{test_hooks, SecureInputGuard};
+
+fn reset_counters() {
+    test_hooks::ENABLE_COUNT.store(0, Ordering::SeqCst);
+    test_hooks::DISABLE_COUNT.store(0, Ordering::SeqCst);
+}
 
 #[test]
-#[ignore = "Wave 0 stub — implemented in plan 09"]
-fn toggle_calls_carbon() {}
+fn toggle_calls_carbon() {
+    reset_counters();
+    let mut g = SecureInputGuard::new();
+    g.toggle();
+    assert_eq!(test_hooks::ENABLE_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(test_hooks::DISABLE_COUNT.load(Ordering::SeqCst), 0);
+    g.toggle();
+    assert_eq!(test_hooks::ENABLE_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(test_hooks::DISABLE_COUNT.load(Ordering::SeqCst), 1);
+    drop(g);
+    assert_eq!(test_hooks::DISABLE_COUNT.load(Ordering::SeqCst), 1);
+}
 
 #[test]
-#[ignore = "Wave 0 stub — implemented in plan 09"]
-fn raii_disables_on_drop() {}
+fn raii_disables_on_drop() {
+    reset_counters();
+    {
+        let mut g = SecureInputGuard::new();
+        g.enable();
+        assert_eq!(test_hooks::ENABLE_COUNT.load(Ordering::SeqCst), 1);
+    }
+    assert_eq!(
+        test_hooks::DISABLE_COUNT.load(Ordering::SeqCst),
+        1,
+        "Pitfall 6: RAII drop MUST call DisableSecureEventInput"
+    );
+}
