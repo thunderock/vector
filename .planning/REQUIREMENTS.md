@@ -49,7 +49,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [x] **POLISH-05**: OSC 52 clipboard copy works in both raw and DCS-wrapped forms (tmux pass-through compatibility)
 - [x] **POLISH-06**: Scrollback regex search with match highlighting and next/prev navigation
 - [x] **POLISH-07**: Profiles — saved targets named `local`, `codespace`, `dev_tunnel` with per-profile env, theme, tint, and startup command
-- [ ] **POLISH-08**: Secure Keyboard Entry toggle and basic IME composition display via `NSTextInputClient` (no candidate window UI; full IME is v2)
+- [x] **POLISH-08**: Secure Keyboard Entry toggle and basic IME composition display via `NSTextInputClient` (no candidate window UI; full IME is v2)
 
 ### GitHub Auth & Codespaces Picker
 
@@ -179,7 +179,7 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | POLISH-05 | Phase 5 | Complete |
 | POLISH-06 | Phase 5 | Complete |
 | POLISH-07 | Phase 5 | Complete |
-| POLISH-08 | Phase 5 | Pending |
+| POLISH-08 | Phase 5 | Complete |
 | AUTH-01 | Phase 6 | Pending |
 | AUTH-02 | Phase 6 | Pending |
 | AUTH-03 | Phase 6 | Pending |
