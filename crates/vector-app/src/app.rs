@@ -8,7 +8,8 @@ use tokio::sync::mpsc;
 use vector_input::{
     encode_key, wrap_bracketed_paste, EncodedKey, ModState, MuxCommand, SelectionState,
 };
-use vector_mux::{Mux, PaneId, SplitDirection};
+use vector_mux::{compute_layout, Mux, PaneId, Rect, SplitDirection, WindowId as MuxWindowId};
+use vector_render::Compositor;
 use vector_term::Term;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
@@ -20,15 +21,21 @@ use winit::window::{Window, WindowAttributes, WindowId};
 use crate::input_bridge::InputBridge;
 use crate::mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};
 use crate::overlay::Overlay;
+use crate::pty_actor::PtyActorRouter;
 use crate::render_host::RenderHost;
 use crate::{menu, overlay, UserEvent};
+
+/// D-66 active-pane border color (light blue accent).
+const BORDER_COLOR_ACTIVE: [f32; 4] = [0.4, 0.6, 1.0, 1.0];
+/// Inactive pane: alpha 0 disables the border shader contribution.
+const BORDER_COLOR_INACTIVE: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 /// Window size threshold for debouncing `Term::resize` (D-49).
 const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 
 /// Per-winit-Window state. Plan 04-04 (D-56): each NSWindowTabbingMode-grouped
-/// window holds its own RenderHost + overlay + first-paint gate. Multi-pane
-/// rendering inside a window remains Plan 04-05 polish.
+/// window holds its own RenderHost + overlay + first-paint gate. Plan 04-06:
+/// multi-pane shape with per-pane `compositors` map + `active_pane_id`.
 struct AppWindow {
     window: Arc<Window>,
     render_host: Option<RenderHost>,
@@ -37,6 +44,12 @@ struct AppWindow {
     first_paint_ready: bool,
     last_resize_at: Option<Instant>,
     pending_resize: Option<(u16, u16)>,
+    /// Plan 04-06: per-pane compositors keyed by Mux PaneId. Populated lazily
+    /// on first `UserEvent::PaneOutput` for a pane.
+    compositors: HashMap<PaneId, Compositor>,
+    /// Plan 04-06: which pane currently owns the active-pane border + filled cursor.
+    /// First pane registered becomes active; Cmd-Opt-Arrow flips it.
+    active_pane_id: Option<PaneId>,
 }
 
 pub struct App {
@@ -51,6 +64,15 @@ pub struct App {
     /// Plan 04-05: dispatches Cmd-D/Cmd-Shift-D split requests to the I/O thread
     /// which drives `Mux::split_pane_async` + `router.spawn_pane`.
     split_req_tx: Option<mpsc::Sender<(PaneId, SplitDirection)>>,
+    /// Plan 04-06: shared handle to the per-pane PtyActorRouter so the App's
+    /// per-pane SIGWINCH walk in `flush_pending_resize_if_quiescent` can call
+    /// `router.send_resize(pane_id, rows, cols)` for each pane in the layout.
+    router: Option<Arc<Mutex<PtyActorRouter>>>,
+    /// Plan 04-06: winit::WindowId -> vector_mux::WindowId map. The bootstrap
+    /// window records its mapping in `resumed`; Cmd-T windows reuse the
+    /// bootstrap mux WindowId (TODO(phase-5): allocate a fresh Mux Window per
+    /// Cmd-T NSWindow when handle_new_tab spawns a real Mux Tab+Pane).
+    winit_to_mux_window: HashMap<WindowId, MuxWindowId>,
 }
 
 impl App {
@@ -67,6 +89,8 @@ impl App {
             cursor_px: PhysicalPosition::new(0.0, 0.0),
             lpm_flag,
             split_req_tx: None,
+            router: None,
+            winit_to_mux_window: HashMap::new(),
         }
     }
 
@@ -74,6 +98,13 @@ impl App {
     /// dispatch async splits to the I/O thread.
     pub fn set_split_req_tx(&mut self, tx: mpsc::Sender<(PaneId, SplitDirection)>) {
         self.split_req_tx = Some(tx);
+    }
+
+    /// Plan 04-06: hook the per-pane PtyActorRouter so the App's
+    /// `flush_pending_resize_if_quiescent` can fan SIGWINCH out per-pane via
+    /// `Mux::resize_window` + `router.send_resize`.
+    pub fn set_router(&mut self, router: Arc<Mutex<PtyActorRouter>>) {
+        self.router = Some(router);
     }
 
     fn primary_window(&self) -> Option<&AppWindow> {
@@ -104,17 +135,308 @@ impl App {
         }
     }
 
-    /// D-49 debounce: if a pending resize is ≥ 50 ms old on the given window, flush it now.
+    /// D-49 debounce + Plan 04-06 per-pane SIGWINCH fanout. Mirrors
+    /// `TabWindow::flush_pending_resize_if_quiescent`. When the pending resize is
+    /// ≥ 50 ms old, walks `Mux::resize_window` (which redistributes split ratios
+    /// and emits per-pane (rows, cols)) and routes each tuple through the
+    /// PtyActorRouter so the kernel SIGWINCH reaches each child shell.
     fn flush_pending_resize_if_quiescent(&mut self, id: WindowId) {
         let Some(aw) = self.windows.get_mut(&id) else {
             return;
         };
-        if let (Some(at), Some((rows, cols))) = (aw.last_resize_at, aw.pending_resize) {
-            if at.elapsed() >= RESIZE_DEBOUNCE {
-                self.input_bridge.send_resize(rows, cols);
-                aw.pending_resize = None;
-                aw.last_resize_at = None;
+        let (Some(at), Some((rows, cols))) = (aw.last_resize_at, aw.pending_resize) else {
+            return;
+        };
+        if at.elapsed() < RESIZE_DEBOUNCE {
+            return;
+        }
+        let Some(mux) = Mux::try_get() else {
+            return;
+        };
+        let Some(mux_window_id) = self.winit_to_mux_window.get(&id).copied() else {
+            // No Mux mapping yet (pre-bootstrap); clear the pending so we don't spin.
+            aw.pending_resize = None;
+            aw.last_resize_at = None;
+            return;
+        };
+        let Some(router) = self.router.clone() else {
+            return;
+        };
+        let walk = mux.resize_window(mux_window_id, rows, cols);
+        {
+            let router = router.lock();
+            for (pane_id, prows, pcols) in walk {
+                router.send_resize(pane_id, prows, pcols);
             }
+        }
+        aw.pending_resize = None;
+        aw.last_resize_at = None;
+    }
+
+    /// Plan 04-06 (Gap 3): when focus moves to `new_id`, paint the D-66 border
+    /// on the new-active pane's compositor, clear the border on the old-active
+    /// pane's compositor, and flip `cursor_focused` to filled (active) / hollow
+    /// (inactive). Updates `aw.active_pane_id` for the window holding `new_id`.
+    fn apply_focus_change(&mut self, new_id: PaneId) {
+        for aw in self.windows.values_mut() {
+            if !aw.compositors.contains_key(&new_id) {
+                continue;
+            }
+            let Some(host) = aw.render_host.as_ref() else {
+                continue;
+            };
+            let queue = host.queue();
+            let old_id = aw.active_pane_id;
+            if let Some(old) = old_id {
+                if old != new_id {
+                    if let Some(comp) = aw.compositors.get_mut(&old) {
+                        comp.set_border_color(queue, BORDER_COLOR_INACTIVE);
+                        comp.set_cursor_focused(false);
+                    }
+                }
+            }
+            if let Some(comp) = aw.compositors.get_mut(&new_id) {
+                comp.set_border_color(queue, BORDER_COLOR_ACTIVE);
+                comp.set_cursor_focused(true);
+            }
+            aw.active_pane_id = Some(new_id);
+        }
+    }
+
+    /// Plan 04-06 (Gap 1): per-pane render loop. Acquires the surface frame
+    /// once, then iterates the window's compositors against the layout from
+    /// `Mux::compute_layout`. First pane uses `LoadOp::Clear`; subsequent panes
+    /// use `LoadOp::Load` so each compositor paints onto the same view.
+    #[allow(clippy::too_many_lines)]
+    fn render_window(&mut self, id: WindowId, sel: Option<((u16, u16), (u16, u16))>) {
+        let Some(aw) = self.windows.get_mut(&id) else {
+            return;
+        };
+        // Fall back to the legacy single-pane render path when the per-pane map
+        // hasn't been populated yet (pre-first-paint).
+        if aw.compositors.is_empty() {
+            let Some(host) = aw.render_host.as_mut() else {
+                return;
+            };
+            let mut t = self.term.lock();
+            if let Err(err) = host.render(&mut t, sel) {
+                tracing::warn!(?err, "render failed");
+            }
+            return;
+        }
+        let Some(host) = aw.render_host.as_mut() else {
+            return;
+        };
+        // Resolve the Mux tab + layout once per frame, off any aw borrow.
+        let mux_window_id = self.winit_to_mux_window.get(&id).copied();
+        let mux = Mux::try_get();
+        let layout_snapshot = match (mux.as_ref(), mux_window_id) {
+            (Some(mux), Some(wid)) => {
+                let tab_id = mux.active_tab_id(wid);
+                tab_id.and_then(|tid| {
+                    mux.with_tab(wid, tid, |tab| {
+                        let viewport = Rect {
+                            x: 0,
+                            y: 0,
+                            w: tab.last_cols,
+                            h: tab.last_rows,
+                        };
+                        let layout = compute_layout(&tab.root, viewport);
+                        // Sort leaves by PaneId for deterministic render order.
+                        let mut leaves = tab.root.leaves();
+                        leaves.sort();
+                        (leaves, layout)
+                    })
+                })
+            }
+            _ => None,
+        };
+        let Some((leaves, layout)) = layout_snapshot else {
+            return;
+        };
+        // Resolve cell metrics from any existing compositor in the window.
+        let Some((cell_w, cell_h)) = aw
+            .compositors
+            .values()
+            .next()
+            .map(|c| (c.cell_width_px(), c.cell_height_px()))
+        else {
+            return;
+        };
+        // Acquire the surface frame once. Skip the frame on Outdated/Lost.
+        let frame = match host.acquire_frame() {
+            Ok(Some(f)) => f,
+            Ok(None) => return,
+            Err(err) => {
+                tracing::warn!(?err, "acquire_frame failed");
+                return;
+            }
+        };
+        let view = &frame.view;
+        let width = frame.width;
+        let height = frame.height;
+        let device = host.device();
+        let queue = host.queue();
+        let default_bg = wgpu::Color {
+            r: 0.06,
+            g: 0.06,
+            b: 0.06,
+            a: 1.0,
+        };
+        let active_pane_id = aw.active_pane_id;
+        let mut first = true;
+        for pane_id in leaves {
+            let Some(rect) = layout.get(&pane_id) else {
+                continue;
+            };
+            let Some(comp) = aw.compositors.get_mut(&pane_id) else {
+                continue;
+            };
+            #[allow(clippy::cast_precision_loss)]
+            let offset_px = [
+                f32::from(rect.x) * cell_w as f32,
+                f32::from(rect.y) * cell_h as f32,
+            ];
+            #[allow(clippy::cast_precision_loss)]
+            let size_px = [
+                f32::from(rect.w) * cell_w as f32,
+                f32::from(rect.h) * cell_h as f32,
+            ];
+            comp.set_viewport(queue, offset_px, size_px);
+            let is_active = active_pane_id == Some(pane_id);
+            comp.set_border_color(
+                queue,
+                if is_active {
+                    BORDER_COLOR_ACTIVE
+                } else {
+                    BORDER_COLOR_INACTIVE
+                },
+            );
+            comp.set_cursor_focused(is_active);
+            // Source-of-truth term per pane: the Mux Pane's own term mutex.
+            // Selection is forwarded only to the active pane.
+            let load_op = if first {
+                wgpu::LoadOp::Clear(default_bg)
+            } else {
+                wgpu::LoadOp::Load
+            };
+            let pane_sel = if is_active { sel } else { None };
+            if let Some(pane) = Mux::try_get().and_then(|m| m.pane(pane_id)) {
+                let mut t = pane.term.lock();
+                if let Err(err) = comp.render_into_view(
+                    device, queue, view, width, height, &mut t, pane_sel, load_op,
+                ) {
+                    tracing::warn!(?pane_id, ?err, "compositor render_into_view failed");
+                }
+            } else {
+                // No Mux pane for this id (race): fall back to the shared term
+                // so we still paint something instead of a black hole.
+                let mut t = self.term.lock();
+                if let Err(err) = comp.render_into_view(
+                    device, queue, view, width, height, &mut t, pane_sel, load_op,
+                ) {
+                    tracing::warn!(
+                        ?pane_id,
+                        ?err,
+                        "compositor render_into_view fallback failed"
+                    );
+                }
+            }
+            first = false;
+        }
+        frame.present();
+    }
+
+    /// Plan 04-06 (Gap 1 plumbing): lazily create a per-pane Compositor for
+    /// every Mux leaf in the tab that holds `seed_pane_id`. No-op if the window
+    /// has no render host. Idempotent — only creates compositors for leaves not
+    /// already in the map.
+    fn ensure_compositors_for_pane(&mut self, window_id: WindowId, seed_pane_id: PaneId) {
+        let Some(mux) = Mux::try_get() else {
+            return;
+        };
+        let Some((mux_window_id, tab_id)) = mux.locate_pane(seed_pane_id) else {
+            return;
+        };
+        // Snapshot leaves + viewport + layout under a single with_tab read lock.
+        let snapshot = mux.with_tab(mux_window_id, tab_id, |tab| {
+            let viewport = Rect {
+                x: 0,
+                y: 0,
+                w: tab.last_cols,
+                h: tab.last_rows,
+            };
+            let layout = compute_layout(&tab.root, viewport);
+            (tab.root.leaves(), layout)
+        });
+        let Some((leaves, layout)) = snapshot else {
+            return;
+        };
+        let Some(aw) = self.windows.get_mut(&window_id) else {
+            return;
+        };
+        let Some(host) = aw.render_host.as_ref() else {
+            return;
+        };
+        // For the very first compositor we don't know cell metrics yet; build
+        // it sized to the full surface and read its metrics back. Subsequent
+        // panes use those metrics to derive their viewport pixel rects.
+        let (cell_w, cell_h) = if let Some(m) = aw
+            .compositors
+            .values()
+            .next()
+            .map(|c| (c.cell_width_px(), c.cell_height_px()))
+        {
+            m
+        } else {
+            let (sw, sh) = host.surface_size();
+            let viewport_offset = [0.0_f32, 0.0_f32];
+            #[allow(clippy::cast_precision_loss)]
+            let viewport_size = [sw as f32, sh as f32];
+            match host.new_compositor_for_viewport(viewport_offset, viewport_size) {
+                Ok(comp) => {
+                    let cw = comp.cell_width_px();
+                    let ch = comp.cell_height_px();
+                    aw.compositors.insert(seed_pane_id, comp);
+                    (cw, ch)
+                }
+                Err(err) => {
+                    tracing::error!(?err, "lazy Compositor init failed");
+                    return;
+                }
+            }
+        };
+        if cell_w == 0 || cell_h == 0 {
+            return;
+        }
+        for pane_id in leaves {
+            if aw.compositors.contains_key(&pane_id) {
+                continue;
+            }
+            let Some(rect) = layout.get(&pane_id) else {
+                continue;
+            };
+            #[allow(clippy::cast_precision_loss)]
+            let offset_px = [
+                f32::from(rect.x) * cell_w as f32,
+                f32::from(rect.y) * cell_h as f32,
+            ];
+            #[allow(clippy::cast_precision_loss)]
+            let size_px = [
+                f32::from(rect.w) * cell_w as f32,
+                f32::from(rect.h) * cell_h as f32,
+            ];
+            match host.new_compositor_for_viewport(offset_px, size_px) {
+                Ok(comp) => {
+                    aw.compositors.insert(pane_id, comp);
+                }
+                Err(err) => {
+                    tracing::error!(?pane_id, ?err, "per-pane Compositor init failed");
+                }
+            }
+        }
+        if aw.active_pane_id.is_none() {
+            aw.active_pane_id = Some(seed_pane_id);
         }
     }
 
@@ -153,8 +475,18 @@ impl App {
                 first_paint_ready: false,
                 last_resize_at: None,
                 pending_resize: None,
+                compositors: HashMap::new(),
+                active_pane_id: None,
             },
         );
+        // TODO(phase-5): per-NSWindow mux WindowId allocation when Cmd-T spawns a
+        // fresh Mux Tab+Pane. Plan 04-06 bounded scope: reuse the bootstrap mux
+        // WindowId so newly-created tab-group NSWindows still route resize.
+        if let Some(mux_window_id) =
+            Mux::try_get().and_then(|m| m.window_ids_snapshot().first().copied())
+        {
+            self.winit_to_mux_window.insert(id, mux_window_id);
+        }
         tracing::info!(window_id = ?id, "Cmd-T: new tab-grouped window created");
     }
 
@@ -222,10 +554,10 @@ impl App {
                     if let Some(active) = mux.any_active_pane_id() {
                         if let Some(new_id) = mux.focus_direction(active, dir) {
                             tracing::info!(?active, ?new_id, "focus moved");
-                            // Multi-pane border flip + cursor_focused toggle lands
-                            // when the per-pane Compositor map goes live. For now
-                            // we redraw every window so future renderers pick up
-                            // the new active_pane_id from the Mux Tab.
+                            // Plan 04-06 Gap 3: invoke the D-66 border-color setter
+                            // on both the old-active and new-active compositors,
+                            // and flip cursor_focused for filled vs hollow cursor.
+                            self.apply_focus_change(new_id);
                             self.request_redraw_all();
                         } else {
                             tracing::debug!("focus_direction returned no neighbor; absorbed");
@@ -284,8 +616,17 @@ impl ApplicationHandler<UserEvent> for App {
                 first_paint_ready: false,
                 last_resize_at: None,
                 pending_resize: None,
+                compositors: HashMap::new(),
+                active_pane_id: None,
             },
         );
+        // Plan 04-06: record the bootstrap mux WindowId mapping. The I/O thread
+        // creates exactly one Mux window on startup (main.rs); we adopt its id.
+        if let Some(mux_window_id) =
+            Mux::try_get().and_then(|m| m.window_ids_snapshot().first().copied())
+        {
+            self.winit_to_mux_window.insert(id, mux_window_id);
+        }
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
@@ -294,22 +635,28 @@ impl ApplicationHandler<UserEvent> for App {
                 if bytes.is_empty() {
                     return;
                 }
-                // Plan 04-05 shim: only the currently-active Mux pane is mirrored
-                // into the visible Term. Background panes still consume their
-                // PTY output (kept inside their own Mux::Pane.term mutex) so
-                // their shells don't block on full pipes, but those bytes are
-                // not yet drawn — full per-pane Compositor rendering lands in
-                // the multi-pane render polish.
+                // Plan 04-06: feed bytes into the pane's own per-pane Term (the
+                // source of truth in the Mux). Backward-compat: keep mirroring
+                // the ACTIVE pane's bytes into the App's shared `self.term` so
+                // existing selection / cell_from_pixel plumbing still works.
                 let active = Mux::try_get().and_then(|m| m.any_active_pane_id());
                 let is_active = active.is_some_and(|a| a == pane_id);
+                if let Some(pane) = Mux::try_get().and_then(|m| m.pane(pane_id)) {
+                    let mut t = pane.term.lock();
+                    t.feed(&bytes);
+                }
                 if is_active {
                     let mut t = self.term.lock();
                     t.feed(&bytes);
                 }
+                // Plan 04-06: lazily ensure per-pane Compositors are built for
+                // every leaf in this pane's tab. New panes from Cmd-D land here.
+                let window_ids: Vec<WindowId> = self.windows.keys().copied().collect();
+                for wid in window_ids {
+                    self.ensure_compositors_for_pane(wid, pane_id);
+                }
                 // First-paint gate (D-51, per-window per Pitfall H): flip on ANY
-                // pane's first non-empty drain. Today there is exactly one
-                // visible window in production; the gate generalizes naturally
-                // once per-pane→winit-window routing lands.
+                // pane's first non-empty drain.
                 for aw in self.windows.values_mut() {
                     if !aw.overlay_dropped {
                         aw.overlay = None;
@@ -322,9 +669,10 @@ impl ApplicationHandler<UserEvent> for App {
                             "first PTY byte received; per-window first-paint gate open (D-51)"
                         );
                     }
-                    if is_active {
-                        aw.window.request_redraw();
-                    }
+                    // Plan 04-06: redraw on ANY pane's output (not only the
+                    // active one), since the per-pane Compositor map paints
+                    // every pane independently.
+                    aw.window.request_redraw();
                 }
             }
             UserEvent::PaneResized {
@@ -493,17 +841,7 @@ impl ApplicationHandler<UserEvent> for App {
                     .selection
                     .range()
                     .map(|r| (r.anchor, r.cursor));
-                let Some(host) = self
-                    .windows
-                    .get_mut(&id)
-                    .and_then(|aw| aw.render_host.as_mut())
-                else {
-                    return;
-                };
-                let mut t = self.term.lock();
-                if let Err(err) = host.render(&mut t, sel) {
-                    tracing::warn!(?err, "render failed");
-                }
+                self.render_window(id, sel);
             }
             _ => {}
         }

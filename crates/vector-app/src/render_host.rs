@@ -15,6 +15,22 @@ pub struct RenderHost {
     dpr: f32,
 }
 
+/// Surface frame handle yielded by `RenderHost::with_frame`. Plan 04-06: per-pane
+/// render loop acquires the surface once, then iterates compositors against `view`
+/// with chained LoadOps; caller calls `present()` after the last pane is encoded.
+pub struct AcquiredFrame {
+    frame: wgpu::SurfaceTexture,
+    pub view: wgpu::TextureView,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl AcquiredFrame {
+    pub fn present(self) {
+        self.frame.present();
+    }
+}
+
 impl RenderHost {
     pub fn new(window: &Arc<Window>) -> Result<Self> {
         #[allow(clippy::cast_possible_truncation)]
@@ -95,5 +111,78 @@ impl RenderHost {
             Ok(()) | Err(CompositorError::Outdated | CompositorError::Lost) => Ok(()),
             Err(err) => Err(anyhow::anyhow!("compositor render: {err}")),
         }
+    }
+
+    /// Plan 04-06: read access to the underlying wgpu queue. Per-pane border-color
+    /// updates from the App's MuxCommand::FocusDir handler call `Compositor::set_border_color`
+    /// which needs the queue.
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.ctx.queue
+    }
+
+    /// Plan 04-06: read access to device for lazy per-pane Compositor construction.
+    pub fn device(&self) -> &wgpu::Device {
+        &self.ctx.device
+    }
+
+    /// Plan 04-06: surface format for `Compositor::new_with_viewport`.
+    pub fn surface_format(&self) -> wgpu::TextureFormat {
+        self.ctx.config.format
+    }
+
+    /// Plan 04-06: surface dimensions (width, height) in physical pixels.
+    pub fn surface_size(&self) -> (u32, u32) {
+        (self.ctx.config.width, self.ctx.config.height)
+    }
+
+    /// Plan 04-06: acquire the next surface frame. Returns `Ok(None)` when the
+    /// surface is Occluded/Timeout/Outdated/Lost (caller skips the frame and the
+    /// surface auto-reconfigures for Outdated/Lost).
+    pub fn acquire_frame(&mut self) -> Result<Option<AcquiredFrame>> {
+        let frame = match self.ctx.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                self.ctx
+                    .surface
+                    .configure(&self.ctx.device, &self.ctx.config);
+                return Ok(None);
+            }
+            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                return Ok(None);
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                return Err(anyhow::anyhow!("surface validation error"));
+            }
+        };
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        Ok(Some(AcquiredFrame {
+            frame,
+            view,
+            width: self.ctx.config.width,
+            height: self.ctx.config.height,
+        }))
+    }
+
+    /// Plan 04-06: build a fresh Compositor against this host's device + surface
+    /// format. Used to populate the per-pane `compositors` map lazily.
+    pub fn new_compositor_for_viewport(
+        &self,
+        offset_px: [f32; 2],
+        size_px: [f32; 2],
+    ) -> Result<Compositor> {
+        let fs = FontStack::load_bundled(self.dpr, 14.0)?;
+        Compositor::new_with_viewport(
+            &self.ctx.device,
+            &self.ctx.queue,
+            self.ctx.config.format,
+            self.ctx.config.width,
+            self.ctx.config.height,
+            offset_px,
+            size_px,
+            fs,
+        )
     }
 }

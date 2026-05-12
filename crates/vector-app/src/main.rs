@@ -37,7 +37,15 @@ fn main() -> Result<()> {
 
     let lpm_flag = Arc::new(AtomicBool::new(false));
     let proxy_io = proxy.clone();
-    let lpm_io = Arc::clone(&lpm_flag);
+
+    // Plan 04-06: construct the PtyActorRouter on the main thread so we can
+    // hand the Arc to both the App (per-pane SIGWINCH fanout) and the I/O
+    // thread (per-pane spawn / write / read tasks).
+    let router_main = Arc::new(parking_lot::Mutex::new(pty_actor::PtyActorRouter::new(
+        proxy.clone(),
+        Arc::clone(&lpm_flag),
+    )));
+    let router_io = Arc::clone(&router_main);
 
     let _io_thread = thread::Builder::new()
         .name("tokio-io".into())
@@ -63,11 +71,9 @@ fn main() -> Result<()> {
                     }
                 };
 
-                let mut router =
-                    pty_actor::PtyActorRouter::new(proxy_io.clone(), Arc::clone(&lpm_io));
                 if let Some(pane) = mux.pane(pane_id) {
                     if let Some(transport) = pane.take_transport() {
-                        router.spawn_pane(pane_id, transport);
+                        router_io.lock().spawn_pane(pane_id, transport);
                     }
                 }
 
@@ -77,7 +83,7 @@ fn main() -> Result<()> {
                     let _ = proxy_pt.send_event(UserEvent::PaneTitleChanged { pane_id, label });
                 }));
 
-                let router = Arc::new(parking_lot::Mutex::new(router));
+                let router = router_io;
                 let router_w = Arc::clone(&router);
                 let mut write_rx = write_rx;
                 drop(tokio::spawn(async move {
@@ -134,6 +140,7 @@ fn main() -> Result<()> {
 
     let mut application = app::App::new(write_tx, resize_tx, lpm_flag);
     application.set_split_req_tx(split_req_tx);
+    application.set_router(router_main);
     event_loop.run_app(&mut application)?;
     Ok(())
 }
