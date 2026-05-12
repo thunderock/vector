@@ -8,9 +8,10 @@ use alacritty_terminal::grid::Grid;
 use alacritty_terminal::term::cell::Cell;
 use alacritty_terminal::term::{Config, TermMode};
 use alacritty_terminal::Term as AlacrittyTerm;
+use tokio::sync::mpsc;
 
 use crate::dims::VectorDims;
-use crate::listener::NoopListener;
+use crate::listener::{ClipboardEvent, ForwardingListener};
 use crate::osc_sniff::{OscSniff, PromptMark};
 use crate::parser::Processor;
 
@@ -18,7 +19,7 @@ const CWD_RING_CAP: usize = 16;
 const PROMPT_RING_CAP: usize = 1000;
 
 pub struct Term {
-    inner: AlacrittyTerm<NoopListener>,
+    inner: AlacrittyTerm<ForwardingListener>,
     parser: Processor,
     osc_parser: vte::Parser,
     osc_sniff: OscSniff,
@@ -29,7 +30,23 @@ pub struct Term {
 }
 
 impl Term {
+    /// Construct a Term with dummy listener channels (events are dropped).
+    /// Preserves Phase-2 callsite shape. Use `with_channels` for live wiring.
     pub fn new(cols: u16, rows: u16, scrollback: usize) -> Self {
+        let (write_tx, _) = mpsc::channel(1);
+        let (clip_tx, _) = mpsc::channel(1);
+        Self::with_channels(cols, rows, scrollback, write_tx, clip_tx)
+    }
+
+    /// Construct a Term wired to live PtyWrite + Clipboard channels.
+    /// Plan 05-06 + vector-app consume these for OSC 52 + OSC 10/11/12 replies.
+    pub fn with_channels(
+        cols: u16,
+        rows: u16,
+        scrollback: usize,
+        write_tx: mpsc::Sender<Vec<u8>>,
+        clipboard_tx: mpsc::Sender<ClipboardEvent>,
+    ) -> Self {
         let config = Config {
             scrolling_history: scrollback,
             ..Config::default()
@@ -38,7 +55,11 @@ impl Term {
             cols: cols.into(),
             rows: rows.into(),
         };
-        let inner = AlacrittyTerm::new(config, &dims, NoopListener);
+        let listener = ForwardingListener {
+            write_tx,
+            clipboard_tx,
+        };
+        let inner = AlacrittyTerm::new(config, &dims, listener);
         let parser = Processor::new();
         Self {
             inner,
@@ -131,7 +152,7 @@ impl Term {
         &self.prompt_marks
     }
 
-    pub(crate) fn inner(&self) -> &AlacrittyTerm<NoopListener> {
+    pub(crate) fn inner(&self) -> &AlacrittyTerm<ForwardingListener> {
         &self.inner
     }
 }
