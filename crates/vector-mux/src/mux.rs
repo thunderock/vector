@@ -53,6 +53,36 @@ impl Mux {
         MUX.get().cloned().expect("Mux::install not called yet")
     }
 
+    /// Fallible variant of `get` — returns `None` if `install` hasn't been called.
+    /// Plan 04-04 callers (App's Cmd-* handlers) probe the singleton without panicking
+    /// because the App can be running before the I/O thread completes Mux setup.
+    #[must_use]
+    pub fn try_get() -> Option<Arc<Mux>> {
+        MUX.get().cloned()
+    }
+
+    /// Plan 04-04: snapshot of all currently-registered `WindowId`s.
+    #[must_use]
+    pub fn window_ids_snapshot(&self) -> Vec<WindowId> {
+        self.windows.read().keys().copied().collect()
+    }
+
+    /// Plan 04-04: the first active PaneId observed across all windows. Returns
+    /// the active pane of the active tab of an arbitrary window; `None` if mux
+    /// is empty. Multi-window disambiguation by key-NSWindow lands in Plan 04-05.
+    #[must_use]
+    pub fn any_active_pane_id(&self) -> Option<PaneId> {
+        let windows = self.windows.read();
+        for w in windows.values() {
+            if let Some(tab_id) = w.active_tab_id {
+                if let Some(tab) = w.tabs.iter().find(|t| t.id == tab_id) {
+                    return Some(tab.active_pane_id);
+                }
+            }
+        }
+        None
+    }
+
     pub fn allocate_pane_id(&self) -> PaneId {
         self.ids.allocate_pane()
     }

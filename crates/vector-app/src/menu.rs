@@ -7,7 +7,11 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::NSString;
 
-/// SAFETY: must be called on the macOS main thread (winit's `resumed` guarantees this).
+/// Install the standard AppKit menu bar (UI-SPEC).
+///
+/// # Safety
+/// Caller must invoke this on the macOS main thread; winit's `resumed`
+/// callback guarantees that invariant for production callers.
 pub unsafe fn install_main_menu() {
     let mtm = MainThreadMarker::new().expect("must be called on main thread");
     let app = NSApplication::sharedApplication(mtm);
@@ -68,14 +72,18 @@ fn app_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     item
 }
 
-// File menu (UI-SPEC): New Window (Cmd-N, disabled), New Tab (Cmd-T, disabled),
-// separator, Close (Cmd-W, performClose:).
+// File menu (UI-SPEC): New Window (Cmd-N, disabled — Phase 5/D-65), New Tab
+// (Cmd-T, Plan 04-04 enabled — no AppKit action; winit KeyboardInput sees Cmd-T
+// and routes to `MuxCommand::NewTab` which our App handles), separator,
+// Close (Cmd-W, performClose:).
 fn file_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     let item = NSMenuItem::new(mtm);
     let submenu = NSMenu::new(mtm);
     submenu.setTitle(&NSString::from_str("File"));
     add_disabled(mtm, &submenu, "New Window", "n");
-    add_disabled(mtm, &submenu, "New Tab", "t");
+    // Plan 04-04: "New Tab" enabled (not greyed); key event flows through winit
+    // to our keymap which encodes it as `EncodedKey::Mux(MuxCommand::NewTab)`.
+    add_key_only(mtm, &submenu, "New Tab", "t");
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
     add(mtm, &submenu, "Close", sel!(performClose:), "w");
     item.setSubmenu(Some(&submenu));
@@ -160,6 +168,17 @@ fn add(mtm: MainThreadMarker, menu: &NSMenu, title: &str, action: Sel, key: &str
     // objc2 cannot prove the receiver implements the target.
     unsafe { mi.setAction(Some(action)) };
     mi.setKeyEquivalent(&NSString::from_str(key));
+    menu.addItem(&mi);
+}
+
+/// Append a menu entry whose only purpose is to show the key equivalent in the
+/// menu — the keystroke flows through to winit because no AppKit action is
+/// installed. Used by Plan 04-04 for Cmd-T (App handles it via the keymap).
+fn add_key_only(mtm: MainThreadMarker, menu: &NSMenu, title: &str, key: &str) {
+    let mi = NSMenuItem::new(mtm);
+    mi.setTitle(&NSString::from_str(title));
+    mi.setKeyEquivalent(&NSString::from_str(key));
+    // Leave the item enabled (default) and no action installed.
     menu.addItem(&mi);
 }
 

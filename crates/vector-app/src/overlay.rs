@@ -29,7 +29,10 @@ impl Overlay {
     pub fn relayout(&mut self) {}
 }
 
-/// SAFETY: must be called on the macOS main thread.
+/// Install the version overlay on the window's AppKit content view.
+///
+/// # Safety
+/// Caller must invoke this on the macOS main thread.
 pub unsafe fn install(window: &Window) -> Overlay {
     let mtm = MainThreadMarker::new().expect("must be called on main thread");
 

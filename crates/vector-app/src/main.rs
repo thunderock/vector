@@ -8,37 +8,9 @@ use anyhow::Result;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tracing_subscriber::{fmt, EnvFilter};
-use vector_mux::{LocalDomain, Mux, PaneId};
+use vector_app::{app, lpm, pty_actor, UserEvent};
+use vector_mux::{LocalDomain, Mux};
 use winit::event_loop::{ControlFlow, EventLoop};
-
-mod app;
-mod frame_tick;
-mod input_bridge;
-mod lpm;
-mod menu;
-mod overlay;
-mod pty_actor;
-mod render_host;
-
-/// Phase-4 cross-thread event variants. Plan 04-03 keyed PtyOutput / Resized by PaneId.
-#[derive(Debug, Clone)]
-pub enum UserEvent {
-    PaneOutput {
-        pane_id: PaneId,
-        bytes: Vec<u8>,
-    },
-    PaneResized {
-        pane_id: PaneId,
-        rows: u16,
-        cols: u16,
-    },
-    PaneExited(PaneId),
-    PaneTitleChanged {
-        pane_id: PaneId,
-        label: String,
-    },
-    LpmChanged(bool),
-}
 
 fn main() -> Result<()> {
     fmt()
@@ -57,8 +29,6 @@ fn main() -> Result<()> {
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
 
-    // Per-pane router-fed channels for the *active* pane. Plan 04-04 will
-    // teach App to route by PaneId; in Plan 04-03 we only have one pane.
     let (write_tx, write_rx) = mpsc::channel::<Vec<u8>>(64);
     let (resize_tx, resize_rx) = mpsc::channel::<(u16, u16)>(8);
 
@@ -75,7 +45,6 @@ fn main() -> Result<()> {
                 .build()
                 .expect("build tokio runtime");
             rt.block_on(async move {
-                // Install the Mux singleton + spawn the bootstrap pane.
                 let local_domain = Arc::new(
                     LocalDomain::new().expect("LocalDomain::new (shell resolution failed)"),
                 );
@@ -91,7 +60,6 @@ fn main() -> Result<()> {
                     }
                 };
 
-                // Spawn the per-pane PTY actor for the bootstrap pane.
                 let mut router =
                     pty_actor::PtyActorRouter::new(proxy_io.clone(), Arc::clone(&lpm_io));
                 if let Some(pane) = mux.pane(pane_id) {
@@ -100,16 +68,12 @@ fn main() -> Result<()> {
                     }
                 }
 
-                // Frame_tick is now spawned per-pane inside `router.spawn_pane`.
                 drop(lpm::spawn_lpm_observer(proxy_io.clone()));
-                // D-57: foreground-process tracker.
                 let proxy_pt = proxy_io.clone();
                 drop(vector_mux::spawn_proc_tracker(move |pane_id, label| {
                     let _ = proxy_pt.send_event(UserEvent::PaneTitleChanged { pane_id, label });
                 }));
 
-                // Bridge the App's single (write_tx, resize_tx) into the bootstrap
-                // pane's router channels. Plan 04-04 replaces this with PaneId routing.
                 let router = Arc::new(parking_lot::Mutex::new(router));
                 let router_w = Arc::clone(&router);
                 let mut write_rx = write_rx;
@@ -126,7 +90,6 @@ fn main() -> Result<()> {
                     }
                 }));
 
-                // Park the I/O thread; tokio tasks keep running.
                 std::future::pending::<()>().await;
             });
         })?;
