@@ -126,16 +126,17 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   3. `printf '\e]52;c;%s\a' "$(echo hello | base64)"` puts "hello" in the macOS clipboard. Inside real tmux 3.4+ on a Codespace (smoke-tested manually before phase boundary), the DCS-wrapped form `\eP\e]52;c;…\a\e\\` round-trips correctly.
   4. Scrollback regex search highlights matches with next/prev navigation; OSC 7 (cwd), OSC 8 (hyperlinks), OSC 10/11/12 (color queries), and OSC 133 (semantic prompt marks) are observable in a shell-integration smoke test.
   5. Saved profiles named `local`, `codespace`, `dev_tunnel` exist in the config with per-profile env, theme, tint, and startup command. Secure Keyboard Entry can be toggled from a menu item; basic IME composition displays under the cursor (no candidate window UI).
-**Plans**: 9 plans
+**Plans**: 10 plans (revision iteration 1 — 05-08 split into 05-08 logic + 05-10 wiring)
   - [ ] 05-01-PLAN.md — Wave 0: D-83 hardening (workspace lints + path-dep arch-lint + cargo-deny pre-commit + cargo-machete CI) + 22 Wave-0 test stubs + 10 workspace deps
-  - [ ] 05-02-PLAN.md — Wave 1: vector-config schema + loader (ConfigFile / ProfileBlock / Kind / FontCfg / KeyBind / Action) + line/col errors + flat-overlay resolve_profile (POLISH-01, POLISH-07)
+  - [ ] 05-02-PLAN.md — Wave 1: vector-config schema + loader (ConfigFile / ProfileBlock / Kind / FontCfg / KeyBind / Action / cwd_override) + line/col errors + flat-overlay resolve_profile (POLISH-01, POLISH-07)
   - [ ] 05-03-PLAN.md — Wave 1: vector-theme palette + chrome tokens (UI-SPEC §9.1) + Vector Light/Dark builtins + .itermcolors importer + appearance resolver (POLISH-03)
   - [ ] 05-04-PLAN.md — Wave 2: notify-debouncer-full watcher (150 ms + parent-dir + themes-dir) + apply pipeline diff_config + parse-error keep-last-good (POLISH-01, POLISH-02 restart classification)
-  - [ ] 05-05-PLAN.md — Wave 3: OSC sniffer (OSC 7 cwd + OSC 133 prompt marks) + ForwardingListener (OSC 10/11/12 PtyWrite reply) + OSC 8 hyperlink grouping + scheme allowlist (POLISH-04)
-  - [ ] 05-06-PLAN.md — Wave 3: OSC 52 raw + DCS-wrapped inbound (Open Question #1 resolution) + 58-byte outbound chunking + tmux smoke (POLISH-05)
-  - [ ] 05-07-PLAN.md — Wave 4: Cmd-C selection-string (Pitfall 8 wide-char + trailing-ws + rect newlines) + ligatures + Nerd Font + SearchBar smart-case + 1000-cap cache (POLISH-02, POLISH-06)
-  - [ ] 05-08-PLAN.md — Wave 4: Tint stripe pipeline + Profile picker (fuzzy + Phase-6 label) + Toast surface + Clipboard router + Cmd-N + Vector→Switch Profile menu + config watcher wiring (POLISH-07)
-  - [ ] 05-09-PLAN.md — Wave 5: Secure Keyboard Entry (Carbon FFI + RAII) + NSTextInputClient IME (5 selectors) + vector-secrets API lock + manual 9-item smoke matrix checkpoint (POLISH-08)
+  - [ ] 05-05-PLAN.md — Wave 1: OSC sniffer (OSC 7 cwd + OSC 133 prompt marks) + ForwardingListener (OSC 10/11/12 PtyWrite reply) + OSC 8 hyperlink grouping + scheme allowlist (POLISH-04)
+  - [ ] 05-06-PLAN.md — Wave 1: OSC 52 raw + DCS-wrapped inbound (Open Question #1 resolution) + 58-byte outbound chunking + tmux smoke (POLISH-05)
+  - [ ] 05-07-PLAN.md — Wave 2: Cmd-C selection-string (Pitfall 8 wide-char + trailing-ws + rect newlines) + ligatures + Nerd Font + SearchBar smart-case + 1000-cap cache (POLISH-02, POLISH-06)
+  - [ ] 05-08-PLAN.md — Wave 3: Logic — Tint stripe pipeline (B4 fix: full WGSL + pipeline body, no todo!()) + Profile picker (fuzzy + Phase-6 label) + Toast state machine + Clipboard router + B2 OSC 7 consumers (new-pane cwd + tab-title cwd-stem suffix) (POLISH-07)
+  - [ ] 05-10-PLAN.md — Wave 3: Wiring & rendering — B1 OSC 8 Cmd-click + NSWorkspace dispatch + scheme-reject toast (UI-SPEC §6.1) + M1 SearchBar render pass + M2 Toast/Picker render passes + M4 Cmd-Shift-R reload menu + Cmd-N + Cmd-C native pasteboard + Switch Profile submenu + config watcher pump + B2 tab-title wire-up (POLISH-04, POLISH-06, POLISH-07)
+  - [ ] 05-09-PLAN.md — Wave 4: Secure Keyboard Entry (Carbon FFI + RAII) + NSTextInputClient IME (5 selectors) + vector-secrets API lock + manual 9-item smoke matrix checkpoint (POLISH-08)
 **Stack additions**: `serde + toml 1.1.2`, `notify` (FSEvents on macOS), `keyring 4.0` initialized here for later phases, `vector-config`, `vector-theme`, `vector-secrets`.
 **Risks & notes**:
   - **DCS-wrapped OSC 52 through tmux is a known pitfall (Pitfall 8).** Smoke-test on real tmux 3.4+ with `set -g allow-passthrough on` before declaring the phase done. Truncation at ~60 chars is a real bug to design around.
