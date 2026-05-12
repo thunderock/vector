@@ -393,13 +393,17 @@ impl Mux {
         dir: SplitDirection,
         cwd: Option<PathBuf>,
     ) -> Result<PaneId> {
-        let parent_pid = self.pane(pane_id).and_then(|p| p.shell_pid());
         // viewport size for the new pane: inherit the tab's current size.
         let (rows, cols) = self
             .locate_pane(pane_id)
             .and_then(|(wid, tid)| self.with_tab(wid, tid, |t| (t.last_rows, t.last_cols)))
             .unwrap_or((24, 80));
-        let cwd = cwd.or_else(|| Some(inherit_cwd(parent_pid)));
+        // D-79 B2: prefer OSC 7 ring on parent pane; fall back to proc_pidinfo
+        // (D-63) inside spawn_cwd_for; HOME beyond that.
+        let cwd = cwd.or_else(|| {
+            self.pane(pane_id)
+                .map(|p| crate::pane::spawn_cwd_for(&crate::pane::PaneCwdView::from(&*p)))
+        });
         let spawned = self
             .default_domain
             .spawn_local(SpawnCommand {

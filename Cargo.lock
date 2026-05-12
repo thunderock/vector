@@ -816,6 +816,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuzzy-matcher"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54614a3312934d066701a80f20f15fa3b56d67ac7722b39eea5b4c9dd1d66c94"
+dependencies = [
+ "thread_local",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2538,8 +2547,10 @@ version = "2026.5.10"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "bytes",
  "cargo-husky",
+ "fuzzy-matcher",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
@@ -2551,9 +2562,11 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "vector-config",
  "vector-fonts",
  "vector-input",
  "vector-mux",
+ "vector-pty",
  "vector-render",
  "vector-term",
  "wgpu",
@@ -2646,6 +2659,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "vector-config",
  "vector-pty",
  "vector-term",
 ]

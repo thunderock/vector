@@ -644,6 +644,11 @@ impl ApplicationHandler<UserEvent> for App {
                 if let Some(pane) = Mux::try_get().and_then(|m| m.pane(pane_id)) {
                     let mut t = pane.term.lock();
                     t.feed(&bytes);
+                    // D-79 OSC 7 consumer: sync the ring's most-recent cwd into
+                    // the pane so spawn_cwd_for / format_tab_title can read it.
+                    let latest = t.cwd_ring().back().cloned();
+                    drop(t);
+                    *pane.cwd.lock() = latest;
                 }
                 if is_active {
                     let mut t = self.term.lock();
@@ -691,11 +696,14 @@ impl ApplicationHandler<UserEvent> for App {
                 tracing::info!(?pane_id, "pane exited (Plan 04-05 will render sentinel)");
             }
             UserEvent::PaneTitleChanged { pane_id, label } => {
-                tracing::info!(?pane_id, %label, "pane title changed");
-                // D-57: surface the title on the primary window. Multi-window
-                // disambiguation (which window holds which pane) is Plan 04-05.
+                // D-79 B2: append `: {cwd_stem}` when OSC 7 ring is non-empty.
+                let cwd = Mux::try_get()
+                    .and_then(|m| m.pane(pane_id))
+                    .and_then(|p| p.cwd.lock().clone());
+                let title = vector_mux::format_tab_title(&label, cwd.as_deref());
+                tracing::info!(?pane_id, %title, "pane title changed");
                 if let Some(aw) = self.primary_window() {
-                    aw.window.set_title(&format!("Vector — {label}"));
+                    aw.window.set_title(&format!("Vector — {title}"));
                 }
             }
             UserEvent::LpmChanged(enabled) => {

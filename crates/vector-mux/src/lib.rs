@@ -20,7 +20,10 @@ pub use ids::{
 };
 pub use local_domain::{LocalDomain, LocalTransport};
 pub use mux::Mux;
-pub use pane::{Pane, PaneNode, SplitRatio};
+pub use pane::{
+    format_tab_title, spawn_cwd_for, spawn_cwd_for_with_proc, Pane, PaneCwdView, PaneNode,
+    SplitRatio,
+};
 pub use proc_tracker::{proc_name_poll_loop, spawn_proc_tracker};
 pub use spawned_pane::SpawnedPane;
 pub use split_tree::{

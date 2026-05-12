@@ -5,6 +5,7 @@
 //! from `Mux.panes` keyed by id.
 
 use std::os::fd::RawFd;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -88,6 +89,10 @@ pub struct Pane {
     pub master_fd: Option<RawFd>,
     /// Updated by Plan 04-03 proc_tracker (D-57).
     pub last_proc_name: Mutex<String>,
+    /// D-79 OSC 7 consumer: synced from `Term::cwd_ring().back()` after each
+    /// PtyOutput drain. Used by `spawn_cwd_for` for child-pane cwd inheritance
+    /// and by `format_tab_title` for the cwd-stem suffix.
+    pub cwd: Mutex<Option<PathBuf>>,
     /// Flipped by pty_actor on transport.wait() completion.
     pub exited: AtomicBool,
 }
@@ -109,6 +114,7 @@ impl Pane {
             pid,
             master_fd,
             last_proc_name: Mutex::new(String::new()),
+            cwd: Mutex::new(None),
             exited: AtomicBool::new(false),
         }
     }
@@ -129,6 +135,63 @@ impl Pane {
     #[must_use]
     pub fn master_fd(&self) -> Option<RawFd> {
         self.master_fd
+    }
+}
+
+/// Lightweight read-only view of the Pane fields needed for cwd resolution.
+/// Lets tests + plan-05-10 wiring share `spawn_cwd_for*` without constructing
+/// a full Pane (which needs a Term + transport).
+#[derive(Debug, Clone)]
+pub struct PaneCwdView {
+    pub cwd: Option<PathBuf>,
+    pub pid: Option<i32>,
+}
+
+impl From<&Pane> for PaneCwdView {
+    fn from(p: &Pane) -> Self {
+        Self {
+            cwd: p.cwd.lock().clone(),
+            pid: p.pid,
+        }
+    }
+}
+
+/// D-79 B2 fix: resolve cwd for a new-pane / new-tab spawn.
+/// Precedence: OSC 7 ring back (pane.cwd) → proc_pidinfo fallback (D-63) → `$HOME`.
+#[must_use]
+pub fn spawn_cwd_for(view: &PaneCwdView) -> PathBuf {
+    spawn_cwd_for_with_proc(
+        view,
+        |pid| crate::cwd::pidcwd(pid).ok(),
+        || std::env::var_os("HOME").map(PathBuf::from),
+    )
+}
+
+/// Test seam variant: callers inject the proc_pidinfo + HOME lookups.
+#[must_use]
+pub fn spawn_cwd_for_with_proc(
+    view: &PaneCwdView,
+    proc_fn: impl Fn(i32) -> Option<PathBuf>,
+    home_fn: impl Fn() -> Option<PathBuf>,
+) -> PathBuf {
+    if let Some(cwd) = &view.cwd {
+        return cwd.clone();
+    }
+    if let Some(pid) = view.pid {
+        if let Some(cwd) = proc_fn(pid) {
+            return cwd;
+        }
+    }
+    home_fn().unwrap_or_else(|| PathBuf::from("/"))
+}
+
+/// D-79 B2 fix: tab title with cwd-stem suffix when OSC 7 is present.
+/// Returns `"zsh: vector"` when cwd=`/Users/me/vector`; `"zsh"` when cwd=None.
+#[must_use]
+pub fn format_tab_title(process_name: &str, cwd: Option<&Path>) -> String {
+    match cwd.and_then(Path::file_name).and_then(|s| s.to_str()) {
+        Some(stem) if !stem.is_empty() => format!("{process_name}: {stem}"),
+        _ => process_name.to_owned(),
     }
 }
 
