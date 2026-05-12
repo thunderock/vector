@@ -1,8 +1,11 @@
-//! TOML config + hot reload. Filled in Phase 5 atop `serde` + `toml` + `notify`.
+//! vector-config — Phase 5 TOML config + hot reload (POLISH-01, POLISH-07).
 
-use anyhow::Result;
+pub mod error;
+pub mod loader;
+pub mod schema;
 
-#[allow(dead_code, unused_imports)]
-fn _force_anyhow_use() -> Result<()> {
-    Ok(())
-}
+pub use error::ConfigError;
+pub use loader::{parse, resolve_profile, ResolvedProfile};
+pub use schema::{
+    Action, Appearance, ClipboardPolicy, ConfigFile, FontCfg, KeyBind, Kind, ProfileBlock,
+};
