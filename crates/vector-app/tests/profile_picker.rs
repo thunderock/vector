@@ -21,8 +21,7 @@ fn fuzzy_ranking() {
     let pos_work = names.iter().position(|n| *n == "work-cs").unwrap();
     assert!(
         pos_rust < pos_work,
-        "fuzzy 'rs' must rank rust-codespace above work-cs; got {:?}",
-        names
+        "fuzzy 'rs' must rank rust-codespace above work-cs; got {names:?}"
     );
 }
 
@@ -42,8 +41,7 @@ fn codespace_warning_label() {
             Kind::Codespace | Kind::DevTunnel => {
                 assert!(
                     label.contains("Phase 6+"),
-                    "UI-SPEC §5.3: kind={:?} must show `Phase 6+`; got {:?}",
-                    kind, label
+                    "UI-SPEC §5.3: kind={kind:?} must show `Phase 6+`; got {label:?}"
                 );
             }
             Kind::Local => {

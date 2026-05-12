@@ -7,16 +7,19 @@
 use vector_mux::PaneId;
 
 pub mod app;
+pub mod clipboard_router;
 pub mod frame_tick;
 pub mod input_bridge;
 pub mod lpm;
 pub mod menu;
 pub mod mux_commands;
 pub mod overlay;
+pub mod profile_picker;
 pub mod pty_actor;
 pub mod render_host;
 pub mod search_bar;
 pub mod tab_window;
+pub mod toast;
 
 pub use mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};
 pub use tab_window::TabWindow;
