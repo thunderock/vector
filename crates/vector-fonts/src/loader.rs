@@ -24,6 +24,10 @@ pub struct FontStack {
     font_key: FontKey,
     size: Size,
     pub cell_metrics: CellMetrics,
+    // POLISH-02 D-69: runtime ligature toggle (Pattern 5). Default true — JetBrains Mono
+    // ligatures render via CoreText shaping at glyph-lookup time; the toggle gates a
+    // future contiguous-run shaper path (deferred per 05-RESEARCH Pattern 5).
+    ligatures_enabled: bool,
 }
 
 impl FontStack {
@@ -55,7 +59,20 @@ impl FontStack {
             font_key,
             size,
             cell_metrics,
+            ligatures_enabled: true,
         })
+    }
+
+    /// POLISH-02 D-69 ligature toggle (Pattern 5). Runtime no-op for v1 — CoreText
+    /// shapes JetBrains Mono ligatures at glyph lookup unconditionally; the toggle
+    /// is plumbed for the deferred contiguous-run shaper path.
+    pub fn set_ligatures(&mut self, on: bool) {
+        self.ligatures_enabled = on;
+    }
+
+    #[must_use]
+    pub fn ligatures_enabled(&self) -> bool {
+        self.ligatures_enabled
     }
 
     pub fn rasterize(&self, character: char) -> Result<RasterizedGlyph> {
