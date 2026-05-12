@@ -10,6 +10,7 @@ description = "Keymap + paste + selection state — Phase 3 (D-52, D-53, D-54)."
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+vector-mux = { path = "../vector-mux" }
 winit.workspace = true
 
 [lints]

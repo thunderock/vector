@@ -5,7 +5,7 @@ mod mods;
 mod paste;
 mod selection;
 
-pub use keymap::{encode, encode_key};
+pub use keymap::{encode, encode_key, EncodedKey, MuxCommand};
 pub use mods::ModState;
 pub use paste::wrap_bracketed_paste;
 pub use selection::{SelectionRange, SelectionState};

@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
-use vector_input::{encode_key, wrap_bracketed_paste, ModState, SelectionState};
+use vector_input::{encode_key, wrap_bracketed_paste, EncodedKey, ModState, SelectionState};
 use vector_term::Term;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
@@ -174,9 +174,16 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                 }
-                if let Some(bytes) = encode_key(&event, self.mods) {
-                    self.input_bridge.send_bytes(bytes);
-                    self.request_redraw();
+                match encode_key(&event, self.mods) {
+                    Some(EncodedKey::Pty(bytes)) => {
+                        self.input_bridge.send_bytes(bytes);
+                        self.request_redraw();
+                    }
+                    Some(EncodedKey::Mux(cmd)) => {
+                        // Plan 04-04 Task 2 wires the dispatcher; for now log + swallow.
+                        tracing::info!(?cmd, "mux command received (Task 2 will dispatch)");
+                    }
+                    None => {}
                 }
             }
             WindowEvent::MouseInput {

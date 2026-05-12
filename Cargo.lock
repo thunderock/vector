@@ -2389,6 +2389,7 @@ dependencies = [
  "anyhow",
  "thiserror 2.0.18",
  "tracing",
+ "vector-mux",
  "winit",
 ]
 

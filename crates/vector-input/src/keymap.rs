@@ -1,18 +1,43 @@
 //! xterm-compatible key encoder. D-52: full xterm key table coverage.
+//! D-59/D-60/D-61/D-62: Cmd-* mux shortcuts return `EncodedKey::Mux(...)` and
+//! are recognized at the keymap layer BEFORE the xterm key table.
 
+use vector_mux::Direction;
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{Key, NamedKey};
 
 use crate::mods::ModState;
 
-/// Encode a winit key event into xterm-compatible bytes.
-/// Returns None for Released/Dead/Unidentified or unmapped keys.
+/// Output of [`encode`] / [`encode_key`].
+///
+/// `Pty(bytes)` → App routes to `router.send_write(active_pane, bytes)`.
+/// `Mux(cmd)` → App dispatches to the mux command handler; never reaches PTY.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EncodedKey {
+    Pty(Vec<u8>),
+    Mux(MuxCommand),
+}
+
+/// App-layer mux command produced by Cmd-* shortcuts (D-59/D-60/D-61/D-62).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MuxCommand {
+    NewTab,
+    SplitHorizontal,
+    SplitVertical,
+    ClosePane,
+    CycleTabNext,
+    CycleTabPrev,
+    FocusDir(Direction),
+    NudgeSplit(Direction),
+}
+
+/// Encode a winit key event. Returns None for Released/Dead/Unidentified or unmapped keys.
 ///
 /// Delegates to [`encode`] for the parts actually used. `KeyEvent` has a private
 /// `platform_specific` field so it cannot be constructed in tests — call `encode` directly
 /// from unit tests, and `encode_key` from the live `WindowEvent::KeyboardInput` handler.
 #[must_use]
-pub fn encode_key(ev: &KeyEvent, mods: ModState) -> Option<Vec<u8>> {
+pub fn encode_key(ev: &KeyEvent, mods: ModState) -> Option<EncodedKey> {
     encode(&ev.logical_key, ev.text.as_deref(), ev.state, mods)
 }
 
@@ -23,10 +48,79 @@ pub fn encode(
     text: Option<&str>,
     state: ElementState,
     mods: ModState,
-) -> Option<Vec<u8>> {
+) -> Option<EncodedKey> {
     if state != ElementState::Pressed {
         return None;
     }
+
+    // Cmd-* mux shortcuts (D-59/D-60/D-61/D-62) — recognized BEFORE xterm table.
+    // Precedence: Cmd-Opt-Arrow → FocusDir; Cmd-Shift-Arrow → NudgeSplit;
+    // Cmd-T/D/W/Shift-D/Shift-]/Shift-[ → tab/split/close commands.
+    if let Some(cmd) = match_mux_command(logical_key, mods) {
+        return Some(EncodedKey::Mux(cmd));
+    }
+
+    encode_pty(logical_key, text, mods).map(EncodedKey::Pty)
+}
+
+/// Recognize the 14 Cmd-* mux shortcuts. Returns None if the key isn't a mux binding.
+fn match_mux_command(key: &Key, mods: ModState) -> Option<MuxCommand> {
+    // Arrow keys: Cmd+Opt → FocusDir; Cmd+Shift → NudgeSplit. Reject if Ctrl held.
+    if mods.cmd && !mods.ctrl {
+        if mods.alt && !mods.shift {
+            return match key {
+                Key::Named(NamedKey::ArrowLeft) => Some(MuxCommand::FocusDir(Direction::Left)),
+                Key::Named(NamedKey::ArrowRight) => Some(MuxCommand::FocusDir(Direction::Right)),
+                Key::Named(NamedKey::ArrowUp) => Some(MuxCommand::FocusDir(Direction::Up)),
+                Key::Named(NamedKey::ArrowDown) => Some(MuxCommand::FocusDir(Direction::Down)),
+                _ => character_shortcut(key, mods),
+            };
+        }
+        if mods.shift && !mods.alt {
+            return match key {
+                Key::Named(NamedKey::ArrowLeft) => Some(MuxCommand::NudgeSplit(Direction::Left)),
+                Key::Named(NamedKey::ArrowRight) => Some(MuxCommand::NudgeSplit(Direction::Right)),
+                Key::Named(NamedKey::ArrowUp) => Some(MuxCommand::NudgeSplit(Direction::Up)),
+                Key::Named(NamedKey::ArrowDown) => Some(MuxCommand::NudgeSplit(Direction::Down)),
+                _ => character_shortcut(key, mods),
+            };
+        }
+        return character_shortcut(key, mods);
+    }
+    None
+}
+
+/// Cmd-only and Cmd-Shift character shortcuts. macOS sends the shifted glyph
+/// in `Key::Character` when Shift is held (`"D"`, `"}"`, `"{"`).
+fn character_shortcut(key: &Key, mods: ModState) -> Option<MuxCommand> {
+    let s = match key {
+        Key::Character(s) => s.as_str(),
+        _ => return None,
+    };
+    if mods.alt || mods.ctrl {
+        return None;
+    }
+    if mods.shift {
+        // Cmd-Shift-D / Cmd-Shift-] / Cmd-Shift-[. Accept both shifted and unshifted forms.
+        return match s {
+            "D" | "d" => Some(MuxCommand::SplitVertical),
+            "]" | "}" => Some(MuxCommand::CycleTabNext),
+            "[" | "{" => Some(MuxCommand::CycleTabPrev),
+            _ => None,
+        };
+    }
+    // Cmd-T / Cmd-D / Cmd-W (no shift).
+    match s {
+        "t" | "T" => Some(MuxCommand::NewTab),
+        "d" | "D" => Some(MuxCommand::SplitHorizontal),
+        "w" | "W" => Some(MuxCommand::ClosePane),
+        _ => None,
+    }
+}
+
+/// Encode the PTY-bound bytes for a key. Returns None for Released/Dead/Unidentified or
+/// unmapped keys. The Cmd-* mux shortcuts above never reach this function.
+fn encode_pty(logical_key: &Key, text: Option<&str>, mods: ModState) -> Option<Vec<u8>> {
     let mod_param = mods.xterm_mod_param();
 
     // Option (Alt) + Character: ESC + bytes. macOS default (D-52).
