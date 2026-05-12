@@ -152,6 +152,29 @@ impl Term {
         &self.prompt_marks
     }
 
+    /// B1 (Plan 05-10 Task 1, D-78): hyperlink data for the cell at (row, col)
+    /// in viewport coordinates. Returns `(uri, id)`; `id` is `None` for anonymous
+    /// OSC 8 hyperlinks.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    pub fn hyperlink_at(&self, row: usize, col: usize) -> Option<(String, Option<String>)> {
+        use alacritty_terminal::index::{Column, Line, Point};
+        let grid = self.inner.grid();
+        if col >= usize::from(self.cols) || row >= usize::from(self.rows) {
+            return None;
+        }
+        let point = Point::new(Line(row as i32), Column(col));
+        let cell = &grid[point];
+        cell.hyperlink().map(|h| {
+            let id = h.id();
+            let id_opt = if id.is_empty() {
+                None
+            } else {
+                Some(id.to_owned())
+            };
+            (h.uri().to_owned(), id_opt)
+        })
+    }
+
     pub(crate) fn inner(&self) -> &AlacrittyTerm<ForwardingListener> {
         &self.inner
     }
