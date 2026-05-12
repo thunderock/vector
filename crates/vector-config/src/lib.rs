@@ -1,10 +1,12 @@
 //! vector-config — Phase 5 TOML config + hot reload (POLISH-01, POLISH-07).
 
+pub mod apply;
 pub mod error;
 pub mod loader;
 pub mod schema;
 pub mod watcher;
 
+pub use apply::{diff_config, try_load_or_keep, ApplyPlan, LiveChange, RestartReason};
 pub use error::ConfigError;
 pub use loader::{parse, resolve_profile, ResolvedProfile};
 pub use schema::{
