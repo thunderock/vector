@@ -127,7 +127,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   4. Scrollback regex search highlights matches with next/prev navigation; OSC 7 (cwd), OSC 8 (hyperlinks), OSC 10/11/12 (color queries), and OSC 133 (semantic prompt marks) are observable in a shell-integration smoke test.
   5. Saved profiles named `local`, `codespace`, `dev_tunnel` exist in the config with per-profile env, theme, tint, and startup command. Secure Keyboard Entry can be toggled from a menu item; basic IME composition displays under the cursor (no candidate window UI).
 **Plans**: 10 plans (revision iteration 2 — waves rebalanced after dependency analysis; 05-10 now wave 4, 05-09 now wave 5)
-  - [ ] 05-01-PLAN.md — Wave 0: D-83 hardening (workspace lints + path-dep arch-lint + cargo-deny pre-commit + cargo-machete CI) + 22 Wave-0 test stubs + 10 workspace deps
+  - [x] 05-01-PLAN.md — Wave 0: D-83 hardening (workspace lints + path-dep arch-lint + cargo-deny pre-commit + cargo-machete CI) + 22 Wave-0 test stubs + 10 workspace deps
   - [x] 05-02-PLAN.md — Wave 1: vector-config schema + loader (ConfigFile / ProfileBlock / Kind / FontCfg / KeyBind / Action / cwd_override) + line/col errors + flat-overlay resolve_profile (POLISH-01, POLISH-07)
   - [x] 05-03-PLAN.md — Wave 1: vector-theme palette + chrome tokens (UI-SPEC §9.1) + Vector Light/Dark builtins + .itermcolors importer + appearance resolver (POLISH-03)
   - [ ] 05-04-PLAN.md — Wave 2: notify-debouncer-full watcher (150 ms + parent-dir + themes-dir) + apply pipeline diff_config + parse-error keep-last-good (POLISH-01, POLISH-02 restart classification)
