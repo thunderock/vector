@@ -15,6 +15,7 @@ pub mod mux_commands;
 pub mod overlay;
 pub mod pty_actor;
 pub mod render_host;
+pub mod search_bar;
 pub mod tab_window;
 
 pub use mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};
