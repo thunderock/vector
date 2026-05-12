@@ -25,18 +25,33 @@ objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 objc2-quartz-core.workspace = true
 raw-window-handle.workspace = true
-vector-fonts = { path = "../vector-fonts" }
-vector-input = { path = "../vector-input" }
-vector-mux = { path = "../vector-mux" }
-vector-render = { path = "../vector-render" }
-vector-term = { path = "../vector-term" }
+vector-fonts = { path = "../vector-fonts", version = "2026.5.10" }
+vector-input = { path = "../vector-input", version = "2026.5.10" }
+vector-mux = { path = "../vector-mux", version = "2026.5.10" }
+vector-render = { path = "../vector-render", version = "2026.5.10" }
+vector-term = { path = "../vector-term", version = "2026.5.10" }
 
 [dev-dependencies]
 async-trait = { workspace = true }
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
 
-[lints]
-workspace = true
+# vector-app cannot use `[lints] workspace = true` because it must override
+# the workspace's `unsafe_code = "deny"` to permit AppKit FFI: NSTextInputClient
+# (D-81), SKE Carbon (D-80), NSPasteboard (Cmd-C / OSC 52). All other lint rules
+# mirror the workspace exactly so behavior remains consistent.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+await_holding_lock = "deny"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unnecessary_wraps = "allow"
+doc_markdown = "allow"
+unnecessary_debug_formatting = "allow"
 
 [package.metadata.bundle]
 name = "Vector"

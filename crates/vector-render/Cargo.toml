@@ -15,8 +15,8 @@ parking_lot.workspace = true
 pollster.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-vector-fonts = { path = "../vector-fonts" }
-vector-term = { path = "../vector-term" }
+vector-fonts = { path = "../vector-fonts", version = "2026.5.10" }
+vector-term = { path = "../vector-term", version = "2026.5.10" }
 wgpu.workspace = true
 winit.workspace = true
 

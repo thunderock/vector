@@ -3,7 +3,6 @@
 //! D-74: Profile.kind = { Local, Codespace, DevTunnel }; only Local wired in Phase 5.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 #[derive(serde::Deserialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
@@ -31,7 +30,7 @@ pub struct ProfileBlock {
     pub codespace_name: Option<String>,
     pub dev_tunnel_id: Option<String>,
     #[serde(default)]
-    pub cwd_override: Option<PathBuf>,
+    pub cwd_override: Option<std::path::PathBuf>,
 }
 
 #[derive(serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
