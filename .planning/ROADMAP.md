@@ -108,7 +108,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 04-02-PLAN.md — Wave 1: Mux singleton + Window/Tab/PaneNode tree + split mutation + close cascade + directional focus + resize-nudge + WIN-04 grep arch-lint live
   - [x] 04-03-PLAN.md — Wave 2: per-pane PTY actor router (JoinSet<PaneId>) + UserEvent migration + Mux async helpers + cwd inheritance (libproc::pidcwd) + foreground-process tracking (D-57) + real-PTY integration tests
   - [x] 04-04-PLAN.md — Wave 3: vector-input EncodedKey enum + 14 Mux shortcuts + multi-window NSWindowTabbingMode + per-pane Compositor + active-pane border (D-66) + inactive cursor outline
-  - [ ] 04-05-PLAN.md — Wave 4: per-TabWindow first-paint gate + focus-change redraw discipline + per-window resize debounce + manual smoke matrix (autonomous=false)
+  - [x] 04-05-PLAN.md — Wave 4: per-TabWindow first-paint gate + focus-change redraw discipline + per-window resize debounce + manual smoke matrix (autonomous=false) — partial: Task 1 fully landed (22a8272); Task 2 smoke matrix returned 6/9 PASS, 3 FAILs (#3 visible side-by-side render / #4 tput cols per-pane viewport math / #8 visible D-66 border) routed to Plan 04-06 gap-closure
 **Stack additions**: `vector-mux` crate (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>` (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>`.
 **Risks & notes**:
   - The `Domain/Pane/PtyTransport` seam established here is a load-bearing decision — Phases 7, 8, and 9 all depend on it. Embedding transport logic in the terminal model is Architecture Anti-Pattern 1.
@@ -227,7 +227,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 | 1. Foundation & CI/DMG Pipeline | 6/6 | Implementation complete; verifier next | 2026-05-10 |
 | 2. Headless Terminal Core | 0/5 | Plans created | - |
 | 3. GPU Renderer & First Paint | 0/0 | Not started | - |
-| 4. Mux — Tabs & Splits | 0/5 | Plans created | - |
+| 4. Mux — Tabs & Splits | 5/5 | Plans complete; 04-05 partial sign-off (6/9 smoke PASS, #3/#4/#8 FAIL routed to Plan 04-06 gap-closure); verifier next | - |
 | 5. Polish (Local Daily-Driver) | 0/0 | Not started | - |
 | 6. GitHub Auth + Codespaces Picker | 0/0 | Not started | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
