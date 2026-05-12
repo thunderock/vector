@@ -1,3 +1,5 @@
+#![allow(clippy::unreadable_literal)]
+
 use vector_theme::{vector_dark, vector_light};
 
 #[test]
@@ -5,8 +7,7 @@ fn builtins_loadable() {
     let d = vector_dark();
     assert_eq!(d.bg, vector_theme::Rgb::new(0x0d, 0x11, 0x17));
     assert_eq!(
-        d.chrome.surface.a,
-        0xe6,
+        d.chrome.surface.a, 0xe6,
         "chrome.surface alpha must be 230 (UI-SPEC §9.1)"
     );
 

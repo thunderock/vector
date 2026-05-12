@@ -8,8 +8,10 @@ description = "Palette types + builtin themes — Phase 5."
 
 [dependencies]
 anyhow.workspace = true
+plist.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+vector-config = { path = "../vector-config", version = "2026.5.10" }
 
 [lints]
 workspace = true
