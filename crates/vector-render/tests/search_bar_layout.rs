@@ -1,5 +1,7 @@
 //! M1 (Plan 05-10 Task 2) — SearchBarPass layout geometry tests (UI-SPEC §5.2).
 
+#![allow(clippy::float_cmp)]
+
 use vector_render::{search_bar_layout, SEARCH_BAR_HEIGHT_PX};
 
 #[test]
