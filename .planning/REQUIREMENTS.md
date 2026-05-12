@@ -37,7 +37,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [x] **WIN-01**: Native macOS AppKit window with title bar, fullscreen, and standard window-control buttons
 - [ ] **WIN-02**: Tabs — open new tab (Cmd-T), cycle (Cmd-Shift-]/[), close (Cmd-W). Native `NSWindowTabbingMode` or visually equivalent custom bar.
 - [ ] **WIN-03**: Splits — horizontal (Cmd-D) and vertical (Cmd-Shift-D) splits within a tab, with focus routing and per-pane resize
-- [ ] **WIN-04**: A `Domain / Pane / PtyTransport` abstraction (WezTerm-style) is the only seam between terminal model and transport — local, SSH, and tunnel transports all implement the same trait
+- [x] **WIN-04**: A `Domain / Pane / PtyTransport` abstraction (WezTerm-style) is the only seam between terminal model and transport — local, SSH, and tunnel transports all implement the same trait
 - [x] **WIN-05**: `winit::EventLoop` runs on the main thread; `tokio` runs on background threads; cross-thread signaling goes through `EventLoopProxy::send_event` (no `block_on` on main, no shared mutex held across `await`)
 
 ### Polish (Local Daily-Driver)
@@ -171,7 +171,7 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | WIN-01 | Phase 3 | Complete |
 | WIN-02 | Phase 4 | Pending |
 | WIN-03 | Phase 4 | Pending |
-| WIN-04 | Phase 4 | Pending |
+| WIN-04 | Phase 4 | Complete |
 | POLISH-01 | Phase 5 | Pending |
 | POLISH-02 | Phase 5 | Pending |
 | POLISH-03 | Phase 5 | Pending |
