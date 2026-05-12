@@ -41,7 +41,7 @@ async-trait = { workspace = true }
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
 # Re-enter our own crate with `test-hooks` so integration tests in `tests/` see
 # the cfg(test)-style mock for SKE Carbon FFI (POLISH-08 / D-80).
-vector-app = { path = ".", features = ["test-hooks"] }
+vector-app = { path = ".", version = "2026.5.10", features = ["test-hooks"] }
 
 [features]
 default = []

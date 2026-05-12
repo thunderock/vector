@@ -37,7 +37,10 @@ bytes = "1"
 crossfont = "0.9"
 etagere = "0.2"
 fuzzy-matcher = "0.3"
-keyring = "4.0"
+# keyring 4.x is the CLI binary crate; the library now lives in keyring-core.
+# Pair with apple-native-keyring-store for the macOS Keychain backend.
+keyring-core = "1.0"
+apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
 libc = "0.2"
 libproc = "0.14"
 notify = "8"

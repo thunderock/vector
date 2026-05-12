@@ -8,7 +8,10 @@ async fn preedit_not_to_pty() {
     let (write_tx, mut write_rx) = mpsc::channel::<Vec<u8>>(16);
     let mut ime = ImeState::new(write_tx);
     ime.set_preedit("か", 1);
-    assert!(ime.is_active(), "preedit must be active after setMarkedText");
+    assert!(
+        ime.is_active(),
+        "preedit must be active after setMarkedText"
+    );
     let received = write_rx.try_recv();
     assert!(
         received.is_err(),
@@ -25,7 +28,10 @@ async fn commit_to_pty() {
     assert!(ok, "commit must enqueue bytes");
     let bytes = write_rx.recv().await.expect("commit must write to PTY");
     assert_eq!(bytes, "か".as_bytes());
-    assert!(!ime.is_active(), "after commit, preedit cleared + state inactive");
+    assert!(
+        !ime.is_active(),
+        "after commit, preedit cleared + state inactive"
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

@@ -15,6 +15,7 @@ pub mod app;
 pub mod clipboard_router;
 pub mod frame_tick;
 pub mod hyperlink_dispatch;
+pub mod ime;
 pub mod input_bridge;
 pub mod lpm;
 pub mod menu;
