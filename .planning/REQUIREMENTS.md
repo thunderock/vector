@@ -35,8 +35,8 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 ### Window & Mux
 
 - [x] **WIN-01**: Native macOS AppKit window with title bar, fullscreen, and standard window-control buttons
-- [ ] **WIN-02**: Tabs — open new tab (Cmd-T), cycle (Cmd-Shift-]/[), close (Cmd-W). Native `NSWindowTabbingMode` or visually equivalent custom bar.
-- [ ] **WIN-03**: Splits — horizontal (Cmd-D) and vertical (Cmd-Shift-D) splits within a tab, with focus routing and per-pane resize
+- [x] **WIN-02**: Tabs — open new tab (Cmd-T), cycle (Cmd-Shift-]/[), close (Cmd-W). Native `NSWindowTabbingMode` or visually equivalent custom bar.
+- [x] **WIN-03**: Splits — horizontal (Cmd-D) and vertical (Cmd-Shift-D) splits within a tab, with focus routing and per-pane resize
 - [x] **WIN-04**: A `Domain / Pane / PtyTransport` abstraction (WezTerm-style) is the only seam between terminal model and transport — local, SSH, and tunnel transports all implement the same trait
 - [x] **WIN-05**: `winit::EventLoop` runs on the main thread; `tokio` runs on background threads; cross-thread signaling goes through `EventLoopProxy::send_event` (no `block_on` on main, no shared mutex held across `await`)
 
@@ -169,8 +169,8 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | RENDER-04 | Phase 3 | Complete |
 | RENDER-05 | Phase 3 | Complete |
 | WIN-01 | Phase 3 | Complete |
-| WIN-02 | Phase 4 | Pending |
-| WIN-03 | Phase 4 | Pending |
+| WIN-02 | Phase 4 | Complete |
+| WIN-03 | Phase 4 | Complete |
 | WIN-04 | Phase 4 | Complete |
 | POLISH-01 | Phase 5 | Pending |
 | POLISH-02 | Phase 5 | Pending |
@@ -211,3 +211,4 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 ---
 *Requirements defined: 2026-05-10*
 *Last updated: 2026-05-10 — Plan 01-06 closed: BUILD-04 (tagged-release half) and BUILD-05 (xattr in README) complete in commits 4dd0c4e + 75b77b1; BUILD-02 / BUILD-04 retain pending-real-CI-run / pending-real-tagged-release caveat per 01-05 + 01-06 Outstanding Verification Debt blocks*
+*Last updated: 2026-05-12 — Plan 04-06 closed: WIN-02 + WIN-03 complete after smoke matrix re-run (items #3, #4, #8 PASS).*
