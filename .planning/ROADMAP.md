@@ -107,7 +107,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 04-01-PLAN.md — Wave 0: workspace deps + 13 Wave-0 test stubs + SpawnedPane struct + LocalPty child_pid/master_fd accessors (preserves D-38)
   - [x] 04-02-PLAN.md — Wave 1: Mux singleton + Window/Tab/PaneNode tree + split mutation + close cascade + directional focus + resize-nudge + WIN-04 grep arch-lint live
   - [x] 04-03-PLAN.md — Wave 2: per-pane PTY actor router (JoinSet<PaneId>) + UserEvent migration + Mux async helpers + cwd inheritance (libproc::pidcwd) + foreground-process tracking (D-57) + real-PTY integration tests
-  - [ ] 04-04-PLAN.md — Wave 3: vector-input EncodedKey enum + 14 Mux shortcuts + multi-window NSWindowTabbingMode + per-pane Compositor + active-pane border (D-66) + inactive cursor outline
+  - [x] 04-04-PLAN.md — Wave 3: vector-input EncodedKey enum + 14 Mux shortcuts + multi-window NSWindowTabbingMode + per-pane Compositor + active-pane border (D-66) + inactive cursor outline
   - [ ] 04-05-PLAN.md — Wave 4: per-TabWindow first-paint gate + focus-change redraw discipline + per-window resize debounce + manual smoke matrix (autonomous=false)
 **Stack additions**: `vector-mux` crate (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>` (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>`.
 **Risks & notes**:
