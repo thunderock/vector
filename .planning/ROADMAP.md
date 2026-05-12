@@ -103,8 +103,13 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   2. Cmd-D splits the active pane horizontally; Cmd-Shift-D splits vertically. Each pane independently runs a shell and accepts focus, with arrow-key or hjkl-style focus routing.
   3. Resizing the window propagates new sizes to all panes and child shells; `tput cols` in any pane reports the correct width.
   4. The `Domain / Pane / PtyTransport` abstraction is the only seam between the terminal model and the transport — verified by a grep that finds zero `enum PaneSource` discriminations inside `vector-term`.
-**Plans**: TBD
-**Stack additions**: `vector-mux` crate (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>`.
+**Plans**: 5 plans
+  - [ ] 04-01-PLAN.md — Wave 0: workspace deps + 13 Wave-0 test stubs + SpawnedPane struct + LocalPty child_pid/master_fd accessors (preserves D-38)
+  - [ ] 04-02-PLAN.md — Wave 1: Mux singleton + Window/Tab/PaneNode tree + split mutation + close cascade + directional focus + resize-nudge + WIN-04 grep arch-lint live
+  - [ ] 04-03-PLAN.md — Wave 2: per-pane PTY actor router (JoinSet<PaneId>) + UserEvent migration + Mux async helpers + cwd inheritance (libproc::pidcwd) + foreground-process tracking (D-57) + real-PTY integration tests
+  - [ ] 04-04-PLAN.md — Wave 3: vector-input EncodedKey enum + 14 Mux shortcuts + multi-window NSWindowTabbingMode + per-pane Compositor + active-pane border (D-66) + inactive cursor outline
+  - [ ] 04-05-PLAN.md — Wave 4: per-TabWindow first-paint gate + focus-change redraw discipline + per-window resize debounce + manual smoke matrix (autonomous=false)
+**Stack additions**: `vector-mux` crate (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>` (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>`.
 **Risks & notes**:
   - The `Domain/Pane/PtyTransport` seam established here is a load-bearing decision — Phases 7, 8, and 9 all depend on it. Embedding transport logic in the terminal model is Architecture Anti-Pattern 1.
   - No layout save/restore, no broadcast-input — Pitfall 21 scope creep guard.
@@ -222,7 +227,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 | 1. Foundation & CI/DMG Pipeline | 6/6 | Implementation complete; verifier next | 2026-05-10 |
 | 2. Headless Terminal Core | 0/5 | Plans created | - |
 | 3. GPU Renderer & First Paint | 0/0 | Not started | - |
-| 4. Mux — Tabs & Splits | 0/0 | Not started | - |
+| 4. Mux — Tabs & Splits | 0/5 | Plans created | - |
 | 5. Polish (Local Daily-Driver) | 0/0 | Not started | - |
 | 6. GitHub Auth + Codespaces Picker | 0/0 | Not started | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
