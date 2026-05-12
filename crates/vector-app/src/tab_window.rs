@@ -7,13 +7,17 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use vector_mux::{PaneId, TabId, WindowId as MuxWindowId};
+use vector_mux::{Mux, PaneId, TabId, WindowId as MuxWindowId};
 use vector_render::Compositor;
 use winit::window::Window;
 
+use crate::pty_actor::PtyActorRouter;
 use crate::{overlay::Overlay, render_host::RenderHost};
+
+/// D-49 resize-debounce window. Matches the constant in `app.rs`.
+pub const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 
 /// Per-Tab winit window state.
 pub struct TabWindow {
@@ -58,5 +62,30 @@ impl TabWindow {
 
     pub fn request_redraw(&self) {
         self.winit_window.request_redraw();
+    }
+
+    /// D-49 per-TabWindow resize debounce flush. If a pending resize is at least
+    /// `RESIZE_DEBOUNCE` old, route it through the Mux (so all panes in this
+    /// window's tab learn the new viewport) and through the router (kernel
+    /// SIGWINCH per pane). Returns `true` iff a flush occurred — caller may
+    /// recompute per-pane viewports + request_redraw.
+    pub fn flush_pending_resize_if_quiescent(
+        &mut self,
+        now: Instant,
+        mux: &Mux,
+        router: &PtyActorRouter,
+    ) -> bool {
+        let (Some(at), Some((rows, cols))) = (self.last_resize_at, self.pending_resize) else {
+            return false;
+        };
+        if now.duration_since(at) < RESIZE_DEBOUNCE {
+            return false;
+        }
+        for (pane_id, rows, cols) in mux.resize_window(self.mux_window_id, rows, cols) {
+            router.send_resize(pane_id, rows, cols);
+        }
+        self.pending_resize = None;
+        self.last_resize_at = None;
+        true
     }
 }

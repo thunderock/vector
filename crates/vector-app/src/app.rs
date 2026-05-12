@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use vector_input::{
     encode_key, wrap_bracketed_paste, EncodedKey, ModState, MuxCommand, SelectionState,
 };
-use vector_mux::Mux;
+use vector_mux::{Mux, PaneId, SplitDirection};
 use vector_term::Term;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
@@ -18,7 +18,7 @@ use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::input_bridge::InputBridge;
-use crate::mux_commands::{self, WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};
+use crate::mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};
 use crate::overlay::Overlay;
 use crate::render_host::RenderHost;
 use crate::{menu, overlay, UserEvent};
@@ -48,6 +48,9 @@ pub struct App {
     mods: ModState,
     cursor_px: PhysicalPosition<f64>,
     lpm_flag: Arc<AtomicBool>,
+    /// Plan 04-05: dispatches Cmd-D/Cmd-Shift-D split requests to the I/O thread
+    /// which drives `Mux::split_pane_async` + `router.spawn_pane`.
+    split_req_tx: Option<mpsc::Sender<(PaneId, SplitDirection)>>,
 }
 
 impl App {
@@ -63,15 +66,18 @@ impl App {
             mods: ModState::default(),
             cursor_px: PhysicalPosition::new(0.0, 0.0),
             lpm_flag,
+            split_req_tx: None,
         }
+    }
+
+    /// Plan 04-05: hook the split request channel so Cmd-D / Cmd-Shift-D can
+    /// dispatch async splits to the I/O thread.
+    pub fn set_split_req_tx(&mut self, tx: mpsc::Sender<(PaneId, SplitDirection)>) {
+        self.split_req_tx = Some(tx);
     }
 
     fn primary_window(&self) -> Option<&AppWindow> {
         self.windows.values().next()
-    }
-
-    fn primary_window_mut(&mut self) -> Option<&mut AppWindow> {
-        self.windows.values_mut().next()
     }
 
     fn cell_from_pixel(&self, px: PhysicalPosition<f64>) -> Option<(u16, u16)> {
@@ -172,10 +178,29 @@ impl App {
                 }
             }
             MuxCommand::SplitHorizontal | MuxCommand::SplitVertical => {
-                tracing::info!(
-                    "{} — Plan 04-05 wires the per-pane Compositor + redistribute",
-                    mux_commands::describe(cmd)
-                );
+                // Plan 04-05: dispatch the async split to the I/O thread. Per-pane
+                // Compositor wiring + visible second-shell rendering lands in the
+                // multi-pane render polish (Plan 04-06 gap-closure).
+                if let Some(mux) = Mux::try_get() {
+                    if let Some(active) = mux.any_active_pane_id() {
+                        let dir = if matches!(cmd, MuxCommand::SplitHorizontal) {
+                            vector_mux::SplitDirection::Horizontal
+                        } else {
+                            vector_mux::SplitDirection::Vertical
+                        };
+                        if let Some(req_tx) = self.split_req_tx.as_ref() {
+                            if let Err(err) = req_tx.try_send((active, dir)) {
+                                tracing::warn!(?err, "split request channel full/closed");
+                            } else {
+                                tracing::info!(
+                                    pane = ?active,
+                                    ?dir,
+                                    "split request dispatched to I/O thread"
+                                );
+                            }
+                        }
+                    }
+                }
             }
             MuxCommand::CycleTabNext | MuxCommand::CycleTabPrev => {
                 if let Some(mux) = Mux::try_get() {
@@ -192,11 +217,30 @@ impl App {
                     }
                 }
             }
-            MuxCommand::FocusDir(_) | MuxCommand::NudgeSplit(_) => {
-                tracing::info!(
-                    "{} — Plan 04-05 wires multi-pane focus/nudge UI",
-                    mux_commands::describe(cmd)
-                );
+            MuxCommand::FocusDir(dir) => {
+                if let Some(mux) = Mux::try_get() {
+                    if let Some(active) = mux.any_active_pane_id() {
+                        if let Some(new_id) = mux.focus_direction(active, dir) {
+                            tracing::info!(?active, ?new_id, "focus moved");
+                            // Multi-pane border flip + cursor_focused toggle lands
+                            // when the per-pane Compositor map goes live. For now
+                            // we redraw every window so future renderers pick up
+                            // the new active_pane_id from the Mux Tab.
+                            self.request_redraw_all();
+                        } else {
+                            tracing::debug!("focus_direction returned no neighbor; absorbed");
+                        }
+                    }
+                }
+            }
+            MuxCommand::NudgeSplit(dir) => {
+                if let Some(mux) = Mux::try_get() {
+                    if let Some(active) = mux.any_active_pane_id() {
+                        if let Err(err) = mux.nudge_split(active, dir) {
+                            tracing::debug!(?err, "nudge_split no-op");
+                        }
+                    }
+                }
             }
         }
     }
@@ -247,26 +291,40 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::PaneOutput { pane_id, bytes } => {
-                // Plan 04-04 shim: still single-Term per process; Plan 04-05
-                // routes per-pane bytes into the per-pane Term inside the Mux.
-                let _ = pane_id;
                 if bytes.is_empty() {
                     return;
                 }
-                {
+                // Plan 04-05 shim: only the currently-active Mux pane is mirrored
+                // into the visible Term. Background panes still consume their
+                // PTY output (kept inside their own Mux::Pane.term mutex) so
+                // their shells don't block on full pipes, but those bytes are
+                // not yet drawn — full per-pane Compositor rendering lands in
+                // the multi-pane render polish.
+                let active = Mux::try_get().and_then(|m| m.any_active_pane_id());
+                let is_active = active.is_some_and(|a| a == pane_id);
+                if is_active {
                     let mut t = self.term.lock();
                     t.feed(&bytes);
                 }
-                if let Some(aw) = self.primary_window_mut() {
+                // First-paint gate (D-51, per-window per Pitfall H): flip on ANY
+                // pane's first non-empty drain. Today there is exactly one
+                // visible window in production; the gate generalizes naturally
+                // once per-pane→winit-window routing lands.
+                for aw in self.windows.values_mut() {
                     if !aw.overlay_dropped {
                         aw.overlay = None;
                         aw.overlay_dropped = true;
                     }
                     if !aw.first_paint_ready {
                         aw.first_paint_ready = true;
-                        tracing::info!("first PTY byte received; first-paint gate open (D-51)");
+                        tracing::info!(
+                            ?pane_id,
+                            "first PTY byte received; per-window first-paint gate open (D-51)"
+                        );
                     }
-                    aw.window.request_redraw();
+                    if is_active {
+                        aw.window.request_redraw();
+                    }
                 }
             }
             UserEvent::PaneResized {
