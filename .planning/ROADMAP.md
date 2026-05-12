@@ -103,12 +103,13 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   2. Cmd-D splits the active pane horizontally; Cmd-Shift-D splits vertically. Each pane independently runs a shell and accepts focus, with arrow-key or hjkl-style focus routing.
   3. Resizing the window propagates new sizes to all panes and child shells; `tput cols` in any pane reports the correct width.
   4. The `Domain / Pane / PtyTransport` abstraction is the only seam between the terminal model and the transport — verified by a grep that finds zero `enum PaneSource` discriminations inside `vector-term`.
-**Plans**: 5 plans
+**Plans**: 6 plans
   - [x] 04-01-PLAN.md — Wave 0: workspace deps + 13 Wave-0 test stubs + SpawnedPane struct + LocalPty child_pid/master_fd accessors (preserves D-38)
   - [x] 04-02-PLAN.md — Wave 1: Mux singleton + Window/Tab/PaneNode tree + split mutation + close cascade + directional focus + resize-nudge + WIN-04 grep arch-lint live
   - [x] 04-03-PLAN.md — Wave 2: per-pane PTY actor router (JoinSet<PaneId>) + UserEvent migration + Mux async helpers + cwd inheritance (libproc::pidcwd) + foreground-process tracking (D-57) + real-PTY integration tests
   - [x] 04-04-PLAN.md — Wave 3: vector-input EncodedKey enum + 14 Mux shortcuts + multi-window NSWindowTabbingMode + per-pane Compositor + active-pane border (D-66) + inactive cursor outline
   - [x] 04-05-PLAN.md — Wave 4: per-TabWindow first-paint gate + focus-change redraw discipline + per-window resize debounce + manual smoke matrix (autonomous=false) — partial: Task 1 fully landed (22a8272); Task 2 smoke matrix returned 6/9 PASS, 3 FAILs (#3 visible side-by-side render / #4 tput cols per-pane viewport math / #8 visible D-66 border) routed to Plan 04-06 gap-closure
+  - [ ] 04-06-PLAN.md — Wave 6 (gap-closure, autonomous=false): AppWindow → per-pane Compositor map migration; per-pane RedrawRequested LoadOp chain; per-pane viewport SIGWINCH via Mux::resize_window; visible D-66 active-pane border at focus change; closes Gap 1/2/3 from 04-VERIFICATION.md (smoke items #3, #4, #8); flips WIN-02 + WIN-03 to Complete
 **Stack additions**: `vector-mux` crate (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>` (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>`.
 **Risks & notes**:
   - The `Domain/Pane/PtyTransport` seam established here is a load-bearing decision — Phases 7, 8, and 9 all depend on it. Embedding transport logic in the terminal model is Architecture Anti-Pattern 1.
