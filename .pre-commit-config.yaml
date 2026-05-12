@@ -1,0 +1,11 @@
+# D-83 #3: cargo-deny runs as a pre-commit hook (system command).
+# Install on dev machine: `cargo install cargo-deny && pre-commit install`.
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-deny
+        name: cargo deny
+        entry: cargo deny check bans licenses sources advisories
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
