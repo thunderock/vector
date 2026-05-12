@@ -12,11 +12,14 @@ anyhow.workspace = true
 percent-encoding = { workspace = true }
 regex = { workspace = true }
 thiserror.workspace = true
+tokio = { workspace = true }
 tracing.workspace = true
 vte = "0.15"
 
 [dev-dependencies]
+base64 = { workspace = true }
 regex = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true
