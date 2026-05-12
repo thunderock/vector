@@ -8,9 +8,10 @@ description = "Keymap + paste + selection state — Phase 3 (D-52, D-53, D-54)."
 
 [dependencies]
 anyhow.workspace = true
+base64 = { workspace = true }
 thiserror.workspace = true
 tracing.workspace = true
-vector-mux = { path = "../vector-mux" }
+vector-mux = { path = "../vector-mux", version = "2026.5.10" }
 winit.workspace = true
 
 [lints]
