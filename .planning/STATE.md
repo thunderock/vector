@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed Plan 05-04 — POLISH-01 hot-reload watcher + POLISH-02 font-family restart classification
-last_updated: "2026-05-12T18:53:55.372Z"
+stopped_at: Completed 05-07 — POLISH-02 ligature toggle + POLISH-06 search-bar logic + D-53/D-54 selection_to_string carry
+last_updated: "2026-05-12T18:58:05.891Z"
 progress:
   total_phases: 11
   completed_phases: 4
   total_plans: 32
-  completed_plans: 28
+  completed_plans: 29
 ---
 
 # Project State: Vector
@@ -25,7 +25,7 @@ progress:
 ## Current Position
 
 Phase: 05 (polish-local-daily-driver) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 
 ## Phase Map
 
@@ -75,11 +75,13 @@ Plan: 6 of 10
 | Phase 05-polish-local-daily-driver P05 | 25min | 2 tasks | 8 files |
 | Phase 05-polish-local-daily-driver P06 | 38min | 2 tasks | 7 files |
 | Phase 05-polish-local-daily-driver P04 | 3min | 2 tasks | 6 files |
+| Phase 05-polish-local-daily-driver P07 | 6min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
 ### Key Decisions
 
+- **Phase 5 Plan 07 (POLISH-02 + POLISH-06 + D-53/D-54 carry) complete (2026-05-12):** `vector_input::selection_to_string<G: GridAccess>(&SelectionRange, &G, SelectionMode) -> String` ships in `crates/vector-input/src/selection_string.rs` honoring Pitfall 8 (skip WIDE_CHAR_SPACER cells — verified `wide_chars_collapse` "你好"+spacer pattern emits `"你好"`), per-row `trim_end()` strip (CONTEXT.md Claude's Discretion), and Stream-vs-Rectangular mode dispatch (`rect_uses_newline` 2x2 grid → `"ab\ncd"`). `GridAccess` trait abstraction keeps vector-input decoupled from vector-term; `impl GridAccess for &Term` adapter deferred to Plan 05-08. `vector_fonts::FontStack::set_ligatures(bool)` + `ligatures_enabled() -> bool` plumbed on FontStack (default `true`); Pattern-5 v1 contract = runtime no-op because CoreText shapes JetBrains Mono ligatures at glyph-lookup unconditionally; toggle is the destination for Plan 05-04's `LiveChange::Ligatures(bool)`. U+E0A0 Powerline branch icon rasterizes via CoreText fallback chain (third ligature test). `vector_app::search_bar::SearchBar` state machine ships with `open_with(prior_selection)` / `close() -> Option<SelectionRange>` (D-76 Esc-restore) / `set_query(&str, &Term)` (compiles smart-case regex, calls `Term::search`, wraps in `MatchCache`). `smart_case_regex(&str) -> Regex` (D-77): all-lowercase → `(?i)` prefix; any uppercase → case-sensitive raw query; literal-escape fallback if pattern malformed (function infallible — no Result threading through state machine). `MatchCache` with `MAX_CACHED_MATCHES = 1000` public const cap: `from_matches` truncates at 1000 + flips `MatchOverflow::OverThousand`; ≤1000 records `Bounded(len)`; `next/prev` wrap-around; `counter()` returns 1-based active idx + overflow for HUD. **10 Wave-0 stubs un-ignored and green** (3 vector-input + 3 vector-fonts + 4 vector-app). Six task commits (TDD RED+GREEN ×3): `360615b` (Task 1 RED) + `0620f6a` (Task 1 GREEN — selection_to_string + GridAccess + SelectionMode) + `bd9e584` (Task 2 RED) + `3448678` (Task 2 GREEN — FontStack ligature toggle) + `39b4153` (Task 3 RED) + `45bf82a` (Task 3 GREEN — SearchBar + smart_case_regex + MatchCache). Three Rule-1 clippy-pedantic auto-fixes: `trivially_copy_pass_by_ref` on `&SelectionRange` (plan contract preserved via scoped `#[allow]`); `map_unwrap_or` → `is_some_and` in MockGrid; `assigning_clones` → `clone_into` in `set_query`. Workspace 270 passed / 0 failed / 14 ignored. Plan 05-08 inherits `selection_to_string` for the Cmd-C NSPasteboard route + the entire `SearchBar` for the Cmd-F overlay; `impl GridAccess for &Term` adapter lands in 05-08 (or a thin vector-term seam). Plan 05-04's apply pipeline can now invoke `font_stack.set_ligatures(new_value)` directly. **POLISH-02 + POLISH-06 land.**
 - **Phase 5 Plan 04 (POLISH-01 hot-reload + POLISH-02 font-family restart) complete (2026-05-12):** `vector_config::spawn_watcher(config_path, themes_dir, tx) -> impl Drop` ships notify-debouncer-full with `Duration::from_millis(150)` (D-69) over the config file's PARENT directory (Pitfall 1 — vim atomic-rename swaps the file's inode; parent-dir `RecursiveMode::NonRecursive` watch survives) and `themes_dir` (D-73 non-recursive). Every debounce flush collapses the underlying `Vec<DebouncedEvent>` to one `ConfigEvent::Dirty { paths }` after sort+dedup. `ConfigEvent { Dirty { paths }, Error(String) }` declared at crate root (lib.rs) so Plan 05-08 needs one import. `diff_config(&old, &new) -> ApplyPlan { live: Vec<LiveChange>, restart: Vec<RestartReason> }` walks `[default]` + `[default.font]` + `[[keybind]]` + `[profile.X]` deltas per D-69 table: `LiveChange { Theme | Appearance | Tint(Option<String>) | FontSize(u32 milli-pt — Eq-required) | Ligatures(bool) | Keybinds | PerProfile(String) }` and `RestartReason::FontFamily` (Pitfall 7 — CoreText glyph-cache, family swap forces restart toast). Profile add/remove/change all emit `LiveChange::PerProfile(name)`. Keybind diff implemented inline (length + pairwise `key/action`) rather than requiring a cross-plan `KeyBind: PartialEq` schema derive. `try_load_or_keep(source, &mut Option<ConfigFile>)` keeps last-good byte-identical on `Err(ConfigError)` per D-69 — caller (vector-app) owns the storage cell. `tempfile = "3"` added as direct vector-config dev-dep, not workspace level. **4 Wave-0 stubs un-ignored and green:** `debounce_150ms` (3 rapid writes within 150ms collapse to 1 ConfigEvent), `atomic_rename_single_event` (write-tmp + rename-onto-config via parent-dir re-arm), `parse_error_keeps_last_good` (invalid TOML → Err + last_good unchanged → valid TOML → last_good updated), `font_family_change_requires_restart` (JetBrains Mono → Fira Code yields `RestartReason::FontFamily` in plan). 3 Rule-1 auto-fixes — all mechanical clippy pedantic lints in apply.rs: `cast_possible_truncation` + `cast_sign_loss` on font-size cast wrapped with `s.max(0.0)` + scoped `#[allow]`; `if_not_else` in `profile_tint_change` flipped. Five commits: `c5d37fe` (Task 1 RED — Cargo.toml + tests/watcher_debounce.rs) + `dc55d6e` (Task 1 GREEN — src/watcher.rs + lib.rs ConfigEvent) + `2294fb1` (Task 2 RED — tests/apply_pipeline.rs) + `21189de` (Task 2 GREEN — src/apply.rs + lib.rs exports) + `fc2245d` (chore — Cargo.lock for notify + notify-debouncer-full + tempfile transitives). `cargo test -p vector-config` 10 passed / 0 failed / 0 ignored across all targets; `cargo clippy -p vector-config --all-targets -- -D warnings` exit 0. Plan 05-08 inherits a one-import hot-reload pipeline: `spawn_watcher` feeds `mpsc::Receiver<ConfigEvent>`; bridge thread calls `try_load_or_keep` then routes the `ApplyPlan` through `EventLoopProxy<UserEvent::ConfigReloaded>` to the main thread, where each `LiveChange` dispatches to its subsystem (theme cache, keybind table, font renderer `set_font_size`, ligature toggle hook landed by Plan 05-07) and `RestartReason::FontFamily` surfaces as a toast: *"Restart Vector to apply the new font."* **POLISH-01 + POLISH-02 land.**
 - **Phase 5 Plan 06 (POLISH-05 OSC 52) complete (2026-05-12):** `vector_input::osc52_outbound(&[u8]) -> Vec<u8>` ships with raw OSC 52 emission and 58-byte chunking per envelope (`MAX_CHUNK_BASE64 = 58` const, D-71 locked, Pitfall 5 tmux-passthrough safety margin). 3 inbound tests green via Plan-05-05's `Term::with_channels` + `ForwardingListener`: `raw_clipboard_store` (alacritty native dispatch), `dcs_wrapped_round_trip` (DCS envelope auto-peeled by alacritty 0.26 — Open Question #1 resolved empirically; no DCS-unwrap shim required in `osc_sniff.rs`), `read_denied` (alacritty's default `Osc52::OnlyCopy` mode denies reads silently at `term/mod.rs:1727-1728` — neither clipboard event nor PTY write reply fires; test asserts the *absence* of any event within 50ms). Real-tmux integration test body `dcs_round_trip_through_tmux` landed in `crates/vector-term/tests/osc52_tmux.rs` — tmux 3.4+ version gate, `allow-passthrough on`, `pbpaste` verification; `#[ignore]`-gated for Plan-05-09 CI tmux-smoke job. Empirical clarification: alacritty 0.26 base64-DECODES OSC 52 payloads before dispatching `Event::ClipboardStore` (consumers receive plaintext, not base64) — Plan 05-08 clipboard router will write plaintext directly to NSPasteboard. 4 Rule-1 auto-fixes (2 plan-body test-design errors against empirical alacritty behavior — base64 payload contract + silent read-denial path; 2 mechanical clippy lints — `match_wildcard_for_single_variants` + `trim_split_whitespace` + `items_after_statements`). Two task commits: `cb2a4fd` (Task 2 — outbound emitter + tests/clipboard.rs, executed FIRST because self-contained) + `7f23320` (Task 1 — tests/osc52.rs + tests/osc52_tmux.rs, executed AFTER Plan-05-05's `Term::with_channels` + `ForwardingListener` landed via parallel-agent commits cb05d0c + 2127fb0). **POLISH-05 lands.** All clippy + tests green on vector-input + vector-term.
 - **Build fresh in Rust** (not fork ghostty/VS Code). Rationale: ghostty is Zig, VS Code is Electron; the Rust ecosystem (`alacritty_terminal`, `wgpu`, `tokio`, `russh`, `octocrab`) is mature enough to build cleanly without a fork.
@@ -156,9 +158,9 @@ Plan: 6 of 10
 
 ## Session Continuity
 
-**Last session:** 2026-05-12T18:53:55.367Z
+**Last session:** 2026-05-12T18:58:05.886Z
 
-**Stopped at:** Completed Plan 05-04 — POLISH-01 hot-reload watcher + POLISH-02 font-family restart classification
+**Stopped at:** Completed 05-07 — POLISH-02 ligature toggle + POLISH-06 search-bar logic + D-53/D-54 selection_to_string carry
 
 **Next action:**
 

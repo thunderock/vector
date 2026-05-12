@@ -2546,6 +2546,7 @@ dependencies = [
  "objc2-quartz-core 0.3.2",
  "parking_lot",
  "raw-window-handle",
+ "regex",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
