@@ -18,7 +18,7 @@ use vector_fonts::{CellMetrics, FontStack};
 use vector_term::{Term, TermDamage};
 
 use crate::atlas::{Atlas, AtlasSlot, GlyphKey};
-use crate::cell_pipeline::{CellInstance, CellPipeline};
+use crate::cell_pipeline::{CellInstance, CellPipeline, Uniforms as CellUniforms};
 use crate::cursor_pipeline::CursorPipeline;
 use crate::pipeline::RenderContext;
 
@@ -45,6 +45,8 @@ const DEFAULT_BG: [f32; 4] = [0.06, 0.06, 0.06, 1.0];
 const DEFAULT_FG: [f32; 4] = [0.85, 0.85, 0.85, 1.0];
 /// Block-cursor color. Plan 03-05 may promote to a theme uniform; blink also lands there.
 const CURSOR_COLOR: [f32; 4] = [0.85, 0.85, 0.85, 1.0];
+/// D-66 active-pane border default thickness (px).
+pub const DEFAULT_BORDER_WIDTH_PX: f32 = 2.0;
 
 pub struct Compositor {
     cell_pipeline: CellPipeline,
@@ -58,7 +60,17 @@ pub struct Compositor {
     selection_tint: [f32; 4],
     cursor_color: [f32; 4],
     surface_format: wgpu::TextureFormat,
+    /// Full window surface dimensions; used for NDC conversion.
+    window_size_px: [f32; 2],
+    /// Per-pane viewport offset within the window (Plan 04-04).
+    viewport_offset_px: [f32; 2],
+    /// Per-pane viewport size; may equal window_size_px (single-pane mode).
     viewport_size_px: [f32; 2],
+    /// Active-pane border color (D-66). Alpha 0 disables the border.
+    border_color: [f32; 4],
+    border_width_px: f32,
+    /// false → hollow/outline cursor (inactive pane); true → filled rect.
+    cursor_focused: bool,
     instance_scratch: Vec<CellInstance>,
 }
 
@@ -76,6 +88,8 @@ impl Compositor {
 
     /// Build a Compositor against a raw device + queue + surface format. Plan 03-03 tests use
     /// `RenderContext::new_offscreen` to get the device/queue pair without a window.
+    /// Plan 04-04: viewport offset defaults to (0,0) and viewport size to (width,height) —
+    /// single-pane behavior. Per-pane callers use `set_viewport`.
     pub fn new_with(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -94,7 +108,7 @@ impl Compositor {
             16_000,
         );
         let cursor_pipeline = CursorPipeline::new(device, surface_format);
-        let viewport_size_px = [width as f32, height as f32];
+        let size = [width as f32, height as f32];
         let palette_256 = xterm_256_palette();
         let me = Self {
             cell_pipeline,
@@ -108,16 +122,98 @@ impl Compositor {
             selection_tint: SELECTION_TINT,
             cursor_color: CURSOR_COLOR,
             surface_format,
-            viewport_size_px,
+            window_size_px: size,
+            viewport_offset_px: [0.0, 0.0],
+            viewport_size_px: size,
+            border_color: [0.0, 0.0, 0.0, 0.0],
+            border_width_px: DEFAULT_BORDER_WIDTH_PX,
+            cursor_focused: true,
             instance_scratch: Vec::new(),
         };
-        me.cell_pipeline.update_uniforms(
-            queue,
-            [cell_metrics.width_px as f32, cell_metrics.height_px as f32],
-            viewport_size_px,
-            me.selection_tint,
-        );
+        me.write_cell_uniforms(queue);
         Ok(me)
+    }
+
+    /// Build a Compositor with explicit window dimensions, viewport offset, and viewport size.
+    /// Plan 04-04 per-pane callers use this form.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_viewport(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface_format: wgpu::TextureFormat,
+        window_width: u32,
+        window_height: u32,
+        viewport_offset_px: [f32; 2],
+        viewport_size_px: [f32; 2],
+        font_stack: FontStack,
+    ) -> Result<Self> {
+        let mut c = Self::new_with(
+            device,
+            queue,
+            surface_format,
+            window_width,
+            window_height,
+            font_stack,
+        )?;
+        c.viewport_offset_px = viewport_offset_px;
+        c.viewport_size_px = viewport_size_px;
+        c.write_cell_uniforms(queue);
+        Ok(c)
+    }
+
+    fn current_uniforms(&self) -> CellUniforms {
+        CellUniforms {
+            window_size_px: self.window_size_px,
+            cell_size_px: [
+                self.cell_metrics.width_px as f32,
+                self.cell_metrics.height_px as f32,
+            ],
+            selection_tint: self.selection_tint,
+            border_color: self.border_color,
+            viewport_offset_px: self.viewport_offset_px,
+            viewport_size_px: self.viewport_size_px,
+            border_width_px: self.border_width_px,
+            _pad0: 0.0,
+            _pad1: [0.0, 0.0],
+        }
+    }
+
+    fn write_cell_uniforms(&self, queue: &wgpu::Queue) {
+        let u = self.current_uniforms();
+        self.cell_pipeline.update_uniforms(queue, &u);
+    }
+
+    /// Plan 04-04: set per-pane viewport offset + size, re-upload uniforms.
+    pub fn set_viewport(&mut self, queue: &wgpu::Queue, offset_px: [f32; 2], size_px: [f32; 2]) {
+        self.viewport_offset_px = offset_px;
+        self.viewport_size_px = size_px;
+        self.write_cell_uniforms(queue);
+    }
+
+    /// Plan 04-04 (D-66): set active-pane border color. Alpha 0 disables.
+    pub fn set_border_color(&mut self, queue: &wgpu::Queue, color: [f32; 4]) {
+        self.border_color = color;
+        self.write_cell_uniforms(queue);
+    }
+
+    /// Plan 04-04: focused pane → filled cursor (true); inactive → hollow outline (false).
+    pub fn set_cursor_focused(&mut self, focused: bool) {
+        self.cursor_focused = focused;
+    }
+
+    #[must_use]
+    pub fn viewport_offset_px(&self) -> [f32; 2] {
+        self.viewport_offset_px
+    }
+
+    #[must_use]
+    pub fn viewport_size_px(&self) -> [f32; 2] {
+        self.viewport_size_px
+    }
+
+    #[must_use]
+    pub fn border_color(&self) -> [f32; 4] {
+        self.border_color
     }
 
     pub fn cell_width_px(&self) -> u32 {
@@ -147,26 +243,26 @@ impl Compositor {
     pub fn set_dpr(&mut self, _dpr: f32) {}
 
     pub fn resize(&mut self, render_ctx: &RenderContext, cols: u16, rows: u16) {
-        self.viewport_size_px = [
+        let new_size = [
             render_ctx.config.width as f32,
             render_ctx.config.height as f32,
         ];
+        self.window_size_px = new_size;
+        // Single-pane callers keep viewport == window; multi-pane callers will
+        // call set_viewport explicitly after this.
+        if self.viewport_offset_px == [0.0, 0.0] {
+            self.viewport_size_px = new_size;
+        }
         let needed = usize::from(cols) * usize::from(rows);
         self.cell_pipeline
             .ensure_capacity(&render_ctx.device, needed);
-        self.cell_pipeline.update_uniforms(
-            &render_ctx.queue,
-            [
-                self.cell_metrics.width_px as f32,
-                self.cell_metrics.height_px as f32,
-            ],
-            self.viewport_size_px,
-            self.selection_tint,
-        );
+        self.write_cell_uniforms(&render_ctx.queue);
     }
 
     /// Render one frame to the wgpu surface. Selection is wired from day one; Plan 03-03 tests
-    /// pass None; Plan 03-04's selection state machine will populate it.
+    /// pass None; Plan 03-04's selection state machine will populate it. Single-pane callers
+    /// keep the surface clear color (LoadOp::Clear). Plan 04-04 multi-pane callers use
+    /// `render_into_view` for finer control over surface acquisition + LoadOp.
     pub fn render(
         &mut self,
         render_ctx: &RenderContext,
@@ -199,8 +295,34 @@ impl Compositor {
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        self.encode_passes(render_ctx, &view);
+        let load_op = wgpu::LoadOp::Clear(wgpu::Color {
+            r: f64::from(self.default_bg[0]),
+            g: f64::from(self.default_bg[1]),
+            b: f64::from(self.default_bg[2]),
+            a: 1.0,
+        });
+        self.encode_passes_with(&render_ctx.device, &render_ctx.queue, &view, load_op);
         frame.present();
+        Ok(())
+    }
+
+    /// Plan 04-04: render this compositor's pane into the provided view + queue + device.
+    /// The caller acquires/presents the surface texture and orchestrates LoadOp across panes.
+    /// First pane per frame passes `LoadOp::Clear`; subsequent panes pass `LoadOp::Load`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_into_view(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        view: &wgpu::TextureView,
+        window_width: u32,
+        window_height: u32,
+        term: &mut Term,
+        selection: Option<((u16, u16), (u16, u16))>,
+        load_op: wgpu::LoadOp<wgpu::Color>,
+    ) -> anyhow::Result<()> {
+        self.prepare_frame_raw(device, queue, window_width, window_height, term, selection);
+        self.encode_passes_with(device, queue, view, load_op);
         Ok(())
     }
 
@@ -252,7 +374,13 @@ impl Compositor {
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         self.prepare_frame_raw(device, queue, width, height, term, selection);
-        self.encode_passes_raw(device, queue, &view);
+        let load_op = wgpu::LoadOp::Clear(wgpu::Color {
+            r: f64::from(self.default_bg[0]),
+            g: f64::from(self.default_bg[1]),
+            b: f64::from(self.default_bg[2]),
+            a: 1.0,
+        });
+        self.encode_passes_with(device, queue, &view, load_op);
 
         // Copy out via padded staging buffer (256-byte row alignment per wgpu spec).
         let bytes_per_pixel: u32 = 4;
@@ -348,21 +476,17 @@ impl Compositor {
     ) {
         let (cols, rows) = term.dims();
         let cursor = term.cursor();
-        let viewport = [width as f32, height as f32];
+        let window_size = [width as f32, height as f32];
         #[allow(clippy::float_cmp)]
-        let viewport_changed =
-            viewport[0] != self.viewport_size_px[0] || viewport[1] != self.viewport_size_px[1];
-        if viewport_changed {
-            self.viewport_size_px = viewport;
-            self.cell_pipeline.update_uniforms(
-                queue,
-                [
-                    self.cell_metrics.width_px as f32,
-                    self.cell_metrics.height_px as f32,
-                ],
-                self.viewport_size_px,
-                self.selection_tint,
-            );
+        let window_changed =
+            window_size[0] != self.window_size_px[0] || window_size[1] != self.window_size_px[1];
+        if window_changed {
+            self.window_size_px = window_size;
+            // Single-pane case keeps viewport == window.
+            if self.viewport_offset_px == [0.0, 0.0] {
+                self.viewport_size_px = window_size;
+            }
+            self.write_cell_uniforms(queue);
         }
         let needed = usize::from(cols) * usize::from(rows);
         self.cell_pipeline.ensure_capacity(device, needed);
@@ -450,20 +574,19 @@ impl Compositor {
                 self.cell_metrics.width_px as f32,
                 self.cell_metrics.height_px as f32,
             ],
-            self.viewport_size_px,
+            self.window_size_px,
+            self.viewport_offset_px,
             self.cursor_color,
+            self.cursor_focused,
         );
     }
 
-    fn encode_passes(&self, render_ctx: &RenderContext, view: &wgpu::TextureView) {
-        self.encode_passes_raw(&render_ctx.device, &render_ctx.queue, view);
-    }
-
-    fn encode_passes_raw(
+    fn encode_passes_with(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         view: &wgpu::TextureView,
+        cell_load: wgpu::LoadOp<wgpu::Color>,
     ) {
         let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("compositor-encoder"),
@@ -476,12 +599,7 @@ impl Compositor {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: f64::from(self.default_bg[0]),
-                            g: f64::from(self.default_bg[1]),
-                            b: f64::from(self.default_bg[2]),
-                            a: 1.0,
-                        }),
+                        load: cell_load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],

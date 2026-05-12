@@ -15,14 +15,28 @@ use wgpu::{
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
+/// Mirror of cursor.wgsl `CursorUniforms`. Plan 04-04 adds per-pane viewport offset
+/// + cursor_focused (filled vs hollow outline). Layout:
+///   0  window_size_px      vec2 (8)
+///   8  cell_size_px        vec2 (8)
+///   16 cursor_cell         vec2<u32> (8)
+///   24 viewport_offset_px  vec2<f32> (8)
+///   32 cursor_color        vec4 (16) — must be 16-aligned
+///   48 cursor_focused      u32 (4)
+///   52 _pad0               u32 (4)
+///   56 _pad1               vec2<u32> (8) → total 64
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
+#[allow(clippy::pub_underscore_fields)]
 struct CursorUniforms {
-    viewport_size_px: [f32; 2],
+    window_size_px: [f32; 2],
     cell_size_px: [f32; 2],
     cursor_cell: [u32; 2],
-    _pad: [u32; 2],
+    viewport_offset_px: [f32; 2],
     cursor_color: [f32; 4],
+    cursor_focused: u32,
+    _pad0: u32,
+    _pad1: [u32; 2],
 }
 
 /// Placeholder for future instanced cursor variants (bar, underline). Block cursor only in v1.
@@ -126,7 +140,9 @@ impl CursorPipeline {
                 compilation_options: Default::default(),
                 targets: &[Some(ColorTargetState {
                     format: surface_format,
-                    blend: Some(BlendState::REPLACE),
+                    // Alpha blend so the hollow-cursor stroke composites over the cell
+                    // pass without zeroing transparent interior pixels.
+                    blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
             }),
@@ -146,20 +162,26 @@ impl CursorPipeline {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &self,
         queue: &Queue,
         cursor_cell: [u32; 2],
         cell_size_px: [f32; 2],
-        viewport_size_px: [f32; 2],
+        window_size_px: [f32; 2],
+        viewport_offset_px: [f32; 2],
         cursor_color: [f32; 4],
+        cursor_focused: bool,
     ) {
         let u = CursorUniforms {
-            viewport_size_px,
+            window_size_px,
             cell_size_px,
             cursor_cell,
-            _pad: [0, 0],
+            viewport_offset_px,
             cursor_color,
+            cursor_focused: u32::from(cursor_focused),
+            _pad0: 0,
+            _pad1: [0, 0],
         };
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::bytes_of(&u));
     }

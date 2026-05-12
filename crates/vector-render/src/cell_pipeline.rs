@@ -37,12 +37,33 @@ pub struct CellInstance {
     pub _pad: u32,
 }
 
+/// CPU-side mirror of cell.wgsl's `Uniforms`. Plan 04-04 added per-pane viewport
+/// offset/size + border color/width (D-66). Layout matches WGSL std140-ish: vec4
+/// fields are 16-byte aligned; explicit padding keeps total a multiple of 16.
+///
+/// Byte offsets (must match cell.wgsl):
+///   0  window_size_px      vec2 (8 B)
+///   8  cell_size_px        vec2 (8 B)
+///   16 selection_tint      vec4 (16 B)
+///   32 border_color        vec4 (16 B)
+///   48 viewport_offset_px  vec2 (8 B)
+///   56 viewport_size_px    vec2 (8 B)
+///   64 border_width_px     f32  (4 B)
+///   68 _pad0               f32  (4 B)
+///   72 _pad1               vec2 (8 B) → total 80, aligned to 16
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
-struct Uniforms {
-    viewport_size_px: [f32; 2],
-    cell_size_px: [f32; 2],
-    selection_tint: [f32; 4],
+#[allow(clippy::pub_underscore_fields)]
+pub struct Uniforms {
+    pub window_size_px: [f32; 2],
+    pub cell_size_px: [f32; 2],
+    pub selection_tint: [f32; 4],
+    pub border_color: [f32; 4],
+    pub viewport_offset_px: [f32; 2],
+    pub viewport_size_px: [f32; 2],
+    pub border_width_px: f32,
+    pub _pad0: f32,
+    pub _pad1: [f32; 2],
 }
 
 #[repr(C)]
@@ -287,19 +308,8 @@ impl CellPipeline {
         );
     }
 
-    pub fn update_uniforms(
-        &self,
-        queue: &Queue,
-        cell_size_px: [f32; 2],
-        viewport_size_px: [f32; 2],
-        selection_tint: [f32; 4],
-    ) {
-        let u = Uniforms {
-            viewport_size_px,
-            cell_size_px,
-            selection_tint,
-        };
-        queue.write_buffer(&self.uniform_buf, 0, bytemuck::bytes_of(&u));
+    pub fn update_uniforms(&self, queue: &Queue, uniforms: &Uniforms) {
+        queue.write_buffer(&self.uniform_buf, 0, bytemuck::bytes_of(uniforms));
     }
 
     pub fn draw<'a>(&'a self, rpass: &mut RenderPass<'a>, instance_count: u32) {
