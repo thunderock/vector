@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Phase 04 implementation complete; verifier next
-stopped_at: "Plan 04-06 complete (f6f7d25 + bafae38 + f75e6ed); WIN-02 + WIN-03 flipped to Complete; Phase 4 closeable — run /gsd:verify-phase 4 next"
-last_updated: "2026-05-12T15:13:30.253Z"
+status: Ready to plan
+stopped_at: Plan 04-06 complete (f6f7d25 + bafae38 + f75e6ed); WIN-02 + WIN-03 flipped to Complete in REQUIREMENTS.md; user-approved 9/9 smoke matrix sign-off; Phase 4 implementation complete — verifier next.
+last_updated: "2026-05-12T15:21:17.267Z"
 progress:
   total_phases: 11
   completed_phases: 4
@@ -24,8 +24,8 @@ progress:
 
 ## Current Position
 
-Phase: 04 (mux-tabs-splits) — IMPLEMENTATION COMPLETE (verifier next)
-Plan: 6 of 6 (last plan)
+Phase: 999.1
+Plan: Not started
 
 ## Phase Map
 
@@ -156,6 +156,7 @@ Plan: 6 of 6 (last plan)
 ```bash
 
 # Phase 4 implementation is complete (all 6 plans landed; smoke matrix 9/9 PASS).
+
 # The orchestrator runs phase verification next.
 
 /gsd:verify-phase 4

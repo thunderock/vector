@@ -1,113 +1,77 @@
 ---
 phase: 04-mux-tabs-splits
-verified: 2026-05-12T05:00:00Z
-status: gaps_found
-score: 2/4 truths verified (WIN-02 + WIN-04 PASS; WIN-03 FAIL; visible-render acceptance FAIL)
+verified: 2026-05-12T12:00:00Z
+status: passed
+score: 4/4 must-haves verified
 re_verification:
-  previous_status: none
-  note: "Initial verification of Phase 4."
-
-gaps:
-  - truth: "Cmd-D / Cmd-Shift-D split the active pane and render each pane independently side-by-side"
-    status: failed
-    reason: "Mux split tree mutates correctly (unit-test green); per-pane Compositor render loop is architecturally seeded but not iterating in `WindowEvent::RedrawRequested`. The live `AppWindow` struct in `app.rs` does not carry a `compositors` map — only the unused `TabWindow` struct (in `tab_window.rs`) does. Only the active pane's bytes are fed into the single shared `Term`; non-active panes render nothing visible."
-    artifacts:
-      - path: "crates/vector-app/src/app.rs:32-40"
-        issue: "`struct AppWindow` carries only a single `render_host: Option<RenderHost>` — no `compositors: HashMap<PaneId, Compositor>` field. The per-pane render seam exists in `tab_window.rs` as `TabWindow` but is never instantiated by the live `App::resumed` / Cmd-T code path."
-      - path: "crates/vector-app/src/app.rs:485-507"
-        issue: "`WindowEvent::RedrawRequested` calls `host.render(&mut t, sel)` once against the single shared Term — no iteration over per-pane compositors with the seeded `LoadOp::Clear` first / `LoadOp::Load` subsequent pattern."
-      - path: "crates/vector-app/src/app.rs:293-328"
-        issue: "`UserEvent::PaneOutput` is a shim that mirrors ONLY the active pane's bytes into the shared Term; background panes' output is consumed but not rendered."
-    missing:
-      - "Swap `AppWindow` for `TabWindow` (or extend `AppWindow` with a `compositors: HashMap<PaneId, Compositor>` map) in the live `App.windows` HashMap."
-      - "Rewrite `RedrawRequested` to iterate `compositors` in z-order, using `LoadOp::Clear(...)` on the first compositor and `LoadOp::Load` on subsequent, with a single `frame.present()` outside the loop. The `Compositor::render_into_view(LoadOp)` API already exists (Plan 04-04)."
-      - "Route `UserEvent::PaneOutput` bytes into the per-pane `Term` (held by `Mux::Pane`) instead of the single shared `App.term`, then dirty-flag only that pane's compositor."
-
-  - truth: "Resizing the window propagates new sizes to all panes so `tput cols` reports each pane's per-viewport width"
-    status: failed
-    reason: "`Mux::resize_window` correctly returns a `Vec<(PaneId, rows, cols)>` driven by `split_tree::redistribute` + `compute_layout` (unit-tested green at the data layer), and `TabWindow::flush_pending_resize_if_quiescent` (in `tab_window.rs`) correctly walks that vec via `router.send_resize`. But that helper is dead code at runtime — the live `App::flush_pending_resize_if_quiescent` in `app.rs` calls `self.input_bridge.send_resize(rows, cols)` against a SINGLE channel for the bootstrap pane, never walking per-pane via `Mux::resize_window`. As a result both panes report the full window width."
-    artifacts:
-      - path: "crates/vector-app/src/app.rs:107-119"
-        issue: "Live `App::flush_pending_resize_if_quiescent` uses `self.input_bridge.send_resize(rows, cols)` — a single channel to the bootstrap pane. It does not call `Mux::resize_window(window_id, rows, cols)` or iterate per-pane via `PtyActorRouter::send_resize(pane_id, rows, cols)`."
-      - path: "crates/vector-app/src/tab_window.rs:72-90"
-        issue: "Correctly-shaped `TabWindow::flush_pending_resize_if_quiescent` exists (calls `mux.resize_window` + `router.send_resize` per pane) but is unreachable at runtime because `TabWindow` is never instantiated."
-    missing:
-      - "Replace the body of `App::flush_pending_resize_if_quiescent` in `app.rs:107-119` with the per-pane walk: `for (pane_id, rows, cols) in mux.resize_window(window_id, rows, cols) { router.send_resize(pane_id, rows, cols); }` — mirroring `tab_window.rs:72-90`."
-      - "Plumb `Mux` + `PtyActorRouter` references through `App` so the flush call site can reach them (today `App` only holds `InputBridge`, not the Mux/router; the Mux is reachable via `Mux::try_get()`; the router lives on the I/O thread and is reachable via a stored `Arc<PtyActorRouter>` or via the same `EventLoopProxy<UserEvent>` shim used elsewhere)."
-      - "Map the live `winit::WindowId` to a `vector_mux::WindowId` so `Mux::resize_window` can be called with the correct window id."
-
-  - truth: "The active pane is visibly distinguished by a colored border (D-66)"
-    status: failed
-    reason: "Border shader + uniform setter exist (`Compositor::set_border_color`, cell.wgsl edge-distance test, 2 passing offscreen-pixel snapshot tests in `active_pane_border.rs`), and `App::handle_mux_command(MuxCommand::FocusDir)` mutates `Mux::active_pane_id` + calls `self.request_redraw_all()`. But the visible render path never reaches a per-pane Compositor with `set_border_color` invoked — because the per-pane render loop itself is not wired (Gap 1)."
-    artifacts:
-      - path: "crates/vector-app/src/app.rs:220-235"
-        issue: "`MuxCommand::FocusDir` handler calls `mux.focus_direction` + `request_redraw_all()` but does NOT call `set_border_color` against any compositor — the comment at line 225-228 acknowledges this is deferred until per-pane Compositor map goes live."
-      - path: "crates/vector-render/src/compositor.rs"
-        issue: "Setter `Compositor::set_border_color` is implemented and unit-tested via offscreen snapshot. Not exercised against the visible per-pane render loop."
-    missing:
-      - "Once Gap 1 lands the per-pane Compositor map: in the `FocusDir` handler (and on `Mux::active_pane_id` mutation in general), call `compositors[new_active].set_border_color([0.4, 0.6, 1.0, 1.0])` + `compositors[old_active].set_border_color([0.0, 0.0, 0.0, 0.0])` before requesting redraw."
-      - "Verify against the manual smoke item #8: focused pane shows 1–2 px accent border; clicking another pane moves the border."
-
-human_verification:
-  - test: "Plan 04-06 re-walk of smoke items #3, #4, #8 once the per-pane Compositor render loop, per-pane viewport math, and visible D-66 border land"
-    expected: "All three items PASS — visible side-by-side panes; `tput cols` reports per-pane viewport widths after Cmd-D + window resize; focused-pane border is visible against both dark and light themes."
-    why_human: "Visual verification (pixel-perceptual border rendering, AppKit tab-group behavior, real-PTY SIGWINCH timing) cannot be programmatically asserted with confidence; the offscreen snapshot test covers the shader, not the live pipeline."
-
+  previous_status: gaps_found
+  previous_score: 2/4 truths verified
+  previous_verified: 2026-05-12T05:00:00Z
+  gaps_closed:
+    - "Cmd-D / Cmd-Shift-D split the active pane and render each pane independently side-by-side (smoke #3)"
+    - "Resizing the window propagates new sizes to all panes so `tput cols` reports each pane's per-viewport width (smoke #4)"
+    - "The active pane is visibly distinguished by a colored border (D-66, smoke #8)"
+  gaps_remaining: []
+  regressions: []
+  closure_path: "Plan 04-06 — AppWindow extended in place with `compositors: HashMap<PaneId, Compositor>` + `active_pane_id`; per-pane render loop in `RedrawRequested` (chained LoadOp::Clear/Load + single present); per-pane SIGWINCH via `Mux::resize_window` + `PtyActorRouter::send_resize`; `FocusDir` handler invokes `set_border_color` + `set_cursor_focused` on old/new active. Commits: f6f7d25 (fix), bafae38 (REQUIREMENTS flip), f75e6ed (summary), 8c663a8 (state/roadmap)."
+  user_signoff:
+    smoke_matrix: "approved (9/9 PASS)"
+    date: "2026-05-12"
+    location: "04-06-SUMMARY.md §Smoke Matrix Re-Run Results"
 ---
 
-# Phase 4: Mux — Tabs & Splits — Verification Report
+# Phase 4: Mux — Tabs & Splits — Verification Report (Re-Verification)
 
 **Phase Goal:** A user can open a new tab with Cmd-T and split a pane with Cmd-D / Cmd-Shift-D, with each pane running an independent local shell.
-**Verified:** 2026-05-12T05:00:00Z
-**Status:** `gaps_found`
-**Re-verification:** No — initial verification of Phase 4.
+**Verified:** 2026-05-12T12:00:00Z
+**Status:** `passed`
+**Re-verification:** Yes — initial verification on 2026-05-12T05:00:00Z flagged 3 gaps (smoke items #3, #4, #8); Plan 04-06 closed all three; user signed off on the smoke matrix re-run (9/9 PASS).
 
 ## Goal Achievement
 
-The phase goal is partially met:
-
-- **Cmd-T**: PASS — native NSWindowTabbingMode tab grouping verified by user smoke item #1.
-- **Cmd-D / Cmd-Shift-D**: PARTIAL — the keystroke is recognized, the Mux split tree mutates correctly (data-layer unit tests green), and a fresh `LocalDomain::spawn_local` PTY is plumbed through `Mux::split_pane_async` + `PtyActorRouter::spawn_pane`. Each pane DOES run an independent shell at the I/O layer (PaneOutput events fire for all panes; per-pane `proc_tracker` emits title-change events for non-active panes — verified by `tracing::info!` lines in `app.rs:293-345`). What FAILS is the user-visible acceptance: only the active pane's output reaches pixels; both panes report the full window width to `tput cols`; no D-66 border is visible.
+The phase goal is met end-to-end. Cmd-T spawns native NSWindow tabs (smoke #1 PASS); Cmd-D / Cmd-Shift-D split with visible side-by-side panes (smoke #3 PASS post-04-06); each pane runs an independent local shell with cwd inheritance (smoke #5 PASS); window resize propagates per-pane SIGWINCH to each child (smoke #4 PASS post-04-06); the active pane is visibly distinguished by the D-66 border (smoke #8 PASS post-04-06); the `Domain / Pane / PtyTransport` seam holds with zero discrimination in `vector-term` (WIN-04 arch-lint live).
 
 ### Observable Truths
 
 | #   | Truth | Status | Evidence |
 | --- | ----- | ------ | -------- |
-| 1   | Cmd-T opens a new tab and cycles via Cmd-Shift-]/[; Cmd-W cascades pane → tab → window → quit (WIN-02) | ✓ VERIFIED | User smoke #1 + #2 PASS; `mux_close_cascade.rs` + `mux_tab_cycle.rs` unit tests green; `App::handle_mux_command(NewTab)` calls `WinitWindowFactory::create_tabbed` with `setTabbingIdentifier` (D-56) — confirmed by `multi_window_tabbing.rs` mock-driven unit test. |
-| 2   | Cmd-D / Cmd-Shift-D splits the active pane; both panes render side-by-side with independent shells and focus routing (WIN-03 visible) | ✗ FAILED | User smoke #3 FAIL. Mux split tree mutates correctly (data-layer green) but only the active pane's Compositor reaches pixels. See Gap 1. |
-| 3   | Resizing the window propagates per-pane viewport sizes so `tput cols` reports each pane's width (WIN-03 #3) | ✗ FAILED | User smoke #4 FAIL. Live `App::flush_pending_resize_if_quiescent` (app.rs:107-119) does not walk `Mux::resize_window`. See Gap 2. |
-| 4   | `Domain / Pane / PtyTransport` is the only seam between terminal model and transport — zero `enum PaneSource` / `transport.kind()` discrimination in `vector-term` (WIN-04) | ✓ VERIFIED | `vector-term/tests/no_transport_discrimination.rs` LIVE (not ignored); grep returns 0 forbidden hits across `crates/vector-term/src/`; 2/2 tests pass including negative meta-test. |
+| 1   | Cmd-T opens a new tab and cycles via Cmd-Shift-]/[; Cmd-W cascades pane → tab → window → quit (WIN-02) | ✓ VERIFIED | Smoke #1 + #2 PASS (user-approved 2026-05-12); `mux_close_cascade.rs` + `mux_tab_cycle.rs` unit tests green; `multi_window_tabbing.rs` mock-driven test asserts `setTabbingIdentifier` (D-56). |
+| 2   | Cmd-D / Cmd-Shift-D splits the active pane; both panes render side-by-side with independent shells and focus routing (WIN-03 visible) | ✓ VERIFIED | Smoke #3 PASS post-04-06 (user-approved). `AppWindow.compositors: HashMap<PaneId, Compositor>` + `active_pane_id` populated lazily on `PaneOutput`; `RedrawRequested` iterates per-pane compositors with chained `LoadOp::Clear` (first) + `LoadOp::Load` (subsequent) + single `frame.present()` (`crates/vector-app/src/app.rs:208-347`). Mux split commands logged dispatching PaneId 1→2→4→6→8 in user smoke run. |
+| 3   | Resizing the window propagates per-pane viewport sizes so `tput cols` reports each pane's width (WIN-03 #3) | ✓ VERIFIED | Smoke #4 PASS post-04-06 (user-approved). `flush_pending_resize_if_quiescent` (`crates/vector-app/src/app.rs:140-175`) calls `mux.resize_window(mux_window_id, rows, cols)` → iterates `Vec<(PaneId, prows, pcols)>` → `router.send_resize(pane_id, prows, pcols)` per layout entry. Single-channel `input_bridge.send_resize` retired. |
+| 4   | `Domain / Pane / PtyTransport` is the only seam between terminal model and transport — zero `enum PaneSource` / `transport.kind()` discrimination in `vector-term` (WIN-04) | ✓ VERIFIED | `vector-term/tests/no_transport_discrimination.rs` LIVE (2/2 pass including negative meta-test); arch-lint file count = 16. |
 
-**Score:** 2/4 truths verified.
+**Score:** 4/4 truths verified.
 
 ### Required Artifacts (Spot-checked against Plan-frontmatter `key-files`)
 
 | Artifact | Expected | Status | Details |
 | -------- | -------- | ------ | ------- |
-| `crates/vector-mux/src/mux.rs` | Mux singleton + topology + async helpers + resize_window | ✓ VERIFIED | 429-line file; `resize_window` correctly returns per-pane (rows, cols) from `split_tree::compute_layout`. |
-| `crates/vector-mux/src/split_tree.rs` | Pure algorithms (split_at_leaf, redistribute, compute_layout, get_pane_direction, nudge_ratio) | ✓ VERIFIED | Implemented per Plan 04-02; 6 mux unit-test files green. |
-| `crates/vector-mux/src/cwd.rs` + `proc_tracker.rs` | D-57 + D-63 + D-64 plumbing | ✓ VERIFIED | User smoke #5 + #7 PASS. |
-| `crates/vector-app/src/tab_window.rs` | Per-TabWindow first-paint gate + compositors map + flush helper | ⚠️ ORPHANED | File exists with correct shape (HashMap<PaneId, Compositor>, correctly-shaped flush helper) but `TabWindow` is never instantiated by `App::resumed` / Cmd-T handler. Only `pub use` in `lib.rs`. |
+| `crates/vector-mux/src/mux.rs` | Mux singleton + topology + async helpers + resize_window | ✓ VERIFIED | `resize_window` returns per-pane `Vec<(PaneId, rows, cols)>` from `split_tree::compute_layout`; now invoked from live flush path. |
+| `crates/vector-mux/src/split_tree.rs` | Pure algorithms (split_at_leaf, redistribute, compute_layout, get_pane_direction, nudge_ratio) | ✓ VERIFIED | 6 mux unit-test files green. |
+| `crates/vector-mux/src/cwd.rs` + `proc_tracker.rs` | D-57 + D-63 + D-64 plumbing | ✓ VERIFIED | Smoke #5 + #7 PASS. |
+| `crates/vector-app/src/app.rs` | App struct + per-window first-paint gate + handle_mux_command + RedrawRequested | ✓ VERIFIED | `AppWindow` now carries `compositors: HashMap<PaneId, Compositor>` + `active_pane_id: Option<PaneId>` + `winit_to_mux_window: HashMap<WindowId, MuxWindowId>`; RedrawRequested iterates per-pane compositors; FocusDir handler flips `set_border_color` + `set_cursor_focused` on old/new active. |
+| `crates/vector-app/src/render_host.rs` | Surface-frame closure + lazy per-pane Compositor factory + queue accessor | ✓ VERIFIED | `with_frame<F>`, `new_compositor_for_viewport`, and `queue()` extensions present and exercised at render time. |
+| `crates/vector-app/src/main.rs` | `PtyActorRouter` lifted to main thread via `Arc<parking_lot::Mutex<...>>` + `App::set_router` | ✓ VERIFIED | `set_router` call site present after `set_split_req_tx`. |
 | `crates/vector-app/src/mux_commands.rs` | MuxCommand dispatch + WindowFactory + VECTOR_TABBING_IDENTIFIER | ✓ VERIFIED | Live. |
-| `crates/vector-app/src/app.rs` | App struct + per-window first-paint gate + handle_mux_command + RedrawRequested | ⚠️ PARTIAL | Uses an internal `AppWindow` struct (app.rs:32-40) that lacks the `compositors` map; render loop iterates a single host, not per-pane compositors. |
-| `crates/vector-render/src/compositor.rs` | Per-pane viewport + border + cursor_focused + render_into_view | ✓ VERIFIED | All setters + new_with_viewport + render_into_view present; 2/2 offscreen snapshot tests green for the border shader. Not yet exercised against the live multi-pane render path. |
+| `crates/vector-app/src/tab_window.rs` | Per-TabWindow first-paint gate + compositors map + flush helper | ✓ VERIFIED (carried forward) | Parallel data structure; consumed by `multi_window_tabbing.rs` test. AppWindow was extended in place per 04-06 key-decision rather than swapped — orphan downgrade resolved by intentional dual-data-structure choice. |
+| `crates/vector-render/src/compositor.rs` | Per-pane viewport + border + cursor_focused + render_into_view | ✓ VERIFIED | Now exercised against the live per-pane render loop, not just offscreen snapshots. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 | ---- | -- | --- | ------ | ------- |
-| `App::handle_mux_command(SplitHorizontal/Vertical)` | `Mux::split_pane_async` + `PtyActorRouter::spawn_pane` | `split_req_tx` mpsc channel + tokio I/O task | ✓ WIRED at data layer | Split spawns succeed; new shell runs; PaneOutput fires. Verified by tracing logs in user smoke run. |
-| `App::handle_mux_command(SplitHorizontal/Vertical)` | Per-pane Compositor in visible render loop | (none) | ✗ NOT_WIRED | After split, new pane's Compositor is never inserted into the visible per-window compositors map. Active pane's Term receives all visible bytes. |
-| Window resize → per-pane SIGWINCH | `Mux::resize_window` → `PtyActorRouter::send_resize(pane_id, rows, cols)` | `App::flush_pending_resize_if_quiescent` | ✗ NOT_WIRED | Live flush helper bypasses `Mux::resize_window`; sends a single window-total resize on `InputBridge`. |
-| `MuxCommand::FocusDir` mutation | `Compositor::set_border_color` per-pane | (deferred) | ✗ NOT_WIRED | Handler calls `request_redraw_all()` only; no compositor-level border-color setter invoked. |
+| `App::handle_mux_command(SplitHorizontal/Vertical)` | `Mux::split_pane_async` + `PtyActorRouter::spawn_pane` | `split_req_tx` mpsc channel + tokio I/O task | ✓ WIRED | Split spawns succeed; new shell runs; PaneOutput fires per pane. |
+| `App::handle_mux_command(SplitHorizontal/Vertical)` | Per-pane Compositor in visible render loop | `AppWindow.compositors` map + `RenderHost::new_compositor_for_viewport` lazy creation on first `UserEvent::PaneOutput` | ✓ WIRED | New pane's Compositor inserted; visible side-by-side render confirmed by smoke #3. |
+| Window resize → per-pane SIGWINCH | `Mux::resize_window` → `PtyActorRouter::send_resize(pane_id, rows, cols)` | `App::flush_pending_resize_if_quiescent` (app.rs:140-175) | ✓ WIRED | `tput cols` per-pane confirmed by smoke #4. |
+| `MuxCommand::FocusDir` mutation | `Compositor::set_border_color` + `set_cursor_focused` per-pane | `RenderHost::queue` shared wgpu Queue + per-pane compositor map lookup | ✓ WIRED | Border flip + cursor focus flip confirmed by smoke #8 (color `[0.4, 0.6, 1.0, 1.0]` on new-active, cleared on old-active). |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 | -------- | ------------- | ------ | ------------------ | ------ |
-| Visible side-by-side panes | `App.windows[wid].compositors` | (does not exist on AppWindow) | N/A | ✗ DISCONNECTED — `AppWindow` lacks the field; `TabWindow` carries it but is unused. |
-| `tput cols` per-pane viewport | Per-pane `(rows, cols)` from `Mux::resize_window` | `split_tree::compute_layout` | Yes at data layer; not flowing into kernel SIGWINCH in the live flush path | ⚠️ STATIC (single-pane-shaped flush dispatch) |
-| D-66 active-pane border | `Compositor.border_color` uniform | `Compositor::set_border_color` | Yes for the offscreen snapshot test; not invoked at the focus-change handler | ✗ HOLLOW_PROP |
+| Visible side-by-side panes | `AppWindow.compositors` | Lazily populated on `UserEvent::PaneOutput` via `RenderHost::new_compositor_for_viewport`; viewport rects from `vector_mux::compute_layout(&tab.root, viewport)` | Yes — per-pane Term bytes flow through per-pane Compositor; user smoke #3 confirms | ✓ FLOWING |
+| `tput cols` per-pane viewport | Per-pane `(rows, cols)` from `Mux::resize_window` | `split_tree::compute_layout` → `router.send_resize(pane_id, prows, pcols)` → kernel SIGWINCH per child | Yes — user smoke #4 confirms `tput cols` reports per-pane widths after Cmd-D + window resize | ✓ FLOWING |
+| D-66 active-pane border | `Compositor.border_color` uniform | `Compositor::set_border_color([0.4, 0.6, 1.0, 1.0])` invoked in `FocusDir` handler on shared wgpu Queue | Yes — user smoke #8 confirms visible accent border on focused pane | ✓ FLOWING |
 
 ### Behavioral Spot-Checks
 
@@ -115,70 +79,83 @@ The phase goal is partially met:
 | -------- | ------- | ------ | ------ |
 | Workspace test suite green | `cargo test --workspace --tests -q` | 231 passed / 0 failed / 3 ignored | ✓ PASS |
 | WIN-04 grep arch-lint live | `cargo test -p vector-term --test no_transport_discrimination -q` | 2 passed / 0 failed | ✓ PASS |
-| Arch-lint file count = 16 | `find crates -name 'no_*main.rs' -o -name 'no_transport_discrimination.rs' \| wc -l` | 16 | ✓ PASS |
-| `enum PaneSource` / `transport.kind()` zero hits in `vector-term` | `grep -rE "..." crates/vector-term/src/` | 0 hits | ✓ PASS |
-| Visible side-by-side panes after Cmd-D | manual smoke #3 | FAIL (user-confirmed) | ✗ FAIL |
-| `tput cols` per-pane after Cmd-D + window resize | manual smoke #4 | FAIL (user-confirmed) | ✗ FAIL |
-| Visible D-66 border on focus change | manual smoke #8 | FAIL (user-confirmed) | ✗ FAIL |
+| D-66 border snapshot tests | `cargo test -p vector-render --test active_pane_border -q` | 2 passed / 0 failed | ✓ PASS |
+| Clippy clean (`-D warnings`) | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0, no warnings | ✓ PASS |
+| Rustfmt clean | `cargo fmt --all -- --check` | exit 0 | ✓ PASS |
+| Arch-lint file count | `find crates -name 'no_tokio_main.rs' -o -name 'no_transport_discrimination.rs' \| wc -l` | 16 | ✓ PASS |
+| **D-38 zero-diff invariant** | `git diff -- crates/vector-mux/src/domain.rs crates/vector-mux/src/transport.rs \| wc -l` | **0** | ✓ PASS — Phase 2 final trait surface byte-identical |
+| Visible side-by-side panes after Cmd-D | manual smoke #3 (user verdict 2026-05-12) | PASS | ✓ PASS |
+| `tput cols` per-pane after Cmd-D + window resize | manual smoke #4 (user verdict 2026-05-12) | PASS | ✓ PASS |
+| Visible D-66 border on focus change | manual smoke #8 (user verdict 2026-05-12) | PASS | ✓ PASS |
+
+### Manual Smoke Matrix — 9-Item Verdict (Plan 04-06 Re-Run, User-Approved)
+
+The smoke matrix in `04-VALIDATION.md §"Manual-Only Verifications"` is by-design manual (visual/tactile/real-PTY-timing items). The user re-walked all 9 items on 2026-05-12 after Plan 04-06 landed and signed off: **9/9 PASS, 0 FAIL**. Sign-off recorded in `04-06-SUMMARY.md §"Smoke Matrix Re-Run Results"` table and commit `bafae38`.
+
+| # | Behavior | Requirement | 04-05 verdict | 04-06 verdict |
+|---|----------|-------------|---------------|---------------|
+| 1 | Cmd-T spawns native NSWindow tab | WIN-02, D-56 | PASS | PASS |
+| 2 | Cmd-W cascade closes pane → tab → window → app | WIN-02, D-61 | PASS | PASS |
+| 3 | Cmd-D + Cmd-Shift-D split + visible side-by-side panes | WIN-03, D-59 | **FAIL** | **PASS** ← closed by 04-06 |
+| 4 | `tput cols` round-trip after split + window resize | WIN-03 #3 | **FAIL** | **PASS** ← closed by 04-06 |
+| 5 | cwd inheritance via `proc_pidinfo` | D-63 | PASS | PASS |
+| 6 | N-pane idle CPU < 1% | RENDER-03 reaffirm | PASS | PASS |
+| 7 | Tab title tracks foreground process | D-57 | PASS | PASS |
+| 8 | Active-pane border visible (D-66) | WIN-03, D-66 | **FAIL** | **PASS** ← closed by 04-06 |
+| 9 | DPR change with N panes | RENDER-04 reaffirm | PASS | PASS |
+
+Net delta vs prior verification: **+3 PASS** (items #3, #4, #8 flipped FAIL → PASS); no regressions on the previously-green six.
 
 ### Requirements Coverage
 
 | Requirement | Source Plan(s) | Description | Status | Evidence |
 | ----------- | -------------- | ----------- | ------ | -------- |
-| WIN-02 | 04-02, 04-04, 04-05 | Tabs: Cmd-T new, Cmd-Shift-]/[ cycle, Cmd-W close | ✓ SATISFIED | User smoke #1 + #2 PASS; data-layer unit tests green; `multi_window_tabbing.rs` mock-driven test asserts `setTabbingIdentifier` call. Marked **Pending** in REQUIREMENTS.md → recommend flipping to **Complete** since both acceptance criteria (visible tab group + Cmd-W cascade) hold. |
-| WIN-03 | 04-02, 04-03, 04-04, 04-05 | Splits: Cmd-D / Cmd-Shift-D with focus routing + per-pane resize | ✗ BLOCKED | Data-layer green; visible-render acceptance FAIL on smoke items #3, #4, #8. **Stays Pending in REQUIREMENTS.md per Plan 04-05's documented disposition — correct.** Plan 04-06 (gap-closure) is the agreed path to close. |
-| WIN-04 | 04-01, 04-02 | `Domain/Pane/PtyTransport` is the only seam — zero discriminations in `vector-term` | ✓ SATISFIED | Live grep arch-lint passing (`no_transport_discrimination.rs`); negative meta-test proves walker fires on synthetic violations. Marked **Complete** in REQUIREMENTS.md — correct. |
+| WIN-02 | 04-02, 04-04, 04-05 | Tabs: Cmd-T new, Cmd-Shift-]/[ cycle, Cmd-W close | ✓ SATISFIED | `- [x]` in REQUIREMENTS.md; Traceability row `WIN-02 \| Phase 4 \| Complete`; smoke #1 + #2 PASS. Flipped by Plan 04-06 commit `bafae38`. |
+| WIN-03 | 04-02, 04-03, 04-04, 04-05, 04-06 | Splits: Cmd-D / Cmd-Shift-D with focus routing + per-pane resize | ✓ SATISFIED | `- [x]` in REQUIREMENTS.md; Traceability row `WIN-03 \| Phase 4 \| Complete`; smoke #3, #4, #8 PASS. Flipped by Plan 04-06 commit `bafae38`. |
+| WIN-04 | 04-01, 04-02 | `Domain/Pane/PtyTransport` is the only seam — zero discriminations in `vector-term` | ✓ SATISFIED | `- [x]` in REQUIREMENTS.md; Traceability row `WIN-04 \| Phase 4 \| Complete`; live grep arch-lint passes (2/2 in `no_transport_discrimination.rs`). |
 
-**Orphaned requirements check:** No phase-4 requirement is orphaned. The REQUIREMENTS.md → Phase 4 mapping (WIN-02, WIN-03, WIN-04) matches the union of plan frontmatter declarations.
+**Orphaned requirements check:** No phase-4 requirement is orphaned. REQUIREMENTS.md → Phase 4 mapping (WIN-02, WIN-03, WIN-04) is the exact union of plan-frontmatter declarations.
 
-**WIN-02 disposition note:** Plan 04-05's SUMMARY claimed `requirements-completed: [WIN-02]`, but REQUIREMENTS.md still lists WIN-02 as **Pending** at the time of this verification. Both acceptance criteria for WIN-02 (Cmd-T native tab + Cmd-W cascade) are met. The verifier recommends flipping WIN-02 → **Complete** in REQUIREMENTS.md as part of the Plan 04-06 close-out commit (alongside WIN-03 if 04-06 lands its scope). Leaving WIN-02 Pending now is conservative but not load-bearing.
+**REQUIREMENTS.md footer:** `*Last updated: 2026-05-12 — Plan 04-06 closed: WIN-02 + WIN-03 complete after smoke matrix re-run (items #3, #4, #8 PASS).*` — consistent with this verification.
 
 ### Anti-Patterns Found
 
+None of blocker severity. The three documented-stub comments flagged in the prior verification (`app.rs:293-328` shim, `app.rs:220-235` border-flip deferral, `app.rs:180-204` Plan 04-06 handoff comment) are resolved — the FocusDir handler now invokes `set_border_color` + `set_cursor_focused` on the per-pane compositor map (`crates/vector-app/src/app.rs:193-200, 199-200, 307-315`), the per-pane render loop iterates compositors (`crates/vector-app/src/app.rs:319-347`), and the per-pane Term mirroring is documented as the intentional shape (Plan 04-06 key-decision: "Per-pane Term writes are the source of truth for the render loop"; selection movement to per-pane is explicitly deferred to Phase 5).
+
 | File | Line | Pattern | Severity | Impact |
 | ---- | ---- | ------- | -------- | ------ |
-| `crates/vector-app/src/app.rs` | 293-328 | Shim comment: "only the currently-active Mux pane is mirrored into the visible Term" | ℹ️ Info | Documented intentional scope boundary — not a hidden stub. |
-| `crates/vector-app/src/app.rs` | 220-235 | Shim comment: "Multi-pane border flip + cursor_focused toggle lands when the per-pane Compositor map goes live" | ℹ️ Info | Documented intentional scope boundary. |
-| `crates/vector-app/src/app.rs` | 180-204 | Comment: "Per-pane Compositor wiring + visible second-shell rendering lands in the multi-pane render polish (Plan 04-06 gap-closure)" | ℹ️ Info | Explicit Plan 04-06 handoff annotation. |
-| `crates/vector-app/src/tab_window.rs` | 23-37 | Defined `TabWindow` with `compositors` map is `pub use`-exported but never instantiated in the live `App::resumed` / Cmd-T path | ⚠️ Warning (orphan) | The seam is real, the type is in tree; just unused at runtime. Plan 04-06 swaps `AppWindow` → `TabWindow` or extends `AppWindow` to match. |
+| `crates/vector-app/src/app.rs` | (handle_new_tab) | TODO: subsequent Cmd-T tabs reuse the bootstrap mux WindowId; full per-NSWindow Mux WindowId allocation deferred to Phase 5 | ℹ️ Info | Documented, bounded scope-discipline. Smoke #1 (Cmd-T native tab) PASSes today because the bootstrap mapping suffices; Phase 5 picks up multi-NSWindow Mux WindowId allocation. |
 
-No blocker anti-patterns. All stubs are intentional, scope-disciplined, and annotated with a Plan 04-06 reference.
+No blocker anti-patterns.
 
 ### Human Verification Required
 
-After Plan 04-06 lands, a re-run of smoke items #3, #4, #8 is required. See `human_verification` block in frontmatter.
+The 9-item smoke matrix is by-design human-verified (visual contrast judgment, AppKit tab-group behavior, real-PTY SIGWINCH timing, DPR change between physical monitors). The user re-walked all 9 items on 2026-05-12 and approved the matrix (9/9 PASS, 0 FAIL). No re-walk is required for this verifier round — human verification is satisfied; sign-off recorded in `04-06-SUMMARY.md`.
 
-## Gaps Summary
+## Closure Summary
 
-The user-verdict (6 PASS / 3 FAIL on the 9-item smoke matrix) is honest and matches the codebase exactly. Three failed smoke items collapse to one shared root cause and one architectural gap:
+Plan 04-06 closed the three FAILs from the prior verification with one architectural fix (commit `f6f7d25`): `AppWindow` was extended in place with `compositors: HashMap<PaneId, Compositor>` + `active_pane_id: Option<PaneId>`. The same migration unlocked all three gaps simultaneously:
 
-**Root cause:** The phase 4 implementation ships two parallel structs for per-window state:
-1. `AppWindow` (in `app.rs:32`) — the live struct used at runtime, single-pane shaped.
-2. `TabWindow` (in `tab_window.rs:23`) — the multi-pane-correct struct with `compositors: HashMap<PaneId, Compositor>` + a correctly-shaped `flush_pending_resize_if_quiescent` helper, but never instantiated.
+1. **Gap 1 (smoke #3 — visible side-by-side render):** `RedrawRequested` now derives per-pane viewport rects from `vector_mux::compute_layout`, iterates compositors sorted by PaneId for determinism, calls `Compositor::render_into_view` with chained `LoadOp::Clear` (first leaf) + `LoadOp::Load` (subsequent), and presents once outside the loop.
+2. **Gap 2 (smoke #4 — per-pane `tput cols`):** `flush_pending_resize_if_quiescent` now walks `Mux::resize_window(mux_window_id, rows, cols)` → `Vec<(PaneId, prows, pcols)>` → `PtyActorRouter::send_resize(pane_id, prows, pcols)` per layout entry.
+3. **Gap 3 (smoke #8 — visible D-66 active-pane border):** `MuxCommand::FocusDir` handler invokes `comp.set_border_color(queue, [0.4, 0.6, 1.0, 1.0])` + `comp.set_cursor_focused(true)` on new-active and clears on old-active using the shared wgpu Queue surfaced via `RenderHost::queue`.
 
-**Architectural gap:** The render loop (`app.rs:485-507`) iterates the single `AppWindow.render_host`; it never reaches a per-pane compositor map. Per-pane viewport-derived SIGWINCH (`app.rs:107-119`) never reaches `Mux::resize_window`. The active-pane border setter is never invoked at the focus-change site (`app.rs:220-235`).
+Support extensions: `RenderHost::with_frame<F>` surface-frame closure; `RenderHost::new_compositor_for_viewport` lazy per-pane Compositor factory; `RenderHost::queue` shared-queue accessor; `PtyActorRouter` lifted to `Arc<parking_lot::Mutex<...>>` so `App::set_router` reaches the main-thread render+resize site (`main.rs`); `winit_to_mux_window` map records bootstrap mapping.
 
-**Plan 04-06 scope (handoff for `/gsd:plan-phase 4 --gaps`):**
+All automated verification gates held across the migration: workspace tests 231/0/3 (baseline preserved); clippy clean with `-D warnings`; rustfmt clean; WIN-04 arch-lint live (2/2); D-66 snapshots live (2/2); arch-lint file count = 16; D-38 zero-diff invariant confirmed (`git diff -- crates/vector-mux/src/domain.rs crates/vector-mux/src/transport.rs` returns zero hunks).
 
-- **Task 1 — Per-pane Compositor render loop** (closes Gap 1 + Gap 3 simultaneously)
-  - File: `crates/vector-app/src/app.rs:32-40` (AppWindow struct), `crates/vector-app/src/app.rs:485-507` (RedrawRequested), `crates/vector-app/src/app.rs:220-235` (FocusDir handler).
-  - Either swap `AppWindow` → `TabWindow` or extend `AppWindow` with `compositors: HashMap<PaneId, Compositor>` + `active_pane_id: PaneId`.
-  - Iterate compositors in `RedrawRequested` with `LoadOp::Clear` first / `LoadOp::Load` subsequent. Use the existing `Compositor::render_into_view(LoadOp)` API.
-  - In `MuxCommand::FocusDir`: call `set_border_color([0.4, 0.6, 1.0, 1.0])` on the new active compositor and clear it on the old. The D-66 border will then reach pixels automatically.
-- **Task 2 — Per-pane viewport math drives SIGWINCH** (closes Gap 2)
-  - File: `crates/vector-app/src/app.rs:107-119`.
-  - Replace `self.input_bridge.send_resize(rows, cols)` with the per-pane walk shape already implemented in `tab_window.rs:72-90`: `for (pane_id, rows, cols) in mux.resize_window(window_id, rows, cols) { router.send_resize(pane_id, rows, cols); }`.
-  - Requires plumbing `Mux` (via `Mux::try_get()`) and `PtyActorRouter` reference into the App for the flush call site, plus a `winit::WindowId` → `vector_mux::WindowId` mapping.
-- **Task 3 — Route per-pane PaneOutput to per-pane Term**
-  - File: `crates/vector-app/src/app.rs:293-328`.
-  - Instead of mirroring only the active pane into the single shared `App.term`, feed each pane's output into its own `Mux::Pane.term` (already exists as `Arc<Mutex<Term>>`), and dirty-flag only that pane's compositor.
-- **Acceptance:** Re-walk smoke items #3, #4, #8 — all PASS.
+## Cross-Phase / Deferred Notes
 
-**WIN-03 disposition:** Stays **Pending** in REQUIREMENTS.md until Plan 04-06 closes. This is the correct disposition per Plan 04-05's finalization. Phase 4 close-out is deferred to post-04-06.
+- **Phase 5 hand-off (Plan 04-06 key-decision):** `winit_to_mux_window` records only the bootstrap entry. Phase 5 (or whichever phase first spawns a fresh Mux Tab+Pane per NSWindow) should extend `handle_new_tab` to allocate a new `vector_mux::WindowId` and record the mapping. TODO comment placed inline.
+- **Phase 5 hand-off (Plan 04-06 key-decision):** Per-pane Term writes are the source of truth for the render loop, but the active pane's bytes are mirrored into `self.term` so existing selection + `cell_from_pixel` coords plumbing keeps working. Plan 05 may move selection to per-pane.
+- **`tab_window.rs` retained:** Plan 04-06 chose to extend `AppWindow` in place rather than swap to `TabWindow`. `TabWindow` remains `pub use`-exported and consumed by `multi_window_tabbing.rs` as a parallel data structure — intentional dual-data-structure choice documented in 04-06-SUMMARY.md key-decisions; not an orphan.
 
-**Phase 4 overall:** NOT yet ready to close. 2 of 4 phase truths verified; 3 of 9 smoke items failed; WIN-03 unmet at user-visible acceptance. Plan 04-06 (gap-closure) is the bounded, well-scoped next step.
+## Verdict
+
+**Phase 4 is closeable.** All four phase-4 observable truths verified; WIN-02 + WIN-03 + WIN-04 all Complete in REQUIREMENTS.md; manual smoke matrix 9/9 PASS with user sign-off (2026-05-12); D-38 trait-surface invariant byte-identical to Phase 2 final shape; arch-lint count held at 16. No regressions on previously-green items. Phase 5 (Polish — Local Daily-Driver) is plannable from green-bar.
 
 ---
 
-_Verified: 2026-05-12T05:00:00Z_
+_Verified: 2026-05-12T12:00:00Z_
 _Verifier: Claude (gsd-verifier)_
+_Re-verification of: 2026-05-12T05:00:00Z (initial gaps_found verdict, closed by Plan 04-06)_
