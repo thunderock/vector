@@ -27,6 +27,7 @@ pub mod render_host;
 pub mod search_bar;
 pub mod ske;
 pub mod tab_window;
+pub mod term_grid_access;
 pub mod toast;
 
 pub use mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};

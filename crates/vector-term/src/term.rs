@@ -152,6 +152,26 @@ impl Term {
         &self.prompt_marks
     }
 
+    /// Plan 05-11 (POLISH-06): char + WIDE_CHAR_SPACER flag for the cell at
+    /// (row, col) in viewport coordinates. Returns `None` if out of bounds.
+    /// Consumed by `vector-app::term_grid_access::TermGridAccess` for Cmd-C.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    pub fn cell_at(&self, row: usize, col: usize) -> Option<(char, bool)> {
+        use alacritty_terminal::index::{Column, Line, Point};
+        use alacritty_terminal::term::cell::Flags;
+        let grid = self.inner.grid();
+        if row >= usize::from(self.rows) || col >= usize::from(self.cols) {
+            return None;
+        }
+        let cell = &grid[Point::new(Line(row as i32), Column(col))];
+        Some((cell.c, cell.flags.contains(Flags::WIDE_CHAR_SPACER)))
+    }
+
+    /// Plan 05-11: column count as `usize` for `GridAccess::cols`.
+    pub fn grid_cols(&self) -> usize {
+        usize::from(self.cols)
+    }
+
     /// B1 (Plan 05-10 Task 1, D-78): hyperlink data for the cell at (row, col)
     /// in viewport coordinates. Returns `(uri, id)`; `id` is `None` for anonymous
     /// OSC 8 hyperlinks.

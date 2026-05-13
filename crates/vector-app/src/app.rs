@@ -809,15 +809,23 @@ impl ApplicationHandler<UserEvent> for App {
                             self.input_bridge.send_bytes(bytes);
                             return;
                         }
-                        // Plan 05-10 Task 3 — Cmd-C native pasteboard write.
+                        // Plan 05-10 / 05-11 Task 1 — Cmd-C native pasteboard write.
                         // CONTEXT Cmd-C Claude's Discretion: NSPasteboard, NEVER OSC 52.
-                        // Full GridAccess adapter for Term lands incrementally; this branch
-                        // wires the keystroke path + write_pasteboard FFI so the
-                        // event-loop side is complete.
+                        // Selection text built via `selection_to_string` over a
+                        // `TermGridAccess` newtype (B1: trait impl lives in vector-app
+                        // to avoid a vector-input -> vector-mux -> vector-term cycle).
                         if s.as_str() == "c" && !self.mods.shift {
                             if let Some(range) = self.input_bridge.selection.range() {
-                                let _ = range; // selection extraction adapter deferred
-                                self.write_pasteboard("");
+                                use vector_input::{selection_to_string, SelectionMode};
+                                let text = {
+                                    let t = self.term.lock();
+                                    selection_to_string(
+                                        &range,
+                                        &crate::term_grid_access::TermGridAccess(&*t),
+                                        SelectionMode::Stream,
+                                    )
+                                };
+                                self.write_pasteboard(&text);
                             }
                             return;
                         }
@@ -832,6 +840,10 @@ impl ApplicationHandler<UserEvent> for App {
                         self.handle_mux_command(event_loop, cmd);
                         self.request_redraw_all();
                     }
+                    // Plan 05-11 Rule-3 deviation: Plan 05-13 added EncodedKey::App;
+                    // Plan 05-14 wires the App-shortcut dispatch. Until then, ignore
+                    // so the build stays green.
+                    Some(EncodedKey::App(_)) => {}
                     None => {}
                 }
             }
