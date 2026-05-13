@@ -137,7 +137,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 05-08-PLAN.md — Wave 3: Logic — Tint stripe pipeline + Profile picker + Toast state machine + Clipboard router + OSC 7 consumers (POLISH-07)
   - [x] 05-10-PLAN.md — Wave 4: Wiring & rendering scaffolding (POLISH-04, POLISH-06, POLISH-07)
   - [x] 05-09-PLAN.md — Wave 5: Secure Keyboard Entry + IME data machine + vector-secrets API + manual 10-item smoke matrix checkpoint (POLISH-08)
-  - [ ] 05-11-PLAN.md — Wave 1 (gap-closure): impl GridAccess for Term + Cmd-C real selection + Switch Profile submenu dynamic rebuild (gap #5 + #6) (POLISH-06, POLISH-07)
+  - [x] 05-11-PLAN.md — Wave 1 (gap-closure): impl GridAccess for Term + Cmd-C real selection + Switch Profile submenu dynamic rebuild (gap #5 + #6) (POLISH-06, POLISH-07)
   - [ ] 05-12-PLAN.md — Wave 1 (gap-closure): App.clipboard_router field + UserEvent::ClipboardStore + ForwardingListener clip_tx drain task (gap #7) (POLISH-05)
   - [x] 05-13-PLAN.md — Wave 1 (gap-closure): vector-input keymap EncodedKey::App(AppShortcut) for Cmd-N/F/Shift-P/Shift-R (gap #2 pure data) (POLISH-06, POLISH-07, POLISH-08)
   - [ ] 05-14-PLAN.md — Wave 2 (gap-closure): App.search_bar + App.profile_picker fields + EncodedKey::App handler bodies + ungrouped Cmd-N + config reload (gap #2 App-side + gap #3) (POLISH-01, POLISH-06, POLISH-07)
