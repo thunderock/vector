@@ -88,6 +88,10 @@ pub struct App {
     /// Plan 05-09 / POLISH-08 / D-80 — RAII guard for Carbon SKE. Drop on
     /// app exit disables the flag (Pitfall 6).
     ske_guard: SecureInputGuard,
+    /// Plan 05-12 (POLISH-05 gap-closure) — live ClipboardRouter consuming
+    /// OSC 52 Store events forwarded as UserEvent::ClipboardStore. Policy is
+    /// re-resolved from the active profile on every UserEvent::ConfigReloaded.
+    clipboard_router: crate::clipboard_router::ClipboardRouter,
 }
 
 impl App {
@@ -110,6 +114,10 @@ impl App {
             hover_uri: None,
             current_config: None,
             ske_guard: SecureInputGuard::new(),
+            clipboard_router: crate::clipboard_router::ClipboardRouter {
+                active_profile: "default".to_owned(),
+                policy: None, // resolved on ConfigReloaded; None == prompt-first
+            },
         }
     }
 
@@ -753,6 +761,15 @@ impl ApplicationHandler<UserEvent> for App {
                         unsafe { menu::rebuild_switch_profile_submenu(mtm, active); }
                     }
                 }
+                // Plan 05-12 (POLISH-05 gap-closure): re-resolve the active
+                // profile's clipboard_write policy. None == prompt-first.
+                if let Some(cfg) = self.current_config.as_ref() {
+                    let policy = cfg
+                        .profile
+                        .get(&self.clipboard_router.active_profile)
+                        .and_then(|p| p.clipboard_write);
+                    self.clipboard_router.policy = policy;
+                }
             }
             UserEvent::ConfigError(msg) => {
                 tracing::warn!(error = %msg, "config error");
@@ -790,6 +807,28 @@ impl ApplicationHandler<UserEvent> for App {
             }
             UserEvent::ToastInfo(text) => {
                 self.toasts.show(ToastBanner::info(text));
+            }
+            // Plan 05-12 (POLISH-05 gap-closure): OSC 52 Store from any pane's
+            // ForwardingListener -> I/O drain task -> here. Route through the
+            // ClipboardRouter policy; WritePasteboard hits NSPasteboard,
+            // ShowPrompt raises a toast, DenyRead is a no-op log (D-70).
+            UserEvent::ClipboardStore { kind_is_selection, data } => {
+                let fg_proc = "shell"; // v1 default; pane label plumbing is a follow-up.
+                let event = crate::clipboard_router::make_store_event(kind_is_selection, data);
+                match self.clipboard_router.handle(event, fg_proc) {
+                    crate::clipboard_router::ClipboardAction::WritePasteboard(s) => {
+                        let bytes = s.len();
+                        self.write_pasteboard(&s);
+                        tracing::info!(bytes, "OSC 52 -> NSPasteboard (via router)");
+                    }
+                    crate::clipboard_router::ClipboardAction::ShowPrompt(toast) => {
+                        self.toasts.show(toast);
+                        self.request_redraw_all();
+                    }
+                    crate::clipboard_router::ClipboardAction::DenyRead => {
+                        tracing::info!("clipboard read denied (D-70)");
+                    }
+                }
             }
         }
     }

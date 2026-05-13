@@ -23,6 +23,21 @@ pub enum ClipboardAction {
     DenyRead,
 }
 
+/// Plan 05-12: keep `alacritty_terminal::term::ClipboardType` out of `app.rs`
+/// by translating the App-side `bool` discriminator into the real enum here.
+#[must_use]
+pub fn make_store_event(kind_is_selection: bool, data: String) -> ClipboardEvent {
+    use vector_term::ClipboardType;
+    ClipboardEvent::Store(
+        if kind_is_selection {
+            ClipboardType::Selection
+        } else {
+            ClipboardType::Clipboard
+        },
+        data,
+    )
+}
+
 impl ClipboardRouter {
     #[must_use]
     pub fn handle(&self, event: ClipboardEvent, foreground_process: &str) -> ClipboardAction {
