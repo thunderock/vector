@@ -63,4 +63,8 @@ pub enum UserEvent {
     ReloadConfig,                     // M4 — Cmd-Shift-R + View → Reload Config
     HyperlinkClicked { url: String }, // B1
     ToastInfo(String),                // M2 helper for one-shot info toasts
+    /// Plan 05-12 (POLISH-05 gap-closure): OSC 52 Store routed from the
+    /// I/O thread's `clipboard_rx` drain task to App.clipboard_router.
+    /// `kind_is_selection` keeps alacritty_terminal::ClipboardType out of this enum.
+    ClipboardStore { kind_is_selection: bool, data: String },
 }

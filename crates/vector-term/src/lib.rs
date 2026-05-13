@@ -8,7 +8,9 @@ mod parser;
 mod search;
 mod term;
 
-pub use alacritty_terminal::term::{LineDamageBounds, TermDamage, TermDamageIterator};
+pub use alacritty_terminal::term::{
+    ClipboardType, LineDamageBounds, TermDamage, TermDamageIterator,
+};
 pub use hyperlink::{group_row, is_allowed_scheme, HyperlinkRun};
 pub use listener::{ClipboardEvent, ForwardingListener};
 pub use osc_sniff::{PromptKind, PromptMark};

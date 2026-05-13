@@ -42,6 +42,12 @@ fn main() -> Result<()> {
     let (resize_tx, resize_rx) = mpsc::channel::<(u16, u16)>(8);
     let (split_req_tx, split_req_rx) =
         mpsc::channel::<(vector_mux::PaneId, vector_mux::SplitDirection)>(8);
+    // Plan 05-12 (POLISH-05 gap-closure, HIGH-3): clipboard channel — flows
+    // ForwardingListener.clipboard_tx (inside every pane's Term, via
+    // Term::with_channels) -> here -> drain task -> UserEvent::ClipboardStore
+    // -> App.clipboard_router. The sender is moved into Mux::new_with_clipboard
+    // so every create_tab_async / split_pane_async wires a live channel.
+    let (clip_tx, mut clip_rx) = mpsc::channel::<vector_term::ClipboardEvent>(32);
 
     let lpm_flag = Arc::new(AtomicBool::new(false));
     let proxy_io = proxy.clone();
@@ -67,7 +73,7 @@ fn main() -> Result<()> {
                 let local_domain = Arc::new(
                     LocalDomain::new().expect("LocalDomain::new (shell resolution failed)"),
                 );
-                let mux = Mux::new(local_domain);
+                let mux = Mux::new_with_clipboard(local_domain, clip_tx);
                 Mux::install(Arc::clone(&mux));
 
                 let window_id = mux.create_window();
@@ -116,6 +122,29 @@ fn main() -> Result<()> {
                         router_r.lock().send_resize(pane_id, rows, cols);
                     }
                 }));
+                // Plan 05-12 (POLISH-05 gap-closure): drain ClipboardEvent from
+                // every Pane's ForwardingListener and forward Store events to the
+                // main thread as UserEvent::ClipboardStore. LoadDenied is logged
+                // (D-70: OSC 52 reads are always denied in v1).
+                let proxy_clip = proxy_io.clone();
+                drop(tokio::spawn(async move {
+                    while let Some(ev) = clip_rx.recv().await {
+                        match ev {
+                            vector_term::ClipboardEvent::Store(kind, data) => {
+                                let kind_is_selection =
+                                    matches!(kind, vector_term::ClipboardType::Selection);
+                                let _ = proxy_clip.send_event(UserEvent::ClipboardStore {
+                                    kind_is_selection,
+                                    data,
+                                });
+                            }
+                            vector_term::ClipboardEvent::LoadDenied => {
+                                tracing::info!("OSC 52 read denied (D-70)");
+                            }
+                        }
+                    }
+                }));
+
                 let router_s = Arc::clone(&router);
                 let mux_s = Arc::clone(&mux);
                 let mut split_req_rx = split_req_rx;

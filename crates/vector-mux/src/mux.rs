@@ -7,6 +7,7 @@ use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
 use parking_lot::{Mutex, RwLock};
+use tokio::sync::mpsc;
 
 use crate::cwd::inherit_cwd;
 use crate::domain::SpawnCommand;
@@ -29,6 +30,11 @@ pub struct Mux {
     /// Phase 4 only; Phase 7 will add CodespaceDomain etc.
     #[allow(dead_code)]
     default_domain: Arc<LocalDomain>,
+    /// Plan 05-12 (POLISH-05 gap-closure, HIGH-3): real clipboard channel passed
+    /// into every `Term::with_channels` call so OSC 52 events reach the App's
+    /// ClipboardRouter. `None` only in legacy tests; the bootstrap path always
+    /// provides a real sender.
+    clipboard_tx: Option<mpsc::Sender<vector_term::ClipboardEvent>>,
 }
 
 impl Mux {
@@ -39,7 +45,37 @@ impl Mux {
             panes: RwLock::new(HashMap::new()),
             ids: IdAllocator::new(),
             default_domain,
+            clipboard_tx: None,
         })
+    }
+
+    /// Plan 05-12: same as `new` but with a real clipboard sender so OSC 52
+    /// `ClipboardStore` events flow to the App's clipboard router.
+    #[must_use]
+    pub fn new_with_clipboard(
+        default_domain: Arc<LocalDomain>,
+        clipboard_tx: mpsc::Sender<vector_term::ClipboardEvent>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            windows: RwLock::new(HashMap::new()),
+            panes: RwLock::new(HashMap::new()),
+            ids: IdAllocator::new(),
+            default_domain,
+            clipboard_tx: Some(clipboard_tx),
+        })
+    }
+
+    /// Build a Term wired to the Mux's clipboard channel when present, falling
+    /// back to dummy channels for legacy test paths. Used by `create_tab_async`
+    /// and `split_pane_async` to make sure OSC 52 always flows end-to-end.
+    fn build_term(&self, cols: u16, rows: u16, scrollback: usize) -> vector_term::Term {
+        match &self.clipboard_tx {
+            Some(clip_tx) => {
+                let (write_tx, _) = mpsc::channel(1);
+                vector_term::Term::with_channels(cols, rows, scrollback, write_tx, clip_tx.clone())
+            }
+            None => vector_term::Term::new(cols, rows, scrollback),
+        }
     }
 
     /// Install the global Mux singleton. Panics on second call.
@@ -374,7 +410,7 @@ impl Mux {
             })
             .await?;
         let pane_id = self.allocate_pane_id();
-        let term = Arc::new(Mutex::new(vector_term::Term::new(cols, rows, 10_000)));
+        let term = Arc::new(Mutex::new(self.build_term(cols, rows, 10_000)));
         let pane = Arc::new(Pane::new(
             pane_id,
             term,
@@ -415,7 +451,7 @@ impl Mux {
             })
             .await?;
         let new_pane_id = self.allocate_pane_id();
-        let term = Arc::new(Mutex::new(vector_term::Term::new(cols, rows, 10_000)));
+        let term = Arc::new(Mutex::new(self.build_term(cols, rows, 10_000)));
         let pane = Arc::new(Pane::new(
             new_pane_id,
             term,
