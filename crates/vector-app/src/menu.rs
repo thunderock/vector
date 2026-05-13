@@ -1,11 +1,32 @@
 //! AppKit menu bar install per UI-SPEC §"Menu bar items (Phase 1)".
 
+use std::sync::OnceLock;
+
 use objc2::rc::Retained;
 use objc2::runtime::Sel;
 use objc2::sel;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::NSString;
+
+use vector_config::{ConfigFile, Kind};
+
+/// Newtype that asserts main-thread-only access to a `Retained<NSMenu>`. AppKit
+/// objects are `!Sync` by default; access is always gated by `MainThreadMarker`
+/// at the call sites below, which makes parking the handle in a `static`
+/// `OnceLock` safe in practice. `dispatch2::MainThreadBound` would be the
+/// upstream equivalent; we keep the dependency surface tight here.
+struct MainThreadOnly<T>(T);
+// SAFETY: every consumer below holds a `MainThreadMarker`, so the contained
+// `Retained<NSMenu>` is only ever read on the AppKit main thread.
+unsafe impl<T> Sync for MainThreadOnly<T> {}
+unsafe impl<T> Send for MainThreadOnly<T> {}
+
+/// MEDIUM-4 (05-REVIEWS.md): direct handle to the Switch Profile NSMenu.
+/// Populated exactly once by `add_switch_profile_submenu()` at install time;
+/// consumed by `rebuild_switch_profile_submenu()`. No NSApplication.mainMenu
+/// walk — the original index-0 + title-string approach was fragile.
+static SWITCH_PROFILE_SUBMENU: OnceLock<MainThreadOnly<Retained<NSMenu>>> = OnceLock::new();
 
 /// Install the standard AppKit menu bar (UI-SPEC).
 ///
@@ -258,18 +279,66 @@ fn add_key_only_with_modifiers(
     menu.addItem(&mi);
 }
 
-/// Plan 05-10 UI-SPEC §5.8 — Switch Profile submenu placeholder. Populated dynamically
-/// from `ConfigFile.profile` keys once the watcher pumps `UserEvent::ConfigReloaded`.
+/// Plan 05-10 UI-SPEC §5.8 / Plan 05-11 (POLISH-07) — install the Switch Profile
+/// submenu and capture its NSMenu in `SWITCH_PROFILE_SUBMENU` for later rebuilds
+/// (MEDIUM-4). The submenu is left empty at install time; the first
+/// `UserEvent::ConfigReloaded` fills it via `rebuild_switch_profile_submenu`.
 fn add_switch_profile_submenu(mtm: MainThreadMarker, menu: &NSMenu) {
     let item = NSMenuItem::new(mtm);
     item.setTitle(&NSString::from_str("Switch Profile"));
     let sub = NSMenu::new(mtm);
     sub.setTitle(&NSString::from_str("Switch Profile"));
-    // Default placeholder row — replaced at runtime by App when current_config
-    // becomes available. Codespace/DevTunnel rows ship with "(phase 6+)" suffix.
-    add_disabled(mtm, &sub, "(no profiles configured)", "");
     item.setSubmenu(Some(&sub));
     menu.addItem(&item);
+    // MEDIUM-4: store the submenu reference so rebuild doesn't walk mainMenu.
+    // `set` is idempotent — first call wins; reinstalling the menu (rare) is a no-op.
+    let _ = SWITCH_PROFILE_SUBMENU.set(MainThreadOnly(sub));
+}
+
+/// Plan 05-11 (POLISH-07, UI-SPEC §6.4) — produce the `(label, enabled)` rows
+/// that the Switch Profile submenu should display for `cfg`. Local profiles are
+/// enabled; Codespace/DevTunnel profiles ship with `(phase 6+)` suffix and are
+/// disabled. Rows are in `BTreeMap` (alphabetical) order.
+#[must_use]
+pub fn submenu_rows_for(cfg: &ConfigFile) -> Vec<(String, bool)> {
+    cfg.profile
+        .iter()
+        .map(|(name, block)| match block.kind {
+            Some(Kind::Codespace) | Some(Kind::DevTunnel) => {
+                (format!("{name} (phase 6+)"), false)
+            }
+            // Default (None) and explicit Local are first-class.
+            _ => (name.clone(), true),
+        })
+        .collect()
+}
+
+/// Plan 05-11 (POLISH-07, MEDIUM-4) — drain and repopulate the Switch Profile
+/// submenu from `cfg`. Looks up the submenu via the `SWITCH_PROFILE_SUBMENU`
+/// OnceLock — no NSApplication.mainMenu walk. Caller must be on the main thread.
+///
+/// # Safety
+/// AppKit NSMenu mutation must occur on the macOS main thread; callers pass
+/// `MainThreadMarker` to prove that invariant.
+pub unsafe fn rebuild_switch_profile_submenu(mtm: MainThreadMarker, cfg: &ConfigFile) {
+    let Some(bound) = SWITCH_PROFILE_SUBMENU.get() else {
+        tracing::warn!(
+            "rebuild_switch_profile_submenu called before add_switch_profile_submenu install"
+        );
+        return;
+    };
+    let submenu: &NSMenu = &bound.0;
+    // Drain — repeatedly remove index 0 until empty.
+    while submenu.numberOfItems() > 0 {
+        submenu.removeItemAtIndex(0);
+    }
+    for (label, enabled) in submenu_rows_for(cfg) {
+        if enabled {
+            add_key_only(mtm, submenu, &label, "");
+        } else {
+            add_disabled(mtm, submenu, &label, "");
+        }
+    }
 }
 
 /// Add the "Services" submenu wired to NSApp.setServicesMenu.

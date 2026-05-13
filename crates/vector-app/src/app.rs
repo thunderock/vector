@@ -746,6 +746,13 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::ConfigReloaded(cfg) => {
                 tracing::info!("config reloaded; applying");
                 self.current_config = Some(cfg);
+                // Plan 05-11 (POLISH-07, MEDIUM-4): rebuild the Switch Profile
+                // submenu from the new config via direct OnceLock reference.
+                if let Some(mtm) = objc2::MainThreadMarker::new() {
+                    if let Some(active) = self.current_config.as_ref() {
+                        unsafe { menu::rebuild_switch_profile_submenu(mtm, active); }
+                    }
+                }
             }
             UserEvent::ConfigError(msg) => {
                 tracing::warn!(error = %msg, "config error");
