@@ -112,14 +112,16 @@ WindowEvent::Ime(ime_event) => {
 
 ### Task 3: Manual IME Smoke (Hiragana preedit)
 
-**Status: AWAITING HUMAN VERIFICATION**
+**Status: PASS — user approved 2026-05-13**
 
-The manual smoke (Task 3) requires the user to:
+User response: "approved"
+
+Verification steps executed:
 1. Build and launch the app: `cargo run --release`
 2. Switch macOS input source to Japanese — Hiragana
-3. Type `aiueo` — expect `あいうえお` preedit visible at cursor (underlined)
-4. Press Enter — kana commits to shell as single UTF-8 write
-5. Confirm preedit text did not appear byte-by-byte before commit (Pitfall 9)
+3. Type `aiueo` — `あいうえお` preedit visible at cursor (underlined) — PASS
+4. Press Enter — kana commits to shell as single UTF-8 write — PASS
+5. Preedit text did not appear byte-by-byte before commit (Pitfall 9) — PASS
 
 ## Deviations from Plan
 
@@ -159,7 +161,7 @@ The manual smoke (Task 3) requires the user to:
 |------|------|---------|
 | Task 1 | db04ea8 | feat(05-15): declare_class! NSTextInputClient subclass + ImeState regression tests |
 | Task 2 | 39ba9ca | feat(05-15): App.ime field + WindowEvent::Ime dispatch + set_ime_allowed |
-| Task 3 | — | (checkpoint:human-verify — no code commit) |
+| Task 3 | — | (checkpoint:human-verify — no code commit; user approved 2026-05-13) |
 
 ## Forward Dependencies
 
@@ -187,3 +189,4 @@ None — the App.ime field is fully wired to write_tx; preedit/commit/clear all 
 - `cargo test -p vector-app --test ime_shim` 3 passed ✓
 - `cargo build --workspace --release` clean ✓
 - Commits db04ea8 and 39ba9ca exist ✓
+- Task 3 manual smoke: user approved 2026-05-13 ✓
