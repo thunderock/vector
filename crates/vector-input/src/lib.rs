@@ -9,7 +9,7 @@ mod selection;
 mod selection_string;
 
 pub use clipboard::{osc52_outbound, MAX_CHUNK_BASE64};
-pub use keymap::{encode, encode_key, EncodedKey, MuxCommand};
+pub use keymap::{encode, encode_key, AppShortcut, EncodedKey, MuxCommand};
 pub use mods::ModState;
 pub use paste::wrap_bracketed_paste;
 pub use selection::{SelectionRange, SelectionState};

@@ -12,10 +12,13 @@ use crate::mods::ModState;
 ///
 /// `Pty(bytes)` → App routes to `router.send_write(active_pane, bytes)`.
 /// `Mux(cmd)` → App dispatches to the mux command handler; never reaches PTY.
+/// `App(shortcut)` → Plan 05-13: chrome shortcut (Cmd-N/F/Shift-P/Shift-R);
+/// consumed by Plan 05-14 in vector-app's `encode_key` match.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EncodedKey {
     Pty(Vec<u8>),
     Mux(MuxCommand),
+    App(AppShortcut),
 }
 
 /// App-layer mux command produced by Cmd-* shortcuts (D-59/D-60/D-61/D-62).
@@ -29,6 +32,16 @@ pub enum MuxCommand {
     CycleTabPrev,
     FocusDir(Direction),
     NudgeSplit(Direction),
+}
+
+/// Chrome shortcut produced by Cmd-* keys that target the app shell, not the PTY.
+/// Plan 05-13 — Plan 05-14 wires the App-side handlers (D-69/D-75/D-76/D-82).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppShortcut {
+    SpawnNewWindow,    // Cmd-N       -> UserEvent::SpawnNewWindow      (D-82)
+    ToggleSearch,      // Cmd-F       -> UserEvent::ToggleSearch        (D-76)
+    OpenProfilePicker, // Cmd-Shift-P -> UserEvent::OpenProfilePicker   (D-75)
+    ReloadConfig,      // Cmd-Shift-R -> UserEvent::ReloadConfig        (D-69 menu fallback)
 }
 
 /// Encode a winit key event. Returns None for Released/Dead/Unidentified or unmapped keys.
@@ -60,7 +73,36 @@ pub fn encode(
         return Some(EncodedKey::Mux(cmd));
     }
 
+    // Plan 05-13: chrome shortcuts (Cmd-N/F/Shift-P/Shift-R) — after Mux, before PTY.
+    if let Some(app) = match_app_shortcut(logical_key, mods) {
+        return Some(EncodedKey::App(app));
+    }
+
     encode_pty(logical_key, text, mods).map(EncodedKey::Pty)
+}
+
+/// Recognize the four chrome shortcuts. Returns None if the key isn't a chrome binding.
+/// Precedence: called AFTER `match_mux_command` so Cmd-T/D/W shortcuts still win.
+fn match_app_shortcut(key: &Key, mods: ModState) -> Option<AppShortcut> {
+    if !mods.cmd || mods.ctrl || mods.alt {
+        return None;
+    }
+    let s = match key {
+        Key::Character(s) => s.as_str(),
+        _ => return None,
+    };
+    if mods.shift {
+        return match s {
+            "P" | "p" => Some(AppShortcut::OpenProfilePicker),
+            "R" | "r" => Some(AppShortcut::ReloadConfig),
+            _ => None,
+        };
+    }
+    match s {
+        "n" | "N" => Some(AppShortcut::SpawnNewWindow),
+        "f" | "F" => Some(AppShortcut::ToggleSearch),
+        _ => None,
+    }
 }
 
 /// Recognize the 14 Cmd-* mux shortcuts. Returns None if the key isn't a mux binding.
