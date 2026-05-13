@@ -92,6 +92,10 @@ pub struct App {
     /// OSC 52 Store events forwarded as UserEvent::ClipboardStore. Policy is
     /// re-resolved from the active profile on every UserEvent::ConfigReloaded.
     clipboard_router: crate::clipboard_router::ClipboardRouter,
+    /// Plan 05-15 / POLISH-08 / D-81 — pure-Rust IME state machine backed by
+    /// the NSTextInputClient subclass (appkit_impl::VectorInputView). Pitfall 9:
+    /// preedit text NEVER reaches the PTY; only commit() writes to write_tx.
+    ime: crate::ime::ImeState,
 }
 
 impl App {
@@ -100,6 +104,9 @@ impl App {
         resize_tx: mpsc::Sender<(u16, u16)>,
         lpm_flag: Arc<AtomicBool>,
     ) -> Self {
+        // W7: clone write_tx BEFORE it moves into InputBridge so ImeState can
+        // own its own sender for the insertText: commit path.
+        let ime_write_tx = write_tx.clone();
         Self {
             windows: HashMap::new(),
             term: Arc::new(Mutex::new(Term::new(80, 24, 10_000))),
@@ -118,6 +125,8 @@ impl App {
                 active_profile: "default".to_owned(),
                 policy: None, // resolved on ConfigReloaded; None == prompt-first
             },
+            // Plan 05-15: ImeState owns the cloned sender (W7 fix: clone before move).
+            ime: crate::ime::ImeState::new(ime_write_tx),
         }
     }
 
@@ -528,6 +537,10 @@ impl App {
         {
             self.winit_to_mux_window.insert(id, mux_window_id);
         }
+        // Plan 05-15 / D-81: enable IME delivery on Cmd-T windows too.
+        if let Some(aw) = self.windows.get(&id) {
+            aw.window.set_ime_allowed(true);
+        }
         tracing::info!(window_id = ?id, "Cmd-T: new tab-grouped window created");
     }
 
@@ -667,6 +680,10 @@ impl ApplicationHandler<UserEvent> for App {
             Mux::try_get().and_then(|m| m.window_ids_snapshot().first().copied())
         {
             self.winit_to_mux_window.insert(id, mux_window_id);
+        }
+        // Plan 05-15 / D-81: tell the OS to deliver WindowEvent::Ime to this window.
+        if let Some(aw) = self.windows.get(&id) {
+            aw.window.set_ime_allowed(true);
         }
     }
 
@@ -1027,6 +1044,35 @@ impl ApplicationHandler<UserEvent> for App {
                     .range()
                     .map(|r| (r.anchor, r.cursor));
                 self.render_window(id, sel);
+            }
+            // Plan 05-15 / D-81 / Pitfall 9 — IME events from the OS.
+            // winit 0.30: Ime::Preedit(text, Option<(cursor_start, cursor_end)>)
+            // Pitfall 9: preedit text NEVER writes to PTY; only Commit does.
+            WindowEvent::Ime(ime_event) => {
+                use winit::event::Ime;
+                match ime_event {
+                    Ime::Enabled => {
+                        tracing::debug!("Ime enabled");
+                    }
+                    Ime::Preedit(text, cursor_range) => {
+                        // empty preedit string signals preedit cancel.
+                        let offset = cursor_range.map(|(start, _)| start).unwrap_or(0);
+                        if text.is_empty() {
+                            self.ime.clear();
+                        } else {
+                            self.ime.set_preedit(&text, offset);
+                        }
+                        self.request_redraw(id);
+                    }
+                    Ime::Commit(text) => {
+                        // commit() writes UTF-8 bytes to the PTY channel.
+                        let _ = self.ime.commit(&text);
+                        self.request_redraw(id);
+                    }
+                    Ime::Disabled => {
+                        self.ime.clear();
+                    }
+                }
             }
             _ => {}
         }
