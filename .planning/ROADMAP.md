@@ -164,7 +164,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 06-01-PLAN.md — Wave 0: vector-codespaces scaffold + workspace deps + Wave-0 test stubs + Pitfall-14 arch-lint
   - [ ] 06-02-PLAN.md — Wave 1: OAuth Device Flow driver (oauth2 5.0) + Keychain TokenStore + manual Debug discipline (AUTH-01, AUTH-02)
   - [ ] 06-03-PLAN.md — Wave 1: CodespacesClient REST (list/get/start/poll) + 401 silent-refresh chain (CS-01, CS-02, AUTH-03)
-  - [ ] 06-04-PLAN.md — Wave 1: vector-config writer append_codespace_profile + derive_profile_name with atomic rename (CS-03)
+  - [x] 06-04-PLAN.md — Wave 1: vector-config writer append_codespace_profile + derive_profile_name with atomic rename (CS-03)
   - [ ] 06-05-PLAN.md — Wave 2: UserEvent extensions + AuthDeviceFlowModal NSPanel + Sign in/out menu items + Cmd-Shift-G keymap
   - [ ] 06-06-PLAN.md — Wave 2: CodespacesPickerModal NSPanel + codespaces_actor + Connect/Start/Save flows + relative-time formatter
   - [ ] 06-07-PLAN.md — Wave 3: manual UAT smoke matrix (autonomous=false) — 11 items spanning AUTH-01..03 + CS-01..03 + token-leak audit

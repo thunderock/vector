@@ -58,7 +58,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [ ] **AUTH-03**: Token refresh is handled silently; expired tokens trigger a re-auth prompt rather than silent failure _(Wave-0 scaffolded — auth_refresh.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
 - [ ] **CS-01**: After sign-in, a Codespaces picker lists every codespace for the user with state (Available / Shutdown / Starting), repository name, branch, and last-used time _(Wave-0 scaffolded — CodespacesClient stub + Codespace model + list_codespaces.json fixture + codespaces_rest.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
 - [ ] **CS-02**: Selecting a Shutdown codespace from the picker triggers `POST /start`, polls until Available (with 409 swallowed), then connects _(Wave-0 scaffolded — start/poll test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
-- [ ] **CS-03**: A picked codespace can be saved as a one-click profile that survives app restart _(Wave-0 scaffolded — vector-config::writer module + profile_writer.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-04)_
+- [x] **CS-03**: A picked codespace can be saved as a one-click profile that survives app restart _(Wave-0 scaffolded — vector-config::writer module + profile_writer.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-04)_
 
 ### Codespaces SSH Connect
 
