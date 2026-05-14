@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
 use vector_input::{
-    encode_key, wrap_bracketed_paste, EncodedKey, ModState, MuxCommand, SelectionState,
+    encode_key, wrap_bracketed_paste, AppShortcut, EncodedKey, ModState, MuxCommand, SelectionState,
 };
 use vector_mux::{compute_layout, Mux, PaneId, Rect, SplitDirection, WindowId as MuxWindowId};
 use vector_render::Compositor;
@@ -139,16 +139,6 @@ impl App {
         }
     }
 
-    /// Plan 05-14 test accessor — exposes search_bar.open for integration tests.
-    pub fn search_bar_open(&self) -> bool {
-        self.search_bar.open
-    }
-
-    /// Plan 05-14 test accessor — exposes profile_picker.entries.is_empty() for integration tests.
-    pub fn profile_picker_entries_empty(&self) -> bool {
-        self.profile_picker.entries.is_empty()
-    }
-
     /// Plan 05-10 Task 3 — Cmd-C native pasteboard write (CONTEXT Cmd-C
     /// Claude's Discretion: NSPasteboard, NEVER OSC 52).
     #[allow(clippy::unused_self)]
@@ -174,6 +164,155 @@ impl App {
     /// `Mux::resize_window` + `router.send_resize`.
     pub fn set_router(&mut self, router: Arc<Mutex<PtyActorRouter>>) {
         self.router = Some(router);
+    }
+
+    /// Plan 05-14: set current_config for testing purposes.
+    pub fn set_current_config(&mut self, cfg: std::sync::Arc<vector_config::ConfigFile>) {
+        self.current_config = Some(cfg);
+    }
+
+    /// Plan 05-14 test accessor — exposes search_bar.open for integration tests.
+    pub fn search_bar_open(&self) -> bool {
+        self.search_bar.open
+    }
+
+    /// Plan 05-14 test accessor — exposes profile_picker.entries.is_empty() for integration tests.
+    pub fn profile_picker_entries_empty(&self) -> bool {
+        self.profile_picker.entries.is_empty()
+    }
+
+    /// Plan 05-14 test accessor — exposes profile_picker.open for integration tests.
+    pub fn profile_picker_open(&self) -> bool {
+        self.profile_picker.open
+    }
+
+    /// Plan 05-14 test accessor — exposes profile_picker.entries.len() for integration tests.
+    pub fn profile_picker_entry_count(&self) -> usize {
+        self.profile_picker.entries.len()
+    }
+
+    /// Plan 05-14 — toggle search bar open/close. D-76: Cmd-F toggles.
+    pub fn do_toggle_search(&mut self) {
+        if self.search_bar.open {
+            let restored = self.search_bar.close();
+            if let Some(range) = restored {
+                self.input_bridge.selection = SelectionState::Selected(range);
+            }
+        } else {
+            let prior = self.input_bridge.selection.range();
+            self.search_bar.open_with(prior);
+        }
+        self.request_redraw_all();
+    }
+
+    /// Plan 05-14 — build picker entries from current_config and open the picker.
+    pub fn do_open_profile_picker(&mut self) {
+        if let Some(cfg) = self.current_config.clone() {
+            let entries: Vec<crate::profile_picker::PickerEntry> = cfg
+                .profile
+                .iter()
+                .map(|(name, block)| crate::profile_picker::PickerEntry {
+                    name: name.clone(),
+                    kind: block.kind.unwrap_or(vector_config::Kind::Local),
+                })
+                .collect();
+            self.profile_picker = crate::profile_picker::ProfilePicker::new(entries);
+        }
+        self.profile_picker.open();
+        self.request_redraw_all();
+    }
+
+    /// Plan 05-14 — reload config from disk (same path as FSEvents watcher). D-69 fallback.
+    fn do_reload_config(&mut self) {
+        let path = std::env::var_os("HOME")
+            .map(|h| std::path::PathBuf::from(h).join(".config/vector/config.toml"));
+        if let Some(path) = path {
+            match std::fs::read_to_string(&path) {
+                Ok(src) => match vector_config::parse(&src) {
+                    Ok(cfg) => {
+                        self.current_config = Some(std::sync::Arc::new(cfg));
+                        // LOW-3: rebuild_switch_profile_submenu is idempotent (proven by
+                        // switch_profile_menu_idempotent test). Safe to call from both
+                        // UserEvent::ConfigReloaded and AppShortcut::ReloadConfig.
+                        if let Some(mtm) = objc2::MainThreadMarker::new() {
+                            if let Some(c) = self.current_config.as_ref() {
+                                unsafe { menu::rebuild_switch_profile_submenu(mtm, c); }
+                            }
+                        }
+                        self.toasts.show(ToastBanner::info("config reloaded"));
+                        tracing::info!("D-69 Cmd-Shift-R: config reloaded from disk");
+                    }
+                    Err(e) => {
+                        self.toasts.show(ToastBanner::info(format!("config error: {e}")));
+                        tracing::warn!(error = %e, "D-69 Cmd-Shift-R: config parse error");
+                    }
+                },
+                Err(e) => {
+                    self.toasts.show(ToastBanner::info(format!("config error: {e}")));
+                    tracing::warn!(error = %e, "D-69 Cmd-Shift-R: config read error");
+                }
+            }
+            self.request_redraw_all();
+        }
+    }
+
+    /// Plan 05-14 — dispatch an AppShortcut to the corresponding handler.
+    /// Called from both the `EncodedKey::App` keyboard path and the `UserEvent::*` menu path.
+    pub(crate) fn handle_app_shortcut(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        shortcut: AppShortcut,
+    ) {
+        match shortcut {
+            AppShortcut::ToggleSearch => self.do_toggle_search(),
+            AppShortcut::OpenProfilePicker => self.do_open_profile_picker(),
+            AppShortcut::SpawnNewWindow => {
+                // D-82: clean slate — fresh ungrouped NSWindow. v1 simplification: the new
+                // window opens without an auto-spawned PTY; the user presses Cmd-T for a shell.
+                // PTY spawn for the new window is deferred (see 05-14 SUMMARY deferred section).
+                let attrs = WindowAttributes::default()
+                    .with_title("Vector")
+                    .with_inner_size(winit::dpi::LogicalSize::new(1024.0_f64, 640.0_f64));
+                let factory = crate::mux_commands::WinitWindowFactory { event_loop };
+                match factory.create_ungrouped(attrs) {
+                    Ok(window) => {
+                        // MEDIUM-3 (05-REVIEWS.md): this plan OWNS the set_ime_allowed call
+                        // site for the SpawnNewWindow branch. Plan 05-15 cannot edit code that
+                        // does not yet exist; 05-15 only handles resumed() + handle_new_tab().
+                        window.set_ime_allowed(true);
+                        // SAFETY: window_event runs on main thread per winit contract.
+                        let overlay_inst = unsafe { Some(crate::overlay::install(&window)) };
+                        let render_host = match RenderHost::new(&window) {
+                            Ok(h) => Some(h),
+                            Err(err) => {
+                                tracing::error!(?err, "Cmd-N: RenderHost init failed");
+                                None
+                            }
+                        };
+                        let id = window.id();
+                        self.windows.insert(
+                            id,
+                            AppWindow {
+                                window,
+                                render_host,
+                                overlay: overlay_inst,
+                                overlay_dropped: false,
+                                first_paint_ready: false,
+                                last_resize_at: None,
+                                pending_resize: None,
+                                compositors: std::collections::HashMap::new(),
+                                active_pane_id: None,
+                            },
+                        );
+                        tracing::info!(window_id = ?id, "D-82 Cmd-N: ungrouped NSWindow spawned");
+                    }
+                    Err(err) => {
+                        tracing::error!(?err, "Cmd-N: create_ungrouped failed");
+                    }
+                }
+            }
+            AppShortcut::ReloadConfig => self.do_reload_config(),
+        }
     }
 
     fn primary_window(&self) -> Option<&AppWindow> {
@@ -706,7 +845,7 @@ impl ApplicationHandler<UserEvent> for App {
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::PaneOutput { pane_id, bytes } => {
                 if bytes.is_empty() {
@@ -813,19 +952,20 @@ impl ApplicationHandler<UserEvent> for App {
                     .show(ToastBanner::info(format!("config error: {msg}")));
             }
             UserEvent::ReloadConfig => {
-                // M4 — D-69 Cmd-Shift-R fallback. The watcher thread will pick up
-                // a real file change; this arm just records intent so the menu
-                // item is wired end-to-end.
-                tracing::info!("ReloadConfig requested (M4 / D-69 fallback)");
+                // M4 — D-69 Cmd-Shift-R fallback: delegate to the same handler path as
+                // AppShortcut::ReloadConfig (which reads from disk and rebuilds the submenu).
+                self.handle_app_shortcut(event_loop, AppShortcut::ReloadConfig);
             }
             UserEvent::OpenProfilePicker => {
-                tracing::info!("OpenProfilePicker (Plan 05-10 picker — render pass deferred to future plan)");
+                // Cmd-Shift-P via menu — delegate to the same handler path.
+                self.handle_app_shortcut(event_loop, AppShortcut::OpenProfilePicker);
             }
             UserEvent::ProfileSelected(name) => {
                 tracing::info!(profile = %name, "ProfileSelected (Local kind only in v1; Codespace/DevTunnel deferred to Phase 6+)");
             }
             UserEvent::ToggleSearch => {
-                tracing::info!("ToggleSearch (Plan 05-10 — search bar overlay pass deferred)");
+                // Cmd-F via menu — delegate to the same handler path.
+                self.handle_app_shortcut(event_loop, AppShortcut::ToggleSearch);
             }
             UserEvent::ToggleSecureKeyboardEntry => {
                 // POLISH-08 / D-80 — toggle Carbon SKE; menu state mirrors via
@@ -835,8 +975,10 @@ impl ApplicationHandler<UserEvent> for App {
                 tracing::info!(secure_keyboard_entry = now_on, "ToggleSecureKeyboardEntry");
             }
             UserEvent::SpawnNewWindow => {
-                // D-82 Cmd-N — spawn a fresh ungrouped NSWindow with default profile.
-                tracing::info!("SpawnNewWindow (D-82 Cmd-N — full window factory wired in Phase-4 mux_commands)");
+                // D-82 Cmd-N via menu — delegate to the same handler path.
+                // MEDIUM-3: set_ime_allowed(true) is called inside handle_app_shortcut's
+                // SpawnNewWindow arm so the UserEvent path also gets IME on the new window.
+                self.handle_app_shortcut(event_loop, AppShortcut::SpawnNewWindow);
             }
             UserEvent::HyperlinkClicked { url } => {
                 hyperlink_dispatch::open_with_nsworkspace(&url);
@@ -922,10 +1064,10 @@ impl ApplicationHandler<UserEvent> for App {
                         self.handle_mux_command(event_loop, cmd);
                         self.request_redraw_all();
                     }
-                    // Plan 05-11 Rule-3 deviation: Plan 05-13 added EncodedKey::App;
-                    // Plan 05-14 wires the App-shortcut dispatch. Until then, ignore
-                    // so the build stays green.
-                    Some(EncodedKey::App(_)) => {}
+                    // Plan 05-14: App-shortcut dispatch — replaces the Plan 05-11 no-op.
+                    Some(EncodedKey::App(shortcut)) => {
+                        self.handle_app_shortcut(event_loop, shortcut);
+                    }
                     None => {}
                 }
             }
