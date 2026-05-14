@@ -10,6 +10,7 @@ description = "TOML config + hot reload — Phase 5 (serde + toml + notify)."
 anyhow.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
+regex.workspace = true
 serde.workspace = true
 toml.workspace = true
 toml_edit.workspace = true
