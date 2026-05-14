@@ -40,6 +40,11 @@ vector-term = { path = "../vector-term", version = "2026.5.10" }
 # and zeroize to handle the access token without leaking.
 octocrab.workspace = true
 zeroize.workspace = true
+# Phase 6 / Plan 06-06 — codespaces_actor + picker modal use
+# tokio-util CancellationToken for cooperative poll cancellation
+# and chrono for last_used_at elapsed math.
+tokio-util.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 async-trait = { workspace = true }

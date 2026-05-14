@@ -15,7 +15,7 @@ use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::Key;
+use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::hyperlink_dispatch;
@@ -135,6 +135,11 @@ pub struct App {
     /// device-flow task; cleared on AuthCompleted/AuthFailed. Lets the modal
     /// share the same cancel flag as the tokio task.
     pending_auth_cancellation: Option<crate::auth_actor::AuthCancellation>,
+    /// Plan 06-06 / CS-01..03 — live CodespacesPickerModal NSPanel.
+    codespaces_modal: Option<crate::codespaces_modal::CodespacesPickerModal>,
+    /// Plan 06-06 — Octocrab-backed client built lazily on first picker open
+    /// from the Keychain access token. Reused across fetch / start / poll.
+    codespaces_client: Option<std::sync::Arc<vector_codespaces::CodespacesClient>>,
 }
 
 impl App {
@@ -176,6 +181,8 @@ impl App {
             tokio_handle: None,
             auth_modal: None,
             pending_auth_cancellation: None,
+            codespaces_modal: None,
+            codespaces_client: None,
         }
     }
 
@@ -383,6 +390,161 @@ impl App {
         self.toasts.show(ToastBanner::info(toast_text));
         self.request_redraw_all();
         tracing::info!(reason, "auth_failed");
+    }
+
+    // ---- Phase 6 / CS-01..03 — picker handlers --------------------------
+
+    fn handle_open_codespaces_picker(&mut self) {
+        // Build client lazily from Keychain.
+        if self.codespaces_client.is_none() {
+            let Some(c) = crate::codespaces_actor::build_client_from_keychain() else {
+                tracing::info!("OpenCodespacesPicker: no token — routing to AuthRequired");
+                if let Some(proxy) = &self.proxy {
+                    let _ = proxy.send_event(UserEvent::AuthRequired);
+                }
+                return;
+            };
+            self.codespaces_client = Some(c);
+        }
+        let Some(mtm) = objc2::MainThreadMarker::new() else {
+            tracing::warn!("OpenCodespacesPicker: not on main thread");
+            return;
+        };
+        let Some(proxy) = self.proxy.clone() else {
+            return;
+        };
+        let Some(handle) = self.tokio_handle.clone() else {
+            return;
+        };
+        let Some(client) = self.codespaces_client.clone() else {
+            return;
+        };
+        // Dismiss prior modal (if any) before showing a fresh one.
+        if let Some(prev) = self.codespaces_modal.take() {
+            prev.dismiss();
+        }
+        let modal = crate::codespaces_modal::CodespacesPickerModal::show(mtm);
+        self.codespaces_modal = Some(modal);
+        crate::codespaces_actor::spawn_fetch_codespaces(&handle, proxy, client);
+    }
+
+    fn handle_codespaces_loaded(
+        &mut self,
+        list: &std::sync::Arc<Vec<vector_codespaces::Codespace>>,
+    ) {
+        let Some(mtm) = objc2::MainThreadMarker::new() else {
+            return;
+        };
+        let Some(modal) = self.codespaces_modal.as_mut() else {
+            return;
+        };
+        // Spawn poll tasks for any row in the Starting family so live state
+        // ticks render in the picker.
+        let cancel_token = modal.poll_cancel.clone();
+        modal.handle_loaded(mtm, list.clone());
+        if let (Some(handle), Some(client), Some(proxy)) = (
+            self.tokio_handle.clone(),
+            self.codespaces_client.clone(),
+            self.proxy.clone(),
+        ) {
+            for cs in list.iter() {
+                if crate::relative_time::state_label(cs.state) == "Starting" {
+                    crate::codespaces_actor::spawn_poll_row(
+                        &handle,
+                        proxy.clone(),
+                        client.clone(),
+                        &cs.name,
+                        cancel_token.clone(),
+                    );
+                }
+            }
+        }
+    }
+
+    /// Connect to currently selected codespace (Phase-6 stub: emits placeholder
+    /// toast per UI-SPEC §6.1; Phase 7 replaces with real SSH transport).
+    fn codespaces_connect_selected(&mut self) {
+        let Some(modal) = self.codespaces_modal.as_ref() else {
+            return;
+        };
+        if modal.selected().is_some() {
+            self.toasts.show(ToastBanner::info(
+                "codespace ssh transport not yet wired — phase 7",
+            ));
+            self.request_redraw_all();
+        }
+    }
+
+    /// Start the currently selected Shutdown-family codespace (CS-02).
+    fn codespaces_start_selected(&mut self) {
+        let (Some(modal), Some(handle), Some(client), Some(proxy)) = (
+            self.codespaces_modal.as_ref(),
+            self.tokio_handle.clone(),
+            self.codespaces_client.clone(),
+            self.proxy.clone(),
+        ) else {
+            return;
+        };
+        let Some(cs) = modal.selected() else {
+            return;
+        };
+        let cancel = modal.poll_cancel.clone();
+        crate::codespaces_actor::spawn_start_then_poll(
+            &handle,
+            proxy,
+            client,
+            cs.name.clone(),
+            cancel,
+        );
+    }
+
+    /// Save the currently selected codespace as a profile (CS-03).
+    fn codespaces_save_selected(&mut self) {
+        let Some(modal) = self.codespaces_modal.as_ref() else {
+            return;
+        };
+        let Some(cs) = modal.selected() else {
+            return;
+        };
+        let existing: Vec<String> = self
+            .current_config
+            .as_ref()
+            .map(|c| c.profile.keys().cloned().collect())
+            .unwrap_or_default();
+        let existing_refs: Vec<&str> = existing.iter().map(String::as_str).collect();
+        let suggested =
+            vector_config::derive_profile_name(&cs.repository.full_name, &existing_refs);
+        let path = crate::codespaces_modal::config_path();
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match vector_config::append_codespace_profile(&path, &suggested, &cs.name, "#7a3aaf") {
+            Ok(final_name) => {
+                self.toasts
+                    .show(ToastBanner::info(format!("profile saved as \"{final_name}\"")));
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "append_codespace_profile failed");
+                self.toasts.show(ToastBanner::info(format!(
+                    "could not save profile — {e}"
+                )));
+            }
+        }
+        self.request_redraw_all();
+    }
+
+    /// Dismiss the codespaces picker if open. Used by Esc and lifecycle paths.
+    fn codespaces_picker_dismiss(&mut self) {
+        if let Some(modal) = self.codespaces_modal.take() {
+            modal.dismiss();
+        }
+    }
+
+    /// Returns true if the codespaces picker is the AppKit key window.
+    fn codespaces_picker_is_key(&self) -> bool {
+        self.codespaces_modal
+            .as_ref()
+            .is_some_and(crate::codespaces_modal::CodespacesPickerModal::is_key_window)
     }
 
     /// 1 Hz tick into the auth modal countdown. Called from the existing
@@ -1477,14 +1639,30 @@ impl ApplicationHandler<UserEvent> for App {
                 self.toasts.show(ToastBanner::info("signed out"));
                 tracing::info!("sign_out_complete");
             }
-            // Plan 06-06 will wire the picker. Phase-6 stubs:
+            // Plan 06-06 / CS-01..03 — Codespaces picker handlers.
             UserEvent::OpenCodespacesPicker => {
-                tracing::info!("OpenCodespacesPicker (handler arrives in Plan 06-06)");
+                self.handle_open_codespaces_picker();
             }
-            UserEvent::CodespacesLoaded(_)
-            | UserEvent::CodespacesLoadFailed(_)
-            | UserEvent::CodespaceStateChanged { .. } => {
-                tracing::debug!("codespaces event (handler arrives in Plan 06-06)");
+            UserEvent::CodespacesLoaded(list) => {
+                self.handle_codespaces_loaded(&list);
+            }
+            UserEvent::CodespacesLoadFailed(msg) => {
+                tracing::warn!(error = %msg, "codespaces_load_failed");
+                if let Some(modal) = self.codespaces_modal.as_mut() {
+                    if let Some(mtm) = objc2::MainThreadMarker::new() {
+                        modal.handle_load_failed(
+                            mtm,
+                            "could not fetch codespaces — check your connection".to_string(),
+                        );
+                    }
+                }
+            }
+            UserEvent::CodespaceStateChanged { name, state } => {
+                if let Some(modal) = self.codespaces_modal.as_mut() {
+                    if let Some(mtm) = objc2::MainThreadMarker::new() {
+                        modal.handle_state_change(mtm, &name, state);
+                    }
+                }
             }
         }
     }
@@ -1502,6 +1680,65 @@ impl ApplicationHandler<UserEvent> for App {
                 self.mods = ModState::from_winit(modifiers.state());
             }
             WindowEvent::KeyboardInput { event, .. } => {
+                // Plan 06-06 / CS-01..03 — picker keyboard routing.
+                // When the codespaces picker is key, intercept Enter / Cmd-S /
+                // Esc / arrows before the standard mux dispatch. The picker is
+                // a separate NSPanel, so events reaching this winit window mean
+                // the picker is NOT key; but we route here defensively so that
+                // global hotkeys (Cmd-Shift-G, etc.) cannot collide with picker
+                // navigation either.
+                if event.state == ElementState::Pressed && self.codespaces_picker_is_key() {
+                    if let Key::Character(s) = &event.logical_key {
+                        match s.as_str() {
+                            "s" | "S" if self.mods.cmd => {
+                                self.codespaces_save_selected();
+                                return;
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let Key::Named(named) = &event.logical_key {
+                        match named {
+                            NamedKey::Enter => {
+                                // Available/Starting → Connect stub; Shutdown → Start.
+                                if let Some(modal) = self.codespaces_modal.as_ref() {
+                                    if let Some(cs) = modal.selected() {
+                                        let label = crate::relative_time::state_label(cs.state);
+                                        if label == "Shutdown" {
+                                            self.codespaces_start_selected();
+                                        } else {
+                                            self.codespaces_connect_selected();
+                                        }
+                                    }
+                                }
+                                return;
+                            }
+                            NamedKey::Escape => {
+                                self.codespaces_picker_dismiss();
+                                return;
+                            }
+                            NamedKey::ArrowDown => {
+                                if let (Some(modal), Some(mtm)) = (
+                                    self.codespaces_modal.as_mut(),
+                                    objc2::MainThreadMarker::new(),
+                                ) {
+                                    modal.select_next(mtm);
+                                }
+                                return;
+                            }
+                            NamedKey::ArrowUp => {
+                                if let (Some(modal), Some(mtm)) = (
+                                    self.codespaces_modal.as_mut(),
+                                    objc2::MainThreadMarker::new(),
+                                ) {
+                                    modal.select_prev(mtm);
+                                }
+                                return;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 // Cmd-V: read NSPasteboard + wrap in bracketed paste markers (D-53).
                 if event.state == ElementState::Pressed && self.mods.cmd {
                     if let Key::Character(s) = &event.logical_key {

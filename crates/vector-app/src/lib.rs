@@ -16,6 +16,8 @@ pub mod auth_actor;
 pub mod auth_modal;
 pub mod chrome;
 pub mod clipboard_router;
+pub mod codespaces_actor;
+pub mod codespaces_modal;
 pub mod frame_tick;
 pub mod hyperlink_dispatch;
 pub mod ime;
