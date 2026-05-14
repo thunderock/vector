@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dev-dependencies]
 toml = { workspace = true }
+regex = { workspace = true }
 
 [lints]
 workspace = true

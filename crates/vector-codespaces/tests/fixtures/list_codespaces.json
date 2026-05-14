@@ -1,0 +1,13 @@
+{
+  "total_count": 1,
+  "codespaces": [
+    {
+      "name": "octocat-hello-world-abc123",
+      "state": "Available",
+      "repository": { "full_name": "octocat/hello-world" },
+      "git_status": { "ref": "main" },
+      "last_used_at": "2026-05-13T10:00:00Z",
+      "display_name": "hello-world"
+    }
+  ]
+}
