@@ -26,6 +26,7 @@ pub mod mux_commands;
 pub mod overlay;
 pub mod profile_picker;
 pub mod pty_actor;
+pub mod relative_time;
 pub mod render_host;
 pub mod search_bar;
 pub mod ske;
