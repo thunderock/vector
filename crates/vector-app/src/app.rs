@@ -32,7 +32,7 @@ use crate::{menu, overlay, UserEvent};
 /// Captured during the per-pane compositor loop and consumed by the chrome pass for
 /// search-bar positioning (bottom-Y) and content width.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct PaneRectPx {
+pub struct PaneRectPx {
     pub x_px: f32,
     pub y_px: f32,
     pub w_px: f32,
@@ -189,6 +189,31 @@ impl App {
     /// Plan 05-14: set current_config for testing purposes.
     pub fn set_current_config(&mut self, cfg: std::sync::Arc<vector_config::ConfigFile>) {
         self.current_config = Some(cfg);
+    }
+
+    /// Plan 05-16 test accessor — set active_pane_rect directly.
+    pub fn set_active_pane_rect_for_test(&mut self, rect: Option<PaneRectPx>) {
+        self.active_pane_rect = rect;
+    }
+
+    /// Plan 05-16 test accessor — read active_pane_rect.
+    pub fn active_pane_rect_pub(&self) -> Option<PaneRectPx> {
+        self.active_pane_rect
+    }
+
+    /// Plan 05-16 test accessor — check if tint would draw given current config.
+    pub fn active_profile_tint_rgba_pub(&self) -> Option<[f32; 4]> {
+        self.active_profile_tint_rgba()
+    }
+
+    /// Plan 05-16 test accessor — borrow current toast banner.
+    pub fn toasts_current_pub(&self) -> Option<&crate::toast::ToastBanner> {
+        self.toasts.current()
+    }
+
+    /// Plan 05-16 test accessor — show a toast banner (for tests that need toast state).
+    pub fn show_toast_for_test(&mut self, text: &str) {
+        self.toasts.show(crate::toast::ToastBanner::info(text));
     }
 
     /// Plan 05-14 test accessor — exposes search_bar.open for integration tests.
@@ -440,8 +465,13 @@ impl App {
     /// once, then iterates the window's compositors against the layout from
     /// `Mux::compute_layout`. First pane uses `LoadOp::Clear`; subsequent panes
     /// use `LoadOp::Load` so each compositor paints onto the same view.
+    /// Plan 05-16: after the pane loop, invoke the chrome pass (tint, search bar,
+    /// toast, picker) via `aw.chrome_pipelines` (parallel field to render_host).
     #[allow(clippy::too_many_lines)]
     fn render_window(&mut self, id: WindowId, sel: Option<((u16, u16), (u16, u16))>) {
+        // Plan 05-16: tick the toast stack so Info toasts auto-expire after 5 s.
+        self.toasts.tick(std::time::Instant::now());
+
         let Some(aw) = self.windows.get_mut(&id) else {
             return;
         };
@@ -457,9 +487,7 @@ impl App {
             }
             return;
         }
-        let Some(host) = aw.render_host.as_mut() else {
-            return;
-        };
+
         // Resolve the Mux tab + layout once per frame, off any aw borrow.
         let mux_window_id = self.winit_to_mux_window.get(&id).copied();
         let mux = Mux::try_get();
@@ -487,6 +515,14 @@ impl App {
         let Some((leaves, layout)) = layout_snapshot else {
             return;
         };
+
+        // Plan 05-16 MEDIUM-2: reset the active-pane snapshot before the pane loop
+        // so stale data from a closed pane doesn't persist.
+        self.active_pane_rect = None;
+
+        let Some(aw) = self.windows.get_mut(&id) else {
+            return;
+        };
         // Resolve cell metrics from any existing compositor in the window.
         let Some((cell_w, cell_h)) = aw
             .compositors
@@ -496,88 +532,265 @@ impl App {
         else {
             return;
         };
-        // Acquire the surface frame once. Skip the frame on Outdated/Lost.
-        let frame = match host.acquire_frame() {
-            Ok(Some(f)) => f,
-            Ok(None) => return,
-            Err(err) => {
-                tracing::warn!(?err, "acquire_frame failed");
+
+        // Per-pane render block — `host` borrow is scoped here so chrome pass can
+        // borrow aw.chrome_pipelines independently afterwards.
+        let (frame_width, frame_height, frame_view) = {
+            let Some(host) = aw.render_host.as_mut() else {
                 return;
-            }
-        };
-        let view = &frame.view;
-        let width = frame.width;
-        let height = frame.height;
-        let device = host.device();
-        let queue = host.queue();
-        let default_bg = wgpu::Color {
-            r: 0.06,
-            g: 0.06,
-            b: 0.06,
-            a: 1.0,
-        };
-        let active_pane_id = aw.active_pane_id;
-        let mut first = true;
-        for pane_id in leaves {
-            let Some(rect) = layout.get(&pane_id) else {
-                continue;
             };
-            let Some(comp) = aw.compositors.get_mut(&pane_id) else {
-                continue;
+            // Acquire the surface frame once. Skip the frame on Outdated/Lost.
+            let frame = match host.acquire_frame() {
+                Ok(Some(f)) => f,
+                Ok(None) => return,
+                Err(err) => {
+                    tracing::warn!(?err, "acquire_frame failed");
+                    return;
+                }
             };
-            #[allow(clippy::cast_precision_loss)]
-            let offset_px = [
-                f32::from(rect.x) * cell_w as f32,
-                f32::from(rect.y) * cell_h as f32,
-            ];
-            #[allow(clippy::cast_precision_loss)]
-            let size_px = [
-                f32::from(rect.w) * cell_w as f32,
-                f32::from(rect.h) * cell_h as f32,
-            ];
-            comp.set_viewport(queue, offset_px, size_px);
-            let is_active = active_pane_id == Some(pane_id);
-            comp.set_border_color(
-                queue,
+            let width = frame.width;
+            let height = frame.height;
+            let device = host.device();
+            let queue = host.queue();
+            let view = &frame.view;
+            let default_bg = wgpu::Color {
+                r: 0.06,
+                g: 0.06,
+                b: 0.06,
+                a: 1.0,
+            };
+            let active_pane_id = aw.active_pane_id;
+            let mut first = true;
+            for pane_id in &leaves {
+                let pane_id = *pane_id;
+                let Some(rect) = layout.get(&pane_id) else {
+                    continue;
+                };
+                let Some(comp) = aw.compositors.get_mut(&pane_id) else {
+                    continue;
+                };
+                #[allow(clippy::cast_precision_loss)]
+                let offset_px = [
+                    f32::from(rect.x) * cell_w as f32,
+                    f32::from(rect.y) * cell_h as f32,
+                ];
+                #[allow(clippy::cast_precision_loss)]
+                let size_px = [
+                    f32::from(rect.w) * cell_w as f32,
+                    f32::from(rect.h) * cell_h as f32,
+                ];
+                comp.set_viewport(queue, offset_px, size_px);
+                let is_active = active_pane_id == Some(pane_id);
+                comp.set_border_color(
+                    queue,
+                    if is_active {
+                        BORDER_COLOR_ACTIVE
+                    } else {
+                        BORDER_COLOR_INACTIVE
+                    },
+                );
+                comp.set_cursor_focused(is_active);
+                // Plan 05-16 MEDIUM-2: snapshot the active pane's pixel rect for the
+                // chrome pass (search-bar positioning + content width).
                 if is_active {
-                    BORDER_COLOR_ACTIVE
+                    self.active_pane_rect = Some(PaneRectPx {
+                        x_px: offset_px[0],
+                        y_px: offset_px[1],
+                        w_px: size_px[0],
+                        h_px: size_px[1],
+                    });
+                }
+                // Source-of-truth term per pane: the Mux Pane's own term mutex.
+                // Selection is forwarded only to the active pane.
+                let load_op = if first {
+                    wgpu::LoadOp::Clear(default_bg)
                 } else {
-                    BORDER_COLOR_INACTIVE
-                },
-            );
-            comp.set_cursor_focused(is_active);
-            // Source-of-truth term per pane: the Mux Pane's own term mutex.
-            // Selection is forwarded only to the active pane.
-            let load_op = if first {
-                wgpu::LoadOp::Clear(default_bg)
-            } else {
-                wgpu::LoadOp::Load
-            };
-            let pane_sel = if is_active { sel } else { None };
-            if let Some(pane) = Mux::try_get().and_then(|m| m.pane(pane_id)) {
-                let mut t = pane.term.lock();
-                if let Err(err) = comp.render_into_view(
-                    device, queue, view, width, height, &mut t, pane_sel, load_op,
-                ) {
-                    tracing::warn!(?pane_id, ?err, "compositor render_into_view failed");
+                    wgpu::LoadOp::Load
+                };
+                let pane_sel = if is_active { sel } else { None };
+                if let Some(pane) = Mux::try_get().and_then(|m| m.pane(pane_id)) {
+                    let mut t = pane.term.lock();
+                    if let Err(err) = comp.render_into_view(
+                        device, queue, view, width, height, &mut t, pane_sel, load_op,
+                    ) {
+                        tracing::warn!(?pane_id, ?err, "compositor render_into_view failed");
+                    }
+                } else {
+                    // No Mux pane for this id (race): fall back to the shared term
+                    // so we still paint something instead of a black hole.
+                    let mut t = self.term.lock();
+                    if let Err(err) = comp.render_into_view(
+                        device, queue, view, width, height, &mut t, pane_sel, load_op,
+                    ) {
+                        tracing::warn!(
+                            ?pane_id,
+                            ?err,
+                            "compositor render_into_view fallback failed"
+                        );
+                    }
                 }
-            } else {
-                // No Mux pane for this id (race): fall back to the shared term
-                // so we still paint something instead of a black hole.
-                let mut t = self.term.lock();
-                if let Err(err) = comp.render_into_view(
-                    device, queue, view, width, height, &mut t, pane_sel, load_op,
-                ) {
-                    tracing::warn!(
-                        ?pane_id,
-                        ?err,
-                        "compositor render_into_view fallback failed"
-                    );
-                }
+                first = false;
             }
-            first = false;
+            frame.present();
+            // Return surface dimensions for the chrome pass encoder (no frame needed).
+            (width, height, ())
+        };
+        let _ = frame_view; // suppress unused warning; texture view lifetime ended with frame.present()
+
+        // Plan 05-16: chrome pass — AFTER per-pane compositor loop, BEFORE next frame.
+        // Snapshot App-level state BEFORE borrowing aw (avoids borrow conflict with
+        // self.windows.get_mut which holds a mutable borrow on self.windows).
+        #[allow(clippy::cast_precision_loss)]
+        let surface_w = frame_width as f32;
+        #[allow(clippy::cast_precision_loss)]
+        let surface_h = frame_height as f32;
+        let active_tint_rgba = self.active_profile_tint_rgba();
+        // Search bar snapshot (open flag + rect + no_match)
+        let search_bar_draw = if self.search_bar.open {
+            self.active_pane_rect.map(|rect| {
+                let content_w = rect.w_px; // LOW-2: pane width, not surface width
+                let bar_top_y = rect.y_px + rect.h_px
+                    - vector_render::SEARCH_BAR_HEIGHT_PX as f32;
+                let no_match = self.search_bar.cache.as_ref()
+                    .map(|c| c.matches().is_empty())
+                    .unwrap_or(false);
+                let layout = vector_render::search_bar_layout(content_w as u32, no_match);
+                (bar_top_y, content_w, layout.bg_rgba)
+            })
+        } else {
+            None
+        };
+        // Toast snapshot
+        let toast_draw = self.toasts.current().map(|toast| {
+            let mode = match toast.mode {
+                crate::toast::ToastMode::Info => vector_render::ToastModeKind::Info,
+                crate::toast::ToastMode::Action { .. } => vector_render::ToastModeKind::Action,
+            };
+            let elapsed_ms = u32::try_from(
+                toast.shown_at.elapsed().as_millis().min(u128::from(u32::MAX)),
+            ).unwrap_or(u32::MAX);
+            let total_visible_ms = match toast.mode {
+                crate::toast::ToastMode::Info => 5000,
+                crate::toast::ToastMode::Action { .. } => u32::MAX,
+            };
+            let alpha = vector_render::alpha_at(elapsed_ms, total_visible_ms, false);
+            (mode, alpha)
+        });
+        // Picker snapshot
+        let picker_draw = if self.profile_picker.open {
+            let longest_label_px = self.profile_picker.entries.iter()
+                .map(|e| (e.name.len() as u32).saturating_mul(9))
+                .max()
+                .unwrap_or(280);
+            let visible_rows = u32::try_from(
+                self.profile_picker.filtered.len().min(8)
+            ).unwrap_or(8);
+            let layout = vector_render::picker_layout(
+                longest_label_px,
+                visible_rows,
+                surface_w as u32,
+                surface_h as u32,
+            );
+            Some(layout)
+        } else {
+            None
+        };
+
+        // Now borrow aw for the chrome pass.
+        // HIGH-2 borrow disjointness: aw.render_host and aw.chrome_pipelines are
+        // separate fields; simultaneous &mut borrows are safe via field projection.
+        let Some(aw) = self.windows.get_mut(&id) else {
+            return;
+        };
+        if let (Some(host), Some(chrome)) = (aw.render_host.as_mut(), aw.chrome_pipelines.as_mut()) {
+            let frame = match host.acquire_frame() {
+                Ok(Some(f)) => f,
+                Ok(None) | Err(_) => return, // skip chrome frame if surface unavailable
+            };
+            let encoder = host.device().create_command_encoder(
+                &wgpu::CommandEncoderDescriptor { label: Some("chrome-passes") },
+            );
+            let mut enc = encoder;
+            {
+                let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("chrome"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &frame.view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                    multiview_mask: None,
+                });
+
+                // 1. Tint stripe (UI-SPEC §5.1, §9.3) — skip if no tint.
+                if active_tint_rgba.is_some() {
+                    chrome.tint.set_color(host.queue(), active_tint_rgba);
+                    chrome.tint.update_quad(host.queue(), frame_width, frame_height);
+                    chrome.tint.draw(&mut rpass);
+                }
+
+                // 2. OSC-8 hover underline — inside grid attributes; no chrome pass.
+
+                // 3. Search bar — drawn iff open AND active_pane_rect known (MEDIUM-2/LOW-2).
+                if let Some((bar_top_y, content_w, bg_rgba)) = search_bar_draw {
+                    chrome.search_bar.update_for_pane(
+                        host.queue(),
+                        bar_top_y,
+                        content_w,
+                        surface_w,
+                        surface_h,
+                        bg_rgba,
+                    );
+                    chrome.search_bar.draw(&mut rpass);
+                }
+
+                // 4. Toast — drawn iff current is Some.
+                if let Some((mode, alpha)) = toast_draw {
+                    let top_y = 0.0_f32; // chrome starts at content top
+                    let content_w = surface_w; // toast spans full window width (UI-SPEC §5.4)
+                    chrome.toast.update(host.queue(), top_y, content_w, mode, alpha, surface_w, surface_h);
+                    chrome.toast.draw(&mut rpass);
+                }
+
+                // 5. Picker — drawn iff open.
+                if let Some(layout) = &picker_draw {
+                    chrome.picker.draw_scrim(host.queue(), surface_w, surface_h, surface_w, surface_h, &mut rpass);
+                    let bg = [0.11_f32, 0.11, 0.12, 0.96];
+                    chrome.picker.draw_modal(host.queue(), layout, bg, surface_w, surface_h, &mut rpass);
+                }
+            } // rpass dropped
+            host.queue().submit(std::iter::once(enc.finish()));
+            frame.present();
         }
-        frame.present();
+    }
+
+    /// Plan 05-16: return the tint RGBA of the currently active profile, or None if
+    /// no tint is configured (UI-SPEC §9.3: tint stripe is a 0-cost skip when None).
+    fn active_profile_tint_rgba(&self) -> Option<[f32; 4]> {
+        let cfg = self.current_config.as_ref()?;
+        let name = &self.clipboard_router.active_profile;
+        let block = cfg.profile.get(name)?;
+        let tint_hex = block.tint.as_ref()?;
+        Self::parse_hex_rgba(tint_hex)
+    }
+
+    /// Plan 05-16: parse a 6-char hex color (#RRGGBB) into [r, g, b, 1.0].
+    fn parse_hex_rgba(hex: &str) -> Option<[f32; 4]> {
+        let s = hex.trim_start_matches('#');
+        if s.len() != 6 {
+            return None;
+        }
+        let r = u8::from_str_radix(&s[0..2], 16).ok()? as f32 / 255.0;
+        let g = u8::from_str_radix(&s[2..4], 16).ok()? as f32 / 255.0;
+        let b = u8::from_str_radix(&s[4..6], 16).ok()? as f32 / 255.0;
+        Some([r, g, b, 1.0])
     }
 
     /// Plan 04-06 (Gap 1 plumbing): lazily create a per-pane Compositor for
