@@ -96,6 +96,12 @@ pub struct App {
     /// the NSTextInputClient subclass (appkit_impl::VectorInputView). Pitfall 9:
     /// preedit text NEVER reaches the PTY; only commit() writes to write_tx.
     ime: crate::ime::ImeState,
+    /// Plan 05-14 gap-closure — SearchBar state (Cmd-F / D-76). Rendered by Plan 05-16's
+    /// SearchBarPass. Defaults to closed.
+    search_bar: crate::search_bar::SearchBar,
+    /// Plan 05-14 gap-closure — ProfilePicker state (Cmd-Shift-P / D-75). Rendered by
+    /// Plan 05-16's PickerPass. Defaults to empty entries (populated on ConfigReloaded).
+    profile_picker: crate::profile_picker::ProfilePicker,
 }
 
 impl App {
@@ -127,7 +133,20 @@ impl App {
             },
             // Plan 05-15: ImeState owns the cloned sender (W7 fix: clone before move).
             ime: crate::ime::ImeState::new(ime_write_tx),
+            // Plan 05-14: both default-closed; ProfilePicker gets entries on ConfigReloaded.
+            search_bar: crate::search_bar::SearchBar::default(),
+            profile_picker: crate::profile_picker::ProfilePicker::new(Vec::new()),
         }
+    }
+
+    /// Plan 05-14 test accessor — exposes search_bar.open for integration tests.
+    pub fn search_bar_open(&self) -> bool {
+        self.search_bar.open
+    }
+
+    /// Plan 05-14 test accessor — exposes profile_picker.entries.is_empty() for integration tests.
+    pub fn profile_picker_entries_empty(&self) -> bool {
+        self.profile_picker.entries.is_empty()
     }
 
     /// Plan 05-10 Task 3 — Cmd-C native pasteboard write (CONTEXT Cmd-C

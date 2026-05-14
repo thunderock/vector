@@ -47,6 +47,21 @@ impl WindowFactory for WinitWindowFactory<'_> {
     }
 }
 
+impl WinitWindowFactory<'_> {
+    /// D-82 Cmd-N: create a fresh winit Window OUTSIDE any tab group.
+    /// MEDIUM-1 (05-REVIEWS.md): implemented via setTabbingMode:NSWindowTabbingModeDisallowed on
+    /// the underlying NSWindow — deterministic, no uuid dep, no counter.
+    pub fn create_ungrouped(
+        &self,
+        attrs: WindowAttributes,
+    ) -> Result<Arc<Window>, winit::error::OsError> {
+        let win = self.event_loop.create_window(attrs)?;
+        // SAFETY: window_event/SpawnNewWindow runs on main thread per winit contract.
+        unsafe { apply_tabbing_mode_disallowed(&win); }
+        Ok(Arc::new(win))
+    }
+}
+
 /// Apply the AppKit tabbing identifier on a freshly-created winit Window. Plan
 /// 04-04 uses both winit's `WindowExtMacOS::set_tabbing_identifier` and an
 /// explicit objc2-app-kit `setTabbingMode(NSWindowTabbingModePreferred)` call
@@ -66,6 +81,36 @@ fn apply_tabbing_identifier(win: &Window, identifier: &str) {
 fn apply_tabbing_identifier(_win: &Window, _identifier: &str) {
     // Non-mac targets have no tab group concept.
 }
+
+/// MEDIUM-1 (05-REVIEWS.md): set NSWindowTabbingModeDisallowed so AppKit will
+/// NEVER group this window into another window's tab bar.
+/// Modeled on the existing `set_tabbing_mode_preferred` helper.
+/// SAFETY: must be called on the main thread; caller verifies via winit event-loop contract.
+#[cfg(target_os = "macos")]
+unsafe fn apply_tabbing_mode_disallowed(win: &Window) {
+    use std::ffi::c_void;
+    use std::ptr::NonNull;
+
+    use objc2_app_kit::{NSView, NSWindowTabbingMode};
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+    let Ok(handle) = win.window_handle() else {
+        return;
+    };
+    let RawWindowHandle::AppKit(h) = handle.as_raw() else {
+        return;
+    };
+    let ns_view_ptr: NonNull<c_void> = h.ns_view;
+    let ns_view = ns_view_ptr.cast::<NSView>().as_ref();
+    let Some(ns_window) = ns_view.window() else {
+        return;
+    };
+    // NSWindowTabbingModeDisallowed = 2 — prevents AppKit from grouping this window.
+    ns_window.setTabbingMode(NSWindowTabbingMode::Disallowed);
+}
+
+#[cfg(not(target_os = "macos"))]
+unsafe fn apply_tabbing_mode_disallowed(_win: &Window) {}
 
 #[cfg(target_os = "macos")]
 fn set_tabbing_mode_preferred(win: &Window) {
