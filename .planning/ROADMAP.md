@@ -165,7 +165,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 06-02-PLAN.md — Wave 1: OAuth Device Flow driver (oauth2 5.0) + Keychain TokenStore + manual Debug discipline (AUTH-01, AUTH-02)
   - [x] 06-03-PLAN.md — Wave 1: CodespacesClient REST (list/get/start/poll) + 401 silent-refresh chain (CS-01, CS-02, AUTH-03)
   - [x] 06-04-PLAN.md — Wave 1: vector-config writer append_codespace_profile + derive_profile_name with atomic rename (CS-03)
-  - [ ] 06-05-PLAN.md — Wave 2: UserEvent extensions + AuthDeviceFlowModal NSPanel + Sign in/out menu items + Cmd-Shift-G keymap
+  - [x] 06-05-PLAN.md — Wave 2: UserEvent extensions + AuthDeviceFlowModal NSPanel + Sign in/out menu items + Cmd-Shift-G keymap
   - [ ] 06-06-PLAN.md — Wave 2: CodespacesPickerModal NSPanel + codespaces_actor + Connect/Start/Save flows + relative-time formatter
   - [ ] 06-07-PLAN.md — Wave 3: manual UAT smoke matrix (autonomous=false) — 11 items spanning AUTH-01..03 + CS-01..03 + token-leak audit
 **Stack additions**: `oauth2 5.0` device flow, `octocrab 0.50`, `reqwest 0.13` (rustls-tls), `keyring-core 1.0` + `apple-native-keyring-store 1.0` (already wired in vector-secrets), `serde_json 1`, `chrono 0.4`, `urlencoding 2`, `tokio-util 0.7 sync`, `http 1`, `wiremock 0.6` (dev), `zeroize 1`.
