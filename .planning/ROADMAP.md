@@ -140,7 +140,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 05-11-PLAN.md — Wave 1 (gap-closure): impl GridAccess for Term + Cmd-C real selection + Switch Profile submenu dynamic rebuild (gap #5 + #6) (POLISH-06, POLISH-07)
   - [x] 05-12-PLAN.md — Wave 1 (gap-closure): App.clipboard_router field + UserEvent::ClipboardStore + ForwardingListener clip_tx drain task (gap #7) (POLISH-05)
   - [x] 05-13-PLAN.md — Wave 1 (gap-closure): vector-input keymap EncodedKey::App(AppShortcut) for Cmd-N/F/Shift-P/Shift-R (gap #2 pure data) (POLISH-06, POLISH-07, POLISH-08)
-  - [ ] 05-14-PLAN.md — Wave 2 (gap-closure): App.search_bar + App.profile_picker fields + EncodedKey::App handler bodies + ungrouped Cmd-N + config reload (gap #2 App-side + gap #3) (POLISH-01, POLISH-06, POLISH-07)
+  - [x] 05-14-PLAN.md — Wave 2 (gap-closure): App.search_bar + App.profile_picker fields + EncodedKey::App handler bodies + ungrouped Cmd-N + config reload (gap #2 App-side + gap #3) (POLISH-01, POLISH-06, POLISH-07)
   - [x] 05-15-PLAN.md — Wave 2 (gap-closure): declare_class! NSTextInputClient subclass + App.ime field + WindowEvent::Ime dispatch + set_ime_allowed (gap #4) (POLISH-08)
   - [ ] 05-16-PLAN.md — Wave 3 (gap-closure): RenderHost owns TintStripe+SearchBar+Toast+Picker pipelines + per-frame chrome orchestration UI-SPEC §11 order + smoke matrix re-run (gap #1) (POLISH-04, POLISH-06, POLISH-07)
 **Stack additions**: `serde + toml 1.1.2`, `notify` (FSEvents on macOS), `keyring 4.0` initialized here for later phases, `vector-config`, `vector-theme`, `vector-secrets`.
@@ -245,7 +245,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 | 2. Headless Terminal Core | 0/5 | Plans created | - |
 | 3. GPU Renderer & First Paint | 0/0 | Not started | - |
 | 4. Mux — Tabs & Splits | 5/5 | Plans complete; 04-05 partial sign-off (6/9 smoke PASS, #3/#4/#8 FAIL routed to Plan 04-06 gap-closure); verifier next | - |
-| 5. Polish (Local Daily-Driver) | 0/9 | Plans created | - |
+| 5. Polish (Local Daily-Driver) | 15/16 | In Progress|  |
 | 6. GitHub Auth + Codespaces Picker | 0/0 | Not started | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
 | 8. Dev Tunnels Integration | 0/0 | Not started | - |
@@ -299,7 +299,7 @@ At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Ev
 
 **Requirements:** TBD (likely a new `AI-*` family in REQUIREMENTS.md when promoted)
 
-**Plans:** 0 plans
+**Plans:** 15/16 plans executed
 
 **Trigger:** After milestone v1.0.0 ships (Phase 10 release). Per PROJECT.md key decision: "must not gate terminal-core work."
 
