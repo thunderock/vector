@@ -142,7 +142,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - [x] 05-13-PLAN.md — Wave 1 (gap-closure): vector-input keymap EncodedKey::App(AppShortcut) for Cmd-N/F/Shift-P/Shift-R (gap #2 pure data) (POLISH-06, POLISH-07, POLISH-08)
   - [x] 05-14-PLAN.md — Wave 2 (gap-closure): App.search_bar + App.profile_picker fields + EncodedKey::App handler bodies + ungrouped Cmd-N + config reload (gap #2 App-side + gap #3) (POLISH-01, POLISH-06, POLISH-07)
   - [x] 05-15-PLAN.md — Wave 2 (gap-closure): declare_class! NSTextInputClient subclass + App.ime field + WindowEvent::Ime dispatch + set_ime_allowed (gap #4) (POLISH-08)
-  - [ ] 05-16-PLAN.md — Wave 3 (gap-closure): RenderHost owns TintStripe+SearchBar+Toast+Picker pipelines + per-frame chrome orchestration UI-SPEC §11 order + smoke matrix re-run (gap #1) (POLISH-04, POLISH-06, POLISH-07)
+  - [x] 05-16-PLAN.md — Wave 3 (gap-closure): RenderHost owns TintStripe+SearchBar+Toast+Picker pipelines + per-frame chrome orchestration UI-SPEC §11 order + smoke matrix re-run (gap #1) (POLISH-04, POLISH-06, POLISH-07)
 **Stack additions**: `serde + toml 1.1.2`, `notify` (FSEvents on macOS), `keyring 4.0` initialized here for later phases, `vector-config`, `vector-theme`, `vector-secrets`.
 **Risks & notes**:
   - **DCS-wrapped OSC 52 through tmux is a known pitfall (Pitfall 8).** Smoke-test on real tmux 3.4+ with `set -g allow-passthrough on` before declaring the phase done. Truncation at ~60 chars is a real bug to design around.
