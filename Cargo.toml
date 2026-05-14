@@ -34,9 +34,11 @@ async-trait = "0.1"
 base64 = "0.22"
 bytemuck = { version = "1", features = ["derive"] }
 bytes = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 crossfont = "0.9"
 etagere = "0.2"
 fuzzy-matcher = "0.3"
+http = "1"
 # keyring 4.x is the CLI binary crate; the library now lives in keyring-core.
 # Pair with apple-native-keyring-store for the macOS Keychain backend.
 keyring-core = "1.0"
@@ -45,10 +47,12 @@ libc = "0.2"
 libproc = "0.14"
 notify = "8"
 notify-debouncer-full = "0.5"
+oauth2 = { version = "5.0", default-features = false, features = ["reqwest", "rustls-tls"] }
 objc2 = "0.6.4"
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
 objc2-quartz-core = { version = "0.3", features = ["CALayer", "objc2-core-foundation", "objc2-core-graphics"] }
+octocrab = "0.50"
 parking_lot = "0.12"
 percent-encoding = "2"
 plist = "1.9"
@@ -56,16 +60,23 @@ pollster = "0.4"
 portable-pty = "0.9"
 raw-window-handle = "0.6"
 regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "http2"] }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
 thiserror = "2"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio-util = "0.7"
 toml = "1.1.2"
 toml_edit = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 unicode-width = "0.2"
+urlencoding = "2"
 wgpu = { version = "29", default-features = false, features = ["metal", "wgsl"] }
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06"] }
+wiremock = "0.6"
+zeroize = { version = "1", features = ["derive"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
