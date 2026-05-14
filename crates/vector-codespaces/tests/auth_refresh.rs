@@ -35,7 +35,7 @@ async fn auth_401_refresh_retry_succeeds() {
         .await;
 
     let client = CodespacesClient::new_for_test(
-        server.uri(),
+        &server.uri(),
         "gho_old_access".to_string(),
         Some("ghr_refresh_token_value".to_string()),
         &format!("{}/login/oauth/access_token", server.uri()),
@@ -63,7 +63,7 @@ async fn auth_refresh_fails_emits_unauthenticated() {
         .await;
 
     let client = CodespacesClient::new_for_test(
-        server.uri(),
+        &server.uri(),
         "gho_old_access".to_string(),
         Some("ghr_bad_refresh".to_string()),
         &format!("{}/login/oauth/access_token", server.uri()),

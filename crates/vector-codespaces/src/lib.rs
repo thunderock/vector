@@ -7,6 +7,6 @@ pub mod auth;
 pub mod client;
 pub mod model;
 
-pub use auth::{AuthError, DeviceCodeDisplay, GitHubAuth, TokenStore};
-pub use client::{ClientError, CodespacesClient};
+pub use auth::{AuthError, DeviceCodeDisplay, GitHubAuth, TokenStore, Tokens};
+pub use client::{build_octocrab, ClientError, CodespacesClient};
 pub use model::{Codespace, CodespaceState, GitStatus, RepositoryRef};

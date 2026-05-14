@@ -12,6 +12,7 @@ chrono.workspace = true
 http.workspace = true
 oauth2.workspace = true
 octocrab.workspace = true
+parking_lot.workspace = true
 reqwest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
