@@ -162,7 +162,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   5. Token refresh on 401 silently re-runs device flow; expired tokens never silently fail — the user sees a re-auth prompt.
 **Plans**: 7 plans
   - [x] 06-01-PLAN.md — Wave 0: vector-codespaces scaffold + workspace deps + Wave-0 test stubs + Pitfall-14 arch-lint
-  - [ ] 06-02-PLAN.md — Wave 1: OAuth Device Flow driver (oauth2 5.0) + Keychain TokenStore + manual Debug discipline (AUTH-01, AUTH-02)
+  - [x] 06-02-PLAN.md — Wave 1: OAuth Device Flow driver (oauth2 5.0) + Keychain TokenStore + manual Debug discipline (AUTH-01, AUTH-02)
   - [ ] 06-03-PLAN.md — Wave 1: CodespacesClient REST (list/get/start/poll) + 401 silent-refresh chain (CS-01, CS-02, AUTH-03)
   - [x] 06-04-PLAN.md — Wave 1: vector-config writer append_codespace_profile + derive_profile_name with atomic rename (CS-03)
   - [ ] 06-05-PLAN.md — Wave 2: UserEvent extensions + AuthDeviceFlowModal NSPanel + Sign in/out menu items + Cmd-Shift-G keymap
