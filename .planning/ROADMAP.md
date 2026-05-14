@@ -160,8 +160,15 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   3. Selecting a Shutdown codespace triggers `POST /user/codespaces/{name}/start`, swallows 409 Conflict, polls `state` at 1s for up to 2 minutes, and shows progress until Available.
   4. A picked codespace can be saved as a one-click profile (kind = `codespace`, codespace_name + tint persisted) that survives app restart. Clicking "Connect" on a profile shows a placeholder toast (Phase 7 wires it).
   5. Token refresh on 401 silently re-runs device flow; expired tokens never silently fail — the user sees a re-auth prompt.
-**Plans**: TBD
-**Stack additions**: `oauth2 5.0` device flow, `octocrab 0.50`, `reqwest 0.13` (rustls), `keyring 4.0`.
+**Plans**: 7 plans
+  - [ ] 06-01-PLAN.md — Wave 0: vector-codespaces scaffold + workspace deps + Wave-0 test stubs + Pitfall-14 arch-lint
+  - [ ] 06-02-PLAN.md — Wave 1: OAuth Device Flow driver (oauth2 5.0) + Keychain TokenStore + manual Debug discipline (AUTH-01, AUTH-02)
+  - [ ] 06-03-PLAN.md — Wave 1: CodespacesClient REST (list/get/start/poll) + 401 silent-refresh chain (CS-01, CS-02, AUTH-03)
+  - [ ] 06-04-PLAN.md — Wave 1: vector-config writer append_codespace_profile + derive_profile_name with atomic rename (CS-03)
+  - [ ] 06-05-PLAN.md — Wave 2: UserEvent extensions + AuthDeviceFlowModal NSPanel + Sign in/out menu items + Cmd-Shift-G keymap
+  - [ ] 06-06-PLAN.md — Wave 2: CodespacesPickerModal NSPanel + codespaces_actor + Connect/Start/Save flows + relative-time formatter
+  - [ ] 06-07-PLAN.md — Wave 3: manual UAT smoke matrix (autonomous=false) — 11 items spanning AUTH-01..03 + CS-01..03 + token-leak audit
+**Stack additions**: `oauth2 5.0` device flow, `octocrab 0.50`, `reqwest 0.13` (rustls-tls), `keyring-core 1.0` + `apple-native-keyring-store 1.0` (already wired in vector-secrets), `serde_json 1`, `chrono 0.4`, `urlencoding 2`, `tokio-util 0.7 sync`, `http 1`, `wiremock 0.6` (dev), `zeroize 1`.
 **Risks & notes**:
   - Use classic OAuth scopes (`codespace`, `read:user`); fine-grained PATs are explicitly broken with Codespaces (`cli/cli#7819`).
   - Manual `Debug` impls on every token-bearing struct — never derive (Pitfall 14).
@@ -246,7 +253,7 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 | 3. GPU Renderer & First Paint | 0/0 | Not started | - |
 | 4. Mux — Tabs & Splits | 5/5 | Plans complete; 04-05 partial sign-off (6/9 smoke PASS, #3/#4/#8 FAIL routed to Plan 04-06 gap-closure); verifier next | - |
 | 5. Polish (Local Daily-Driver) | 15/16 | In Progress|  |
-| 6. GitHub Auth + Codespaces Picker | 0/0 | Not started | - |
+| 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
 | 8. Dev Tunnels Integration | 0/0 | Not started | - |
 | 9. Persistence + Reconnect + tmux Auto-Attach | 0/0 | Not started | - |
