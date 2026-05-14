@@ -19,6 +19,7 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 
 ### Active
 
+- [x] Polish local terminal to daily-driver quality — config hot-reload, theme engine, search bar, profile picker, OSC 52 clipboard, IME, Secure Keyboard Entry, hyperlinks, OSC 7 cwd, Cmd-N window spawning — Phase 5 operationally validated 2026-05-14: all 8 POLISH requirements verified; 16/16 plans complete; 332 tests passing; 10-item smoke matrix 10/10 approved.
 - [ ] Native macOS app distributed as an unsigned `.dmg` (right-click → Open), Universal binary
 - [ ] Session persistence + transparent reconnect — wifi drop should not lose Codespace state
 - [ ] tmux pass-through that "just works" — no double-multiplex visual glitches when remote tmux is running
