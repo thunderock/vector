@@ -53,12 +53,12 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 
 ### GitHub Auth & Codespaces Picker
 
-- [ ] **AUTH-01**: GitHub OAuth Device Flow (RFC 8628) sign-in works from inside the app — no browser plugin, no PAT pasting
-- [ ] **AUTH-02**: OAuth tokens are stored in macOS Keychain via `keyring 4.0`; never written to disk in plaintext, never logged
-- [ ] **AUTH-03**: Token refresh is handled silently; expired tokens trigger a re-auth prompt rather than silent failure
-- [ ] **CS-01**: After sign-in, a Codespaces picker lists every codespace for the user with state (Available / Shutdown / Starting), repository name, branch, and last-used time
-- [ ] **CS-02**: Selecting a Shutdown codespace from the picker triggers `POST /start`, polls until Available (with 409 swallowed), then connects
-- [ ] **CS-03**: A picked codespace can be saved as a one-click profile that survives app restart
+- [ ] **AUTH-01**: GitHub OAuth Device Flow (RFC 8628) sign-in works from inside the app — no browser plugin, no PAT pasting _(Wave-0 scaffolded — test stubs + manual-Debug GitHubAuth stub landed in Plan 06-01; real impl lands in Plan 06-02)_
+- [ ] **AUTH-02**: OAuth tokens are stored in macOS Keychain via `keyring 4.0`; never written to disk in plaintext, never logged _(Wave-0 scaffolded — TokenStore stub + GITHUB_REFRESH_ACCOUNT const + Pitfall-14 arch-lint landed in Plan 06-01; real impl lands in Plan 06-02)_
+- [ ] **AUTH-03**: Token refresh is handled silently; expired tokens trigger a re-auth prompt rather than silent failure _(Wave-0 scaffolded — auth_refresh.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
+- [ ] **CS-01**: After sign-in, a Codespaces picker lists every codespace for the user with state (Available / Shutdown / Starting), repository name, branch, and last-used time _(Wave-0 scaffolded — CodespacesClient stub + Codespace model + list_codespaces.json fixture + codespaces_rest.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
+- [ ] **CS-02**: Selecting a Shutdown codespace from the picker triggers `POST /start`, polls until Available (with 409 swallowed), then connects _(Wave-0 scaffolded — start/poll test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
+- [ ] **CS-03**: A picked codespace can be saved as a one-click profile that survives app restart _(Wave-0 scaffolded — vector-config::writer module + profile_writer.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-04)_
 
 ### Codespaces SSH Connect
 
@@ -180,12 +180,12 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | POLISH-06 | Phase 5 | Complete |
 | POLISH-07 | Phase 5 | Complete |
 | POLISH-08 | Phase 5 | Complete |
-| AUTH-01 | Phase 6 | Pending |
-| AUTH-02 | Phase 6 | Pending |
-| AUTH-03 | Phase 6 | Pending |
-| CS-01 | Phase 6 | Pending |
-| CS-02 | Phase 6 | Pending |
-| CS-03 | Phase 6 | Pending |
+| AUTH-01 | Phase 6 | Complete |
+| AUTH-02 | Phase 6 | Complete |
+| AUTH-03 | Phase 6 | Complete |
+| CS-01 | Phase 6 | Complete |
+| CS-02 | Phase 6 | Complete |
+| CS-03 | Phase 6 | Complete |
 | CS-04 | Phase 7 | Pending |
 | CS-05 | Phase 7 | Pending |
 | CS-06 | Phase 7 | Pending |
