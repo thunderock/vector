@@ -1,7 +1,18 @@
-//! AUTH-02 Keychain integration. Manual-UAT only — CI runner has no Keychain.
+//! AUTH-02 keychain roundtrip. #[ignore]-gated because CI runners lack Keychain;
+//! run locally with: cargo test -p vector-codespaces --test keychain_roundtrip -- --ignored
+
+use vector_codespaces::TokenStore;
+use zeroize::Zeroizing;
 
 #[test]
-#[ignore = "Manual UAT — real macOS Keychain; Plan 06-02 verifies locally"]
+#[ignore = "Manual UAT — requires real macOS Keychain"]
 fn token_roundtrip_through_keychain() {
-    // Plan 06-02 manual UAT: set / get / delete on real Keychain.
+    let store = TokenStore::new();
+    let _ = store.clear();
+    let access = Zeroizing::new("gho_uat_token_value_local_only".to_string());
+    store.save_access(&access).expect("save");
+    let loaded = store.load_access().expect("load");
+    assert_eq!(loaded.as_str(), "gho_uat_token_value_local_only");
+    store.clear().expect("clear");
+    assert!(store.load_access().is_none(), "post-clear load_access");
 }

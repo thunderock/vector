@@ -46,7 +46,7 @@ async fn device_flow_poll_success() {
     Mock::given(method("POST"))
         .and(path("/login/oauth/access_token"))
         .and(body_string_contains("device_code"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "error": "authorization_pending"
         })))
         .up_to_n_times(1)
@@ -81,7 +81,7 @@ async fn device_flow_slow_down() {
     mock_device_code(&server).await;
     Mock::given(method("POST"))
         .and(path("/login/oauth/access_token"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "error": "slow_down"
         })))
         .up_to_n_times(1)
@@ -117,7 +117,7 @@ async fn device_flow_expired() {
     mock_device_code(&server).await;
     Mock::given(method("POST"))
         .and(path("/login/oauth/access_token"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "error": "expired_token"
         })))
         .mount(&server)
