@@ -12,6 +12,7 @@ use vector_mux::PaneId;
 pub const DEFAULT_CONFIG_TOML: &str = "[default]\ntheme = \"vector-dark\"\n\n# M4 / D-69: Cmd-Shift-R fallback for FSEvents-missed config reloads.\n[[keybind]]\nkey = \"cmd-shift-r\"\naction = \"reload-config\"\n";
 
 pub mod app;
+pub mod chrome;
 pub mod clipboard_router;
 pub mod frame_tick;
 pub mod hyperlink_dispatch;

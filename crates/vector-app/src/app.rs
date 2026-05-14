@@ -28,6 +28,17 @@ use crate::ske::SecureInputGuard;
 use crate::toast::{ToastBanner, ToastStack};
 use crate::{menu, overlay, UserEvent};
 
+/// MEDIUM-2 (05-REVIEWS.md): snapshot of the active pane's rect in surface pixels.
+/// Captured during the per-pane compositor loop and consumed by the chrome pass for
+/// search-bar positioning (bottom-Y) and content width.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PaneRectPx {
+    pub x_px: f32,
+    pub y_px: f32,
+    pub w_px: f32,
+    pub h_px: f32,
+}
+
 /// D-66 active-pane border color (light blue accent).
 const BORDER_COLOR_ACTIVE: [f32; 4] = [0.4, 0.6, 1.0, 1.0];
 /// Inactive pane: alpha 0 disables the border shader contribution.
@@ -42,6 +53,10 @@ const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 struct AppWindow {
     window: Arc<Window>,
     render_host: Option<RenderHost>,
+    /// Plan 05-16 (HIGH-2): chrome pipelines as a PARALLEL field to render_host
+    /// so they can be borrowed independently in render_window without a
+    /// double-mutable-borrow on RenderHost's surface/compositor.
+    chrome_pipelines: Option<crate::chrome::ChromePipelines>,
     overlay: Option<Overlay>,
     overlay_dropped: bool,
     first_paint_ready: bool,
@@ -102,6 +117,9 @@ pub struct App {
     /// Plan 05-14 gap-closure — ProfilePicker state (Cmd-Shift-P / D-75). Rendered by
     /// Plan 05-16's PickerPass. Defaults to empty entries (populated on ConfigReloaded).
     profile_picker: crate::profile_picker::ProfilePicker,
+    /// Plan 05-16 (MEDIUM-2): snapshot of the active pane's rect; updated each frame
+    /// during the per-pane compositor loop in render_window. None if no active pane.
+    active_pane_rect: Option<PaneRectPx>,
 }
 
 impl App {
@@ -136,6 +154,8 @@ impl App {
             // Plan 05-14: both default-closed; ProfilePicker gets entries on ConfigReloaded.
             search_bar: crate::search_bar::SearchBar::default(),
             profile_picker: crate::profile_picker::ProfilePicker::new(Vec::new()),
+            // Plan 05-16: populated per frame by the compositor loop.
+            active_pane_rect: None,
         }
     }
 
@@ -289,12 +309,17 @@ impl App {
                                 None
                             }
                         };
+                        // HIGH-2: ChromePipelines constructed from the just-created device + format.
+                        let chrome_pipelines = render_host.as_ref().map(|h| {
+                            crate::chrome::ChromePipelines::new(h.device(), h.surface_format())
+                        });
                         let id = window.id();
                         self.windows.insert(
                             id,
                             AppWindow {
                                 window,
                                 render_host,
+                                chrome_pipelines,
                                 overlay: overlay_inst,
                                 overlay_dropped: false,
                                 first_paint_ready: false,
@@ -673,11 +698,16 @@ impl App {
                 None
             }
         };
+        // HIGH-2: ChromePipelines parallel to render_host (disjoint borrows in render_window).
+        let chrome_pipelines = render_host.as_ref().map(|h| {
+            crate::chrome::ChromePipelines::new(h.device(), h.surface_format())
+        });
         self.windows.insert(
             id,
             AppWindow {
                 window: win,
                 render_host,
+                chrome_pipelines,
                 overlay: overlay_inst,
                 overlay_dropped: false,
                 first_paint_ready: false,
@@ -817,12 +847,17 @@ impl ApplicationHandler<UserEvent> for App {
                 None
             }
         };
+        // HIGH-2: ChromePipelines parallel to render_host (disjoint borrows in render_window).
+        let chrome_pipelines = render_host.as_ref().map(|h| {
+            crate::chrome::ChromePipelines::new(h.device(), h.surface_format())
+        });
         let id = window.id();
         self.windows.insert(
             id,
             AppWindow {
                 window,
                 render_host,
+                chrome_pipelines,
                 overlay: overlay_inst,
                 overlay_dropped: false,
                 first_paint_ready: false,
