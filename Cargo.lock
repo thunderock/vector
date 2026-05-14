@@ -4139,6 +4139,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
+ "octocrab",
  "parking_lot",
  "raw-window-handle",
  "regex",
@@ -4147,6 +4148,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vector-app",
+ "vector-codespaces",
  "vector-config",
  "vector-fonts",
  "vector-input",
@@ -4156,6 +4158,7 @@ dependencies = [
  "vector-term",
  "wgpu",
  "winit",
+ "zeroize",
 ]
 
 [[package]]

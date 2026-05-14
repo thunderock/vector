@@ -1256,6 +1256,20 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                 }
             }
+            // Phase 6 — Task 06-05-01 lands the variants; Task 06-05-02 wires
+            // them end-to-end. Placeholder arms keep the match exhaustive.
+            other @ (UserEvent::AuthSignInRequested
+            | UserEvent::AuthDisplayCode { .. }
+            | UserEvent::AuthCompleted { .. }
+            | UserEvent::AuthFailed { .. }
+            | UserEvent::AuthRequired
+            | UserEvent::SignOut
+            | UserEvent::OpenCodespacesPicker
+            | UserEvent::CodespacesLoaded(_)
+            | UserEvent::CodespacesLoadFailed(_)
+            | UserEvent::CodespaceStateChanged { .. }) => {
+                tracing::debug!(?other, "Phase 6 UserEvent (handler wired in Task 06-05-02)");
+            }
         }
     }
 

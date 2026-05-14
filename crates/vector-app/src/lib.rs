@@ -12,6 +12,8 @@ use vector_mux::PaneId;
 pub const DEFAULT_CONFIG_TOML: &str = "[default]\ntheme = \"vector-dark\"\n\n# M4 / D-69: Cmd-Shift-R fallback for FSEvents-missed config reloads.\n[[keybind]]\nkey = \"cmd-shift-r\"\naction = \"reload-config\"\n";
 
 pub mod app;
+pub mod auth_actor;
+pub mod auth_modal;
 pub mod chrome;
 pub mod clipboard_router;
 pub mod frame_tick;
@@ -68,4 +70,34 @@ pub enum UserEvent {
     /// I/O thread's `clipboard_rx` drain task to App.clipboard_router.
     /// `kind_is_selection` keeps alacritty_terminal::ClipboardType out of this enum.
     ClipboardStore { kind_is_selection: bool, data: String },
+    // ───── Phase 6 (AUTH-01..03 + CS-01..03) — appended; never reorder ─────
+    /// Menu `Vector → Sign in with GitHub` clicked, or codespace profile
+    /// selected while no token is present (D-84 second trigger).
+    AuthSignInRequested,
+    /// Device flow obtained user_code; main thread should open AuthDeviceFlowModal.
+    AuthDisplayCode {
+        user_code: String,
+        verification_uri: String,
+        expires_at: std::time::SystemTime,
+        interval_secs: u64,
+    },
+    /// Device flow polled successfully; tokens already persisted to Keychain.
+    AuthCompleted { user_login: String },
+    /// Device flow ended with cancel / expired / oauth-error.
+    AuthFailed { reason: String },
+    /// Triggered by 401-after-refresh chain in CodespacesClient.
+    AuthRequired,
+    /// Menu `Vector → Sign out (@login)` clicked.
+    SignOut,
+    /// Plan 06-06 will wire this — menu `Codespaces…` or Cmd-Shift-G.
+    OpenCodespacesPicker,
+    /// Plan 06-06 will wire this — codespace list arrived.
+    CodespacesLoaded(std::sync::Arc<Vec<vector_codespaces::Codespace>>),
+    /// Plan 06-06 will wire this.
+    CodespacesLoadFailed(String),
+    /// Plan 06-06 will wire this — single-row state change from poll task.
+    CodespaceStateChanged {
+        name: String,
+        state: vector_codespaces::CodespaceState,
+    },
 }
