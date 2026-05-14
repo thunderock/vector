@@ -61,6 +61,11 @@ fn main() -> Result<()> {
     )));
     let router_io = Arc::clone(&router_main);
 
+    // Plan 06-05 / AUTH-01: hand the tokio runtime handle back to the main
+    // thread via a one-shot channel so the App can spawn the auth_actor
+    // task on the same runtime that powers the PTY I/O.
+    let (handle_tx, handle_rx) = std::sync::mpsc::sync_channel::<tokio::runtime::Handle>(1);
+
     let _io_thread = thread::Builder::new()
         .name("tokio-io".into())
         .spawn(move || {
@@ -69,6 +74,8 @@ fn main() -> Result<()> {
                 .thread_name("tokio-worker")
                 .build()
                 .expect("build tokio runtime");
+            // Share the runtime handle with the App on the main thread.
+            let _ = handle_tx.send(rt.handle().clone());
             rt.block_on(async move {
                 let local_domain = Arc::new(
                     LocalDomain::new().expect("LocalDomain::new (shell resolution failed)"),
@@ -178,6 +185,15 @@ fn main() -> Result<()> {
     let mut application = app::App::new(write_tx, resize_tx, lpm_flag);
     application.set_split_req_tx(split_req_tx);
     application.set_router(router_main);
+    // Plan 06-05 / AUTH-01: wire the proxy + tokio handle so the device-flow
+    // path (menu click -> AuthSignInRequested -> auth_actor.spawn) can find
+    // both halves of its plumbing.
+    application.set_proxy(proxy.clone());
+    if let Ok(handle) = handle_rx.recv() {
+        application.set_tokio_handle(handle);
+    } else {
+        tracing::warn!("tokio handle not received from I/O thread; auth disabled");
+    }
     event_loop.run_app(&mut application)?;
     Ok(())
 }

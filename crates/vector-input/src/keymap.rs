@@ -42,6 +42,10 @@ pub enum AppShortcut {
     ToggleSearch,      // Cmd-F       -> UserEvent::ToggleSearch        (D-76)
     OpenProfilePicker, // Cmd-Shift-P -> UserEvent::OpenProfilePicker   (D-75)
     ReloadConfig,      // Cmd-Shift-R -> UserEvent::ReloadConfig        (D-69 menu fallback)
+    /// Phase 6 / CS-01 / D-86: Cmd-Shift-G opens the Codespaces picker.
+    OpenCodespacesPicker,
+    /// Phase 6 / AUTH-01: menu fallback for sign-in (no default key binding).
+    SignInWithGitHub,
 }
 
 /// Encode a winit key event. Returns None for Released/Dead/Unidentified or unmapped keys.
@@ -93,6 +97,7 @@ fn match_app_shortcut(key: &Key, mods: ModState) -> Option<AppShortcut> {
     };
     if mods.shift {
         return match s {
+            "G" | "g" => Some(AppShortcut::OpenCodespacesPicker),
             "P" | "p" => Some(AppShortcut::OpenProfilePicker),
             "R" | "r" => Some(AppShortcut::ReloadConfig),
             _ => None,

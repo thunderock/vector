@@ -28,7 +28,7 @@ objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 objc2-quartz-core.workspace = true
 raw-window-handle.workspace = true
-vector-codespaces = { path = "../vector-codespaces" }
+vector-codespaces = { path = "../vector-codespaces", version = "2026.5.10" }
 vector-config = { path = "../vector-config", version = "2026.5.10" }
 vector-fonts = { path = "../vector-fonts", version = "2026.5.10" }
 vector-input = { path = "../vector-input", version = "2026.5.10" }

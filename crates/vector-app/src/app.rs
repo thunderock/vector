@@ -120,6 +120,21 @@ pub struct App {
     /// Plan 05-16 (MEDIUM-2): snapshot of the active pane's rect; updated each frame
     /// during the per-pane compositor loop in render_window. None if no active pane.
     active_pane_rect: Option<PaneRectPx>,
+    /// Plan 06-05 / AUTH-01 — EventLoopProxy for spawning UserEvents from
+    /// menu items, the auth_actor tokio task, and the modal Cancel button.
+    /// Wired by main.rs via `set_proxy`.
+    proxy: Option<winit::event_loop::EventLoopProxy<UserEvent>>,
+    /// Plan 06-05 / AUTH-01 — Handle to the I/O-thread tokio runtime so we
+    /// can spawn the auth_actor task without standing up a second runtime.
+    /// Wired by main.rs via `set_tokio_handle`.
+    tokio_handle: Option<tokio::runtime::Handle>,
+    /// Plan 06-05 / AUTH-01 — live AuthDeviceFlowModal NSPanel (Some while
+    /// the modal is on screen). The 1 Hz frame tick calls `tick()` on it.
+    auth_modal: Option<crate::auth_modal::AuthDeviceFlowModal>,
+    /// Plan 06-05 / AUTH-01 — set on AuthSignInRequested when we spawn the
+    /// device-flow task; cleared on AuthCompleted/AuthFailed. Lets the modal
+    /// share the same cancel flag as the tokio task.
+    pending_auth_cancellation: Option<crate::auth_actor::AuthCancellation>,
 }
 
 impl App {
@@ -156,7 +171,24 @@ impl App {
             profile_picker: crate::profile_picker::ProfilePicker::new(Vec::new()),
             // Plan 05-16: populated per frame by the compositor loop.
             active_pane_rect: None,
+            // Plan 06-05 / AUTH-01: wired by main.rs.
+            proxy: None,
+            tokio_handle: None,
+            auth_modal: None,
+            pending_auth_cancellation: None,
         }
+    }
+
+    /// Plan 06-05 / AUTH-01 — supply the EventLoopProxy so menu items and
+    /// the auth_actor task can pump UserEvents back to user_event().
+    pub fn set_proxy(&mut self, proxy: winit::event_loop::EventLoopProxy<UserEvent>) {
+        self.proxy = Some(proxy);
+    }
+
+    /// Plan 06-05 / AUTH-01 — supply the tokio runtime handle from the
+    /// existing I/O thread so the auth_actor can `handle.spawn(...)`.
+    pub fn set_tokio_handle(&mut self, handle: tokio::runtime::Handle) {
+        self.tokio_handle = Some(handle);
     }
 
     /// Plan 05-10 Task 3 — Cmd-C native pasteboard write (CONTEXT Cmd-C
@@ -267,6 +299,108 @@ impl App {
         self.request_redraw_all();
     }
 
+    // ---- Phase 6 / AUTH-01 — device-flow handlers ------------------------
+
+    /// Spawn the auth_actor tokio task. Idempotent-ish: if a flow is already
+    /// in progress (pending_auth_cancellation set), the new request replaces
+    /// the old one (the previous flag is dropped — its task will see the
+    /// stale flag value, but since we abandon the modal it doesn't matter).
+    fn handle_auth_sign_in_requested(&mut self) {
+        let (Some(proxy), Some(handle)) = (self.proxy.clone(), self.tokio_handle.clone()) else {
+            tracing::warn!("AuthSignInRequested: proxy or tokio_handle missing");
+            return;
+        };
+        let cancel = crate::auth_actor::spawn_device_flow(&handle, proxy);
+        self.pending_auth_cancellation = Some(cancel);
+        tracing::info!("auth_actor spawned (device flow in progress)");
+    }
+
+    /// Construct + show the AuthDeviceFlowModal. The cancellation flag from
+    /// the spawn path is shared with the modal so the Cancel button can
+    /// signal the actor task.
+    fn handle_auth_display_code(
+        &mut self,
+        user_code: String,
+        verification_uri: String,
+        expires_at: std::time::SystemTime,
+    ) {
+        let Some(mtm) = objc2::MainThreadMarker::new() else {
+            tracing::warn!("AuthDisplayCode: not on main thread");
+            return;
+        };
+        let Some(proxy) = self.proxy.clone() else {
+            tracing::warn!("AuthDisplayCode: proxy missing");
+            return;
+        };
+        let cancellation = self
+            .pending_auth_cancellation
+            .clone()
+            .unwrap_or_default();
+        if self.auth_modal.is_some() {
+            tracing::debug!("AuthDisplayCode: replacing existing modal");
+            if let Some(prev) = self.auth_modal.take() {
+                prev.dismiss(mtm);
+            }
+        }
+        let modal = crate::auth_modal::AuthDeviceFlowModal::show(
+            mtm,
+            user_code,
+            verification_uri,
+            expires_at,
+            cancellation,
+            proxy,
+        );
+        self.auth_modal = Some(modal);
+    }
+
+    fn handle_auth_completed(&mut self, user_login: &str) {
+        if let Some(mtm) = objc2::MainThreadMarker::new() {
+            if let Some(modal) = self.auth_modal.take() {
+                modal.dismiss(mtm);
+            }
+            unsafe { menu::rebuild_auth_menu_section(mtm, true, Some(user_login)) };
+        }
+        self.pending_auth_cancellation = None;
+        self.toasts
+            .show(ToastBanner::info(format!("signed in as @{user_login}")));
+        self.request_redraw_all();
+        tracing::info!(user_login, "auth_completed");
+    }
+
+    fn handle_auth_failed(&mut self, reason: &str) {
+        if let Some(mtm) = objc2::MainThreadMarker::new() {
+            if let Some(modal) = self.auth_modal.take() {
+                modal.dismiss(mtm);
+            }
+        }
+        self.pending_auth_cancellation = None;
+        // UI-SPEC §6.1 toast copy mapping.
+        let toast_text = match reason {
+            "cancelled" => "sign-in cancelled".to_string(),
+            "expired" => "sign-in code expired — try again".to_string(),
+            other => format!("sign-in failed: {other}"),
+        };
+        self.toasts.show(ToastBanner::info(toast_text));
+        self.request_redraw_all();
+        tracing::info!(reason, "auth_failed");
+    }
+
+    /// 1 Hz tick into the auth modal countdown. Called from the existing
+    /// frame-tick loop on every WindowEvent::RedrawRequested. If the modal
+    /// has expired, emit `AuthFailed { reason: "expired" }` so the regular
+    /// failure path handles dismiss + toast.
+    pub fn tick_auth_modal(&mut self) {
+        if let Some(modal) = self.auth_modal.as_ref() {
+            if modal.tick() {
+                if let Some(proxy) = &self.proxy {
+                    let _ = proxy.send_event(UserEvent::AuthFailed {
+                        reason: "expired".into(),
+                    });
+                }
+            }
+        }
+    }
+
     /// Plan 05-14 — reload config from disk (same path as FSEvents watcher). D-69 fallback.
     fn do_reload_config(&mut self) {
         let path = std::env::var_os("HOME")
@@ -362,6 +496,14 @@ impl App {
                 }
             }
             AppShortcut::ReloadConfig => self.do_reload_config(),
+            AppShortcut::OpenCodespacesPicker => {
+                if let Some(proxy) = &self.proxy {
+                    let _ = proxy.send_event(UserEvent::OpenCodespacesPicker);
+                }
+            }
+            AppShortcut::SignInWithGitHub => {
+                self.handle_auth_sign_in_requested();
+            }
         }
     }
 
@@ -471,6 +613,10 @@ impl App {
     fn render_window(&mut self, id: WindowId, sel: Option<((u16, u16), (u16, u16))>) {
         // Plan 05-16: tick the toast stack so Info toasts auto-expire after 5 s.
         self.toasts.tick(std::time::Instant::now());
+        // Plan 06-05 / AUTH-01: 1 Hz auth modal countdown (UI-SPEC §5.1). The
+        // tick runs every render frame but only mutates the NSTextField once
+        // per second's worth of difference, so the call is cheap.
+        self.tick_auth_modal();
 
         let Some(aw) = self.windows.get_mut(&id) else {
             return;
@@ -1051,6 +1197,17 @@ impl ApplicationHandler<UserEvent> for App {
         // SAFETY: winit guarantees `resumed` runs on the macOS main thread.
         let overlay_inst = unsafe {
             menu::install_main_menu();
+            // Plan 06-05 / AUTH-01: insert Sign in / Sign out / Codespaces…
+            // above the existing Vector-menu items. Requires proxy (set by
+            // main.rs); skip silently if absent (e.g. integration tests).
+            if let (Some(mtm), Some(proxy)) = (objc2::MainThreadMarker::new(), self.proxy.clone()) {
+                menu::install_auth_menu_items(mtm, proxy);
+                // First-launch: reflect Keychain state so the right item is
+                // visible. @login is not fetched here (would block the UI
+                // thread); the next AuthCompleted will fill it in.
+                let token_present = vector_codespaces::TokenStore::new().load_access().is_some();
+                menu::rebuild_auth_menu_section(mtm, token_present, None);
+            }
             Some(overlay::install(&window))
         };
         let render_host = match RenderHost::new(&window) {
@@ -1209,7 +1366,35 @@ impl ApplicationHandler<UserEvent> for App {
                 self.handle_app_shortcut(event_loop, AppShortcut::OpenProfilePicker);
             }
             UserEvent::ProfileSelected(name) => {
-                tracing::info!(profile = %name, "ProfileSelected (Local kind only in v1; Codespace/DevTunnel deferred to Phase 6+)");
+                // D-84: if the selected profile is kind=codespace and no
+                // access token is present in Keychain, divert to the device
+                // flow rather than trying to connect. Reuses the same
+                // AuthSignInRequested path as the menu item; once auth
+                // completes Plan 06-06's Codespaces picker can re-issue the
+                // profile selection.
+                let is_codespace_profile = self
+                    .current_config
+                    .as_ref()
+                    .and_then(|cfg| cfg.profile.get(&name))
+                    .and_then(|p| p.kind)
+                    .is_some_and(|k| matches!(k, vector_config::Kind::Codespace));
+                let has_token = vector_codespaces::TokenStore::new().load_access().is_some();
+                if is_codespace_profile && !has_token {
+                    tracing::info!(
+                        profile = %name,
+                        "D-84: codespace profile selected without token — diverting to sign-in"
+                    );
+                    if let Some(proxy) = &self.proxy {
+                        let _ = proxy.send_event(UserEvent::AuthSignInRequested);
+                    }
+                } else {
+                    tracing::info!(
+                        profile = %name,
+                        is_codespace_profile,
+                        has_token,
+                        "ProfileSelected (connect path lands in Phase 7)"
+                    );
+                }
             }
             UserEvent::ToggleSearch => {
                 // Cmd-F via menu — delegate to the same handler path.
@@ -1256,19 +1441,50 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                 }
             }
-            // Phase 6 — Task 06-05-01 lands the variants; Task 06-05-02 wires
-            // them end-to-end. Placeholder arms keep the match exhaustive.
-            other @ (UserEvent::AuthSignInRequested
-            | UserEvent::AuthDisplayCode { .. }
-            | UserEvent::AuthCompleted { .. }
-            | UserEvent::AuthFailed { .. }
-            | UserEvent::AuthRequired
-            | UserEvent::SignOut
-            | UserEvent::OpenCodespacesPicker
-            | UserEvent::CodespacesLoaded(_)
+            // Phase 6 / AUTH-01 — device-flow user-event arms.
+            UserEvent::AuthSignInRequested => {
+                self.handle_auth_sign_in_requested();
+            }
+            UserEvent::AuthDisplayCode {
+                user_code,
+                verification_uri,
+                expires_at,
+                interval_secs,
+            } => {
+                let _ = interval_secs; // not surfaced in UI; useful for tracing
+                self.handle_auth_display_code(user_code, verification_uri, expires_at);
+            }
+            UserEvent::AuthCompleted { user_login } => {
+                self.handle_auth_completed(&user_login);
+            }
+            UserEvent::AuthFailed { reason } => {
+                self.handle_auth_failed(&reason);
+            }
+            UserEvent::AuthRequired => {
+                // Re-enter the device flow as if the user clicked the menu.
+                if let Some(modal) = self.auth_modal.take() {
+                    if let Some(mtm) = objc2::MainThreadMarker::new() {
+                        modal.dismiss(mtm);
+                    }
+                }
+                self.handle_auth_sign_in_requested();
+            }
+            UserEvent::SignOut => {
+                let _ = vector_codespaces::TokenStore::new().clear();
+                if let Some(mtm) = objc2::MainThreadMarker::new() {
+                    unsafe { menu::rebuild_auth_menu_section(mtm, false, None) };
+                }
+                self.toasts.show(ToastBanner::info("signed out"));
+                tracing::info!("sign_out_complete");
+            }
+            // Plan 06-06 will wire the picker. Phase-6 stubs:
+            UserEvent::OpenCodespacesPicker => {
+                tracing::info!("OpenCodespacesPicker (handler arrives in Plan 06-06)");
+            }
+            UserEvent::CodespacesLoaded(_)
             | UserEvent::CodespacesLoadFailed(_)
-            | UserEvent::CodespaceStateChanged { .. }) => {
-                tracing::debug!(?other, "Phase 6 UserEvent (handler wired in Task 06-05-02)");
+            | UserEvent::CodespaceStateChanged { .. } => {
+                tracing::debug!("codespaces event (handler arrives in Plan 06-06)");
             }
         }
     }

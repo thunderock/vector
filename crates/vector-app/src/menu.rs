@@ -8,8 +8,13 @@ use objc2::sel;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::NSString;
+use winit::event_loop::EventLoopProxy;
 
 use vector_config::{ConfigFile, Kind};
+
+use crate::UserEvent;
+
+pub use auth_target::AuthMenuTarget;
 
 /// Newtype that asserts main-thread-only access to a `Retained<NSMenu>`. AppKit
 /// objects are `!Sync` by default; access is always gated by `MainThreadMarker`
@@ -351,4 +356,171 @@ fn add_services(mtm: MainThreadMarker, menu: &NSMenu) {
     app.setServicesMenu(Some(&services_menu));
     item.setSubmenu(Some(&services_menu));
     menu.addItem(&item);
+}
+
+// ---- Phase 6 / AUTH-01 — auth menu items + dynamic rebuild --------------
+
+struct AuthMenuRefs {
+    sign_in: Retained<NSMenuItem>,
+    sign_out: Retained<NSMenuItem>,
+    /// Held so NSMenuItem's weak target reference stays live. Never read
+    /// after install — the ObjC runtime drives the actions.
+    #[allow(dead_code)]
+    target: Retained<AuthMenuTarget>,
+}
+// SAFETY: every consumer below holds a `MainThreadMarker`; AppKit objects are
+// only ever read/written on the main thread.
+unsafe impl Sync for AuthMenuRefs {}
+unsafe impl Send for AuthMenuRefs {}
+
+static AUTH_MENU_REFS: OnceLock<MainThreadOnly<AuthMenuRefs>> = OnceLock::new();
+
+/// Install Phase-6 auth + codespaces menu items at the top of the existing
+/// `Vector` menu. Idempotent — second invocation is a no-op (OnceLock semantics).
+///
+/// # Safety
+/// AppKit mutation; caller must be on the macOS main thread.
+pub unsafe fn install_auth_menu_items(mtm: MainThreadMarker, proxy: EventLoopProxy<UserEvent>) {
+    let app = NSApplication::sharedApplication(mtm);
+    let Some(main_menu) = app.mainMenu() else {
+        tracing::warn!("install_auth_menu_items: no main menu installed yet");
+        return;
+    };
+    // The `Vector` (app) menu is the first top-level menu item's submenu.
+    let Some(app_item) = main_menu.itemAtIndex(0) else {
+        tracing::warn!("install_auth_menu_items: main menu has no items");
+        return;
+    };
+    let Some(app_submenu) = app_item.submenu() else {
+        tracing::warn!("install_auth_menu_items: app item has no submenu");
+        return;
+    };
+
+    let target = AuthMenuTarget::new(mtm, proxy);
+    let target_obj: &objc2::runtime::AnyObject = (*target).as_ref();
+
+    // Sign in with GitHub — no key equivalent.
+    let sign_in = NSMenuItem::new(mtm);
+    sign_in.setTitle(&NSString::from_str("Sign in with GitHub"));
+    unsafe {
+        sign_in.setAction(Some(sel!(signIn:)));
+        sign_in.setTarget(Some(target_obj));
+    }
+
+    // Sign out (@login) — hidden until token present.
+    let sign_out = NSMenuItem::new(mtm);
+    sign_out.setTitle(&NSString::from_str("Sign out"));
+    unsafe {
+        sign_out.setAction(Some(sel!(signOut:)));
+        sign_out.setTarget(Some(target_obj));
+    }
+    sign_out.setHidden(true);
+
+    // Codespaces… — Cmd-Shift-G (Plan 06-06 handler).
+    let codespaces = NSMenuItem::new(mtm);
+    codespaces.setTitle(&NSString::from_str("Codespaces\u{2026}"));
+    codespaces.setKeyEquivalent(&NSString::from_str("g"));
+    codespaces.setKeyEquivalentModifierMask(
+        NSEventModifierFlags::Command | NSEventModifierFlags::Shift,
+    );
+    unsafe {
+        codespaces.setAction(Some(sel!(openCodespaces:)));
+        codespaces.setTarget(Some(target_obj));
+    }
+
+    let sep = NSMenuItem::separatorItem(mtm);
+
+    // Insert at the very top of the Vector menu, above "About Vector".
+    app_submenu.insertItem_atIndex(&sign_in, 0);
+    app_submenu.insertItem_atIndex(&sign_out, 1);
+    app_submenu.insertItem_atIndex(&codespaces, 2);
+    app_submenu.insertItem_atIndex(&sep, 3);
+
+    let refs = AuthMenuRefs {
+        sign_in,
+        sign_out,
+        target,
+    };
+    let _ = AUTH_MENU_REFS.set(MainThreadOnly(refs));
+}
+
+/// Toggle Sign-in / Sign-out visibility based on Keychain state, and update
+/// the Sign-out title to include `@{login}` when known.
+///
+/// # Safety
+/// AppKit mutation; caller must be on the macOS main thread.
+pub unsafe fn rebuild_auth_menu_section(
+    _mtm: MainThreadMarker,
+    token_present: bool,
+    login: Option<&str>,
+) {
+    let Some(bound) = AUTH_MENU_REFS.get() else {
+        tracing::warn!("rebuild_auth_menu_section called before install_auth_menu_items");
+        return;
+    };
+    let refs = &bound.0;
+    refs.sign_in.setHidden(token_present);
+    refs.sign_out.setHidden(!token_present);
+    let title = match login {
+        Some(l) if token_present => format!("Sign out (@{l})"),
+        _ => "Sign out".to_string(),
+    };
+    refs.sign_out.setTitle(&NSString::from_str(&title));
+}
+
+mod auth_target {
+    use objc2::define_class;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2::{msg_send, DefinedClass, MainThreadOnly};
+    use objc2_app_kit::NSResponder;
+    use parking_lot::Mutex;
+    use winit::event_loop::EventLoopProxy;
+
+    use crate::UserEvent;
+
+    pub struct Ivars {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    const _: fn() = || {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Mutex<Ivars>>();
+    };
+
+    define_class!(
+        // SAFETY: NSResponder is the AppKit base for objects in the responder
+        // chain; we do not override any of its methods.
+        #[unsafe(super(NSResponder))]
+        #[name = "VectorAuthMenuTarget"]
+        #[ivars = Mutex<Ivars>]
+        pub struct AuthMenuTarget;
+
+        impl AuthMenuTarget {
+            #[unsafe(method(signIn:))]
+            fn sign_in(&self, _sender: &AnyObject) {
+                let _ = self.ivars().lock().proxy.send_event(UserEvent::AuthSignInRequested);
+            }
+
+            #[unsafe(method(signOut:))]
+            fn sign_out(&self, _sender: &AnyObject) {
+                let _ = self.ivars().lock().proxy.send_event(UserEvent::SignOut);
+            }
+
+            #[unsafe(method(openCodespaces:))]
+            fn open_codespaces(&self, _sender: &AnyObject) {
+                let _ = self.ivars().lock().proxy.send_event(UserEvent::OpenCodespacesPicker);
+            }
+        }
+    );
+
+    impl AuthMenuTarget {
+        pub fn new(
+            mtm: objc2::MainThreadMarker,
+            proxy: EventLoopProxy<UserEvent>,
+        ) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(Mutex::new(Ivars { proxy }));
+            unsafe { msg_send![super(this), init] }
+        }
+    }
 }
