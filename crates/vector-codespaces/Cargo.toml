@@ -22,7 +22,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 urlencoding.workspace = true
 zeroize.workspace = true
-vector-secrets = { path = "../vector-secrets" }
+vector-secrets = { path = "../vector-secrets", version = "2026.5.10" }
 
 [dev-dependencies]
 tempfile.workspace = true
