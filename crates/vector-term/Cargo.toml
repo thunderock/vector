@@ -8,10 +8,8 @@ description = "VT/ANSI state machine + grid + scrollback — Phase 2 (alacritty_
 
 [dependencies]
 alacritty_terminal = { workspace = true }
-anyhow.workspace = true
 percent-encoding = { workspace = true }
 regex = { workspace = true }
-thiserror.workspace = true
 tokio = { workspace = true }
 tracing.workspace = true
 vte = "0.15"

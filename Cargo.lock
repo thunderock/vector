@@ -4175,7 +4175,6 @@ dependencies = [
 name = "vector-codespaces"
 version = "2026.5.10"
 dependencies = [
- "anyhow",
  "chrono",
  "http",
  "oauth2",
@@ -4218,8 +4217,6 @@ dependencies = [
  "anyhow",
  "crossfont",
  "parking_lot",
- "thiserror 2.0.18",
- "tracing",
  "unicode-width",
 ]
 
@@ -4239,7 +4236,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vector-mux",
- "vector-pty",
  "vector-term",
 ]
 
@@ -4247,10 +4243,7 @@ dependencies = [
 name = "vector-input"
 version = "2026.5.10"
 dependencies = [
- "anyhow",
  "base64",
- "thiserror 2.0.18",
- "tracing",
  "vector-mux",
  "winit",
 ]
@@ -4306,33 +4299,24 @@ dependencies = [
 name = "vector-secrets"
 version = "2026.5.10"
 dependencies = [
- "anyhow",
  "apple-native-keyring-store",
  "keyring-core",
  "thiserror 2.0.18",
- "tracing",
  "zeroize",
 ]
 
 [[package]]
 name = "vector-ssh"
 version = "2026.5.10"
-dependencies = [
- "anyhow",
- "thiserror 2.0.18",
- "tracing",
-]
 
 [[package]]
 name = "vector-term"
 version = "2026.5.10"
 dependencies = [
  "alacritty_terminal",
- "anyhow",
  "base64",
  "percent-encoding",
  "regex",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "vte",
@@ -4342,7 +4326,6 @@ dependencies = [
 name = "vector-theme"
 version = "2026.5.10"
 dependencies = [
- "anyhow",
  "plist",
  "thiserror 2.0.18",
  "tracing",

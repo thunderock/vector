@@ -5,7 +5,11 @@ no-default-features = false
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+ignore = [
+    # rsa 0.9.x timing sidechannel via jsonwebtoken→octocrab; no patch available.
+    # This is a local desktop app — not exposed as a server — so the risk is acceptable.
+    "RUSTSEC-2023-0071",
+]
 unmaintained = "workspace"
 
 [licenses]

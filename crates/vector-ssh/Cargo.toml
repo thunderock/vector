@@ -7,9 +7,5 @@ license.workspace = true
 description = "Async SSH client — PTY channel, port-forward, agent — Phase 7 (russh)."
 
 [dependencies]
-anyhow.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
-
 [lints]
 workspace = true

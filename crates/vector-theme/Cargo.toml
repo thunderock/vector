@@ -7,7 +7,6 @@ license.workspace = true
 description = "Palette types + builtin themes — Phase 5."
 
 [dependencies]
-anyhow.workspace = true
 plist.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

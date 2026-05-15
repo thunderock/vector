@@ -7,7 +7,6 @@ license.workspace = true
 description = "GitHub Codespaces auth + list + connect — Phases 6/7 (octocrab + tonic)."
 
 [dependencies]
-anyhow.workspace = true
 chrono.workspace = true
 http.workspace = true
 oauth2.workspace = true
