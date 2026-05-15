@@ -309,9 +309,7 @@ pub fn submenu_rows_for(cfg: &ConfigFile) -> Vec<(String, bool)> {
     cfg.profile
         .iter()
         .map(|(name, block)| match block.kind {
-            Some(Kind::Codespace | Kind::DevTunnel) => {
-                (format!("{name} (phase 6+)"), false)
-            }
+            Some(Kind::Codespace | Kind::DevTunnel) => (format!("{name} (phase 6+)"), false),
             // Default (None) and explicit Local are first-class.
             _ => (name.clone(), true),
         })
@@ -420,9 +418,8 @@ pub unsafe fn install_auth_menu_items(mtm: MainThreadMarker, proxy: EventLoopPro
     let codespaces = NSMenuItem::new(mtm);
     codespaces.setTitle(&NSString::from_str("Codespaces\u{2026}"));
     codespaces.setKeyEquivalent(&NSString::from_str("g"));
-    codespaces.setKeyEquivalentModifierMask(
-        NSEventModifierFlags::Command | NSEventModifierFlags::Shift,
-    );
+    codespaces
+        .setKeyEquivalentModifierMask(NSEventModifierFlags::Command | NSEventModifierFlags::Shift);
     unsafe {
         codespaces.setAction(Some(sel!(openCodespaces:)));
         codespaces.setTarget(Some(target_obj));

@@ -80,7 +80,10 @@ fn default_state_all_false() {
     let app = make_app();
     let plan = chrome_draw_plan(&app);
     assert!(!plan.draw_tint, "tint should not draw by default");
-    assert!(!plan.draw_search_bar, "search bar should not draw by default");
+    assert!(
+        !plan.draw_search_bar,
+        "search bar should not draw by default"
+    );
     assert!(!plan.draw_toast, "toast should not draw by default");
     assert!(!plan.draw_picker, "picker should not draw by default");
 }
@@ -90,10 +93,16 @@ fn default_state_all_false() {
 fn search_bar_open_no_rect_does_not_draw() {
     let mut app = make_app();
     app.do_toggle_search();
-    assert!(app.search_bar_open(), "search bar should be open after toggle");
+    assert!(
+        app.search_bar_open(),
+        "search bar should be open after toggle"
+    );
     app.set_active_pane_rect_for_test(None);
     let plan = chrome_draw_plan(&app);
-    assert!(!plan.draw_search_bar, "search bar must not draw without active_pane_rect");
+    assert!(
+        !plan.draw_search_bar,
+        "search bar must not draw without active_pane_rect"
+    );
 }
 
 /// SearchBar open + active_pane_rect Some → draw_search_bar == true.
@@ -109,7 +118,10 @@ fn search_bar_open_with_rect_draws() {
         h_px: 600.0,
     }));
     let plan = chrome_draw_plan(&app);
-    assert!(plan.draw_search_bar, "search bar must draw when open + rect known");
+    assert!(
+        plan.draw_search_bar,
+        "search bar must draw when open + rect known"
+    );
 }
 
 /// ProfilePicker open → draw_picker == true.
@@ -139,19 +151,19 @@ fn tint_color_configured_draws() {
     let cfg = cfg_with_tint("#7a3aaf");
     app.set_current_config(cfg);
     let plan = chrome_draw_plan(&app);
-    assert!(plan.draw_tint, "tint must draw when active profile has tint color");
+    assert!(
+        plan.draw_tint,
+        "tint must draw when active profile has tint color"
+    );
 }
 
 /// W6 order test: assert draw-call byte offsets in app.rs are monotonically increasing
 /// per UI-SPEC §11 (tint → search_bar → toast → picker.scrim → picker.modal).
 #[test]
 fn chrome_draw_order_matches_ui_spec_section_11() {
-    let src_path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/app.rs"
-    );
-    let src = std::fs::read_to_string(src_path)
-        .expect("app.rs must be readable for the W6 order test");
+    let src_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/app.rs");
+    let src =
+        std::fs::read_to_string(src_path).expect("app.rs must be readable for the W6 order test");
 
     let markers = [
         "chrome.tint.draw(",
@@ -161,10 +173,7 @@ fn chrome_draw_order_matches_ui_spec_section_11() {
         "chrome.picker.draw_modal(",
     ];
 
-    let offsets: Vec<Option<usize>> = markers
-        .iter()
-        .map(|m| src.find(m))
-        .collect();
+    let offsets: Vec<Option<usize>> = markers.iter().map(|m| src.find(m)).collect();
 
     for (i, m) in markers.iter().enumerate() {
         assert!(

@@ -339,10 +339,7 @@ impl App {
             tracing::warn!("AuthDisplayCode: proxy missing");
             return;
         };
-        let cancellation = self
-            .pending_auth_cancellation
-            .clone()
-            .unwrap_or_default();
+        let cancellation = self.pending_auth_cancellation.clone().unwrap_or_default();
         if self.auth_modal.is_some() {
             tracing::debug!("AuthDisplayCode: replacing existing modal");
             if let Some(prev) = self.auth_modal.take() {
@@ -520,14 +517,14 @@ impl App {
         }
         match vector_config::append_codespace_profile(&path, &suggested, &cs.name, "#7a3aaf") {
             Ok(final_name) => {
-                self.toasts
-                    .show(ToastBanner::info(format!("profile saved as \"{final_name}\"")));
+                self.toasts.show(ToastBanner::info(format!(
+                    "profile saved as \"{final_name}\""
+                )));
             }
             Err(e) => {
                 tracing::warn!(error = %e, "append_codespace_profile failed");
-                self.toasts.show(ToastBanner::info(format!(
-                    "could not save profile — {e}"
-                )));
+                self.toasts
+                    .show(ToastBanner::info(format!("could not save profile — {e}")));
             }
         }
         self.request_redraw_all();
@@ -577,19 +574,23 @@ impl App {
                         // UserEvent::ConfigReloaded and AppShortcut::ReloadConfig.
                         if let Some(mtm) = objc2::MainThreadMarker::new() {
                             if let Some(c) = self.current_config.as_ref() {
-                                unsafe { menu::rebuild_switch_profile_submenu(mtm, c); }
+                                unsafe {
+                                    menu::rebuild_switch_profile_submenu(mtm, c);
+                                }
                             }
                         }
                         self.toasts.show(ToastBanner::info("config reloaded"));
                         tracing::info!("D-69 Cmd-Shift-R: config reloaded from disk");
                     }
                     Err(e) => {
-                        self.toasts.show(ToastBanner::info(format!("config error: {e}")));
+                        self.toasts
+                            .show(ToastBanner::info(format!("config error: {e}")));
                         tracing::warn!(error = %e, "D-69 Cmd-Shift-R: config parse error");
                     }
                 },
                 Err(e) => {
-                    self.toasts.show(ToastBanner::info(format!("config error: {e}")));
+                    self.toasts
+                        .show(ToastBanner::info(format!("config error: {e}")));
                     tracing::warn!(error = %e, "D-69 Cmd-Shift-R: config read error");
                 }
             }
@@ -963,9 +964,11 @@ impl App {
         let search_bar_draw = if self.search_bar.open {
             self.active_pane_rect.map(|rect| {
                 let content_w = rect.w_px; // LOW-2: pane width, not surface width
-                let bar_top_y = rect.y_px + rect.h_px
-                    - vector_render::SEARCH_BAR_HEIGHT_PX as f32;
-                let no_match = self.search_bar.cache.as_ref()
+                let bar_top_y = rect.y_px + rect.h_px - vector_render::SEARCH_BAR_HEIGHT_PX as f32;
+                let no_match = self
+                    .search_bar
+                    .cache
+                    .as_ref()
                     .is_some_and(|c| c.matches().is_empty());
                 let layout = vector_render::search_bar_layout(content_w as u32, no_match);
                 (bar_top_y, content_w, layout.bg_rgba)
@@ -980,8 +983,13 @@ impl App {
                 crate::toast::ToastMode::Action { .. } => vector_render::ToastModeKind::Action,
             };
             let elapsed_ms = u32::try_from(
-                toast.shown_at.elapsed().as_millis().min(u128::from(u32::MAX)),
-            ).unwrap_or(u32::MAX);
+                toast
+                    .shown_at
+                    .elapsed()
+                    .as_millis()
+                    .min(u128::from(u32::MAX)),
+            )
+            .unwrap_or(u32::MAX);
             let total_visible_ms = match toast.mode {
                 crate::toast::ToastMode::Info => 5000,
                 crate::toast::ToastMode::Action { .. } => u32::MAX,
@@ -991,13 +999,15 @@ impl App {
         });
         // Picker snapshot
         let picker_draw = if self.profile_picker.open {
-            let longest_label_px = self.profile_picker.entries.iter()
+            let longest_label_px = self
+                .profile_picker
+                .entries
+                .iter()
                 .map(|e| (e.name.len() as u32).saturating_mul(9))
                 .max()
                 .unwrap_or(280);
-            let visible_rows = u32::try_from(
-                self.profile_picker.filtered.len().min(8)
-            ).unwrap_or(8);
+            let visible_rows =
+                u32::try_from(self.profile_picker.filtered.len().min(8)).unwrap_or(8);
             let layout = vector_render::picker_layout(
                 longest_label_px,
                 visible_rows,
@@ -1015,14 +1025,17 @@ impl App {
         let Some(aw) = self.windows.get_mut(&id) else {
             return;
         };
-        if let (Some(host), Some(chrome)) = (aw.render_host.as_mut(), aw.chrome_pipelines.as_mut()) {
+        if let (Some(host), Some(chrome)) = (aw.render_host.as_mut(), aw.chrome_pipelines.as_mut())
+        {
             let frame = match host.acquire_frame() {
                 Ok(Some(f)) => f,
                 Ok(None) | Err(_) => return, // skip chrome frame if surface unavailable
             };
-            let encoder = host.device().create_command_encoder(
-                &wgpu::CommandEncoderDescriptor { label: Some("chrome-passes") },
-            );
+            let encoder = host
+                .device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("chrome-passes"),
+                });
             let mut enc = encoder;
             {
                 let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1045,7 +1058,9 @@ impl App {
                 // 1. Tint stripe (UI-SPEC §5.1, §9.3) — skip if no tint.
                 if active_tint_rgba.is_some() {
                     chrome.tint.set_color(host.queue(), active_tint_rgba);
-                    chrome.tint.update_quad(host.queue(), frame_width, frame_height);
+                    chrome
+                        .tint
+                        .update_quad(host.queue(), frame_width, frame_height);
                     chrome.tint.draw(&mut rpass);
                 }
 
@@ -1068,15 +1083,37 @@ impl App {
                 if let Some((mode, alpha)) = toast_draw {
                     let top_y = 0.0_f32; // chrome starts at content top
                     let content_w = surface_w; // toast spans full window width (UI-SPEC §5.4)
-                    chrome.toast.update(host.queue(), top_y, content_w, mode, alpha, surface_w, surface_h);
+                    chrome.toast.update(
+                        host.queue(),
+                        top_y,
+                        content_w,
+                        mode,
+                        alpha,
+                        surface_w,
+                        surface_h,
+                    );
                     chrome.toast.draw(&mut rpass);
                 }
 
                 // 5. Picker — drawn iff open.
                 if let Some(layout) = &picker_draw {
-                    chrome.picker.draw_scrim(host.queue(), surface_w, surface_h, surface_w, surface_h, &mut rpass);
+                    chrome.picker.draw_scrim(
+                        host.queue(),
+                        surface_w,
+                        surface_h,
+                        surface_w,
+                        surface_h,
+                        &mut rpass,
+                    );
                     let bg = [0.11_f32, 0.11, 0.12, 0.96];
-                    chrome.picker.draw_modal(host.queue(), layout, bg, surface_w, surface_h, &mut rpass);
+                    chrome.picker.draw_modal(
+                        host.queue(),
+                        layout,
+                        bg,
+                        surface_w,
+                        surface_h,
+                        &mut rpass,
+                    );
                 }
             } // rpass dropped
             host.queue().submit(std::iter::once(enc.finish()));
@@ -1225,9 +1262,9 @@ impl App {
             }
         };
         // HIGH-2: ChromePipelines parallel to render_host (disjoint borrows in render_window).
-        let chrome_pipelines = render_host.as_ref().map(|h| {
-            crate::chrome::ChromePipelines::new(h.device(), h.surface_format())
-        });
+        let chrome_pipelines = render_host
+            .as_ref()
+            .map(|h| crate::chrome::ChromePipelines::new(h.device(), h.surface_format()));
         self.windows.insert(
             id,
             AppWindow {
@@ -1385,9 +1422,9 @@ impl ApplicationHandler<UserEvent> for App {
             }
         };
         // HIGH-2: ChromePipelines parallel to render_host (disjoint borrows in render_window).
-        let chrome_pipelines = render_host.as_ref().map(|h| {
-            crate::chrome::ChromePipelines::new(h.device(), h.surface_format())
-        });
+        let chrome_pipelines = render_host
+            .as_ref()
+            .map(|h| crate::chrome::ChromePipelines::new(h.device(), h.surface_format()));
         let id = window.id();
         self.windows.insert(
             id,
@@ -1506,7 +1543,9 @@ impl ApplicationHandler<UserEvent> for App {
                 // submenu from the new config via direct OnceLock reference.
                 if let Some(mtm) = objc2::MainThreadMarker::new() {
                     if let Some(active) = self.current_config.as_ref() {
-                        unsafe { menu::rebuild_switch_profile_submenu(mtm, active); }
+                        unsafe {
+                            menu::rebuild_switch_profile_submenu(mtm, active);
+                        }
                     }
                 }
                 // Plan 05-12 (POLISH-05 gap-closure): re-resolve the active
@@ -1591,7 +1630,10 @@ impl ApplicationHandler<UserEvent> for App {
             // ForwardingListener -> I/O drain task -> here. Route through the
             // ClipboardRouter policy; WritePasteboard hits NSPasteboard,
             // ShowPrompt raises a toast, DenyRead is a no-op log (D-70).
-            UserEvent::ClipboardStore { kind_is_selection, data } => {
+            UserEvent::ClipboardStore {
+                kind_is_selection,
+                data,
+            } => {
                 let fg_proc = "shell"; // v1 default; pane label plumbing is a follow-up.
                 let event = crate::clipboard_router::make_store_event(kind_is_selection, data);
                 match self.clipboard_router.handle(event, fg_proc) {
