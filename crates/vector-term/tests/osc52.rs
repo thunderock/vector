@@ -71,7 +71,8 @@ async fn read_denied() {
         no_clip.is_err(),
         "D-70: OSC 52 read must NOT yield ClipboardEvent (got {no_clip:?})"
     );
-    let no_write = tokio::time::timeout(std::time::Duration::from_millis(50), write_rx.recv()).await;
+    let no_write =
+        tokio::time::timeout(std::time::Duration::from_millis(50), write_rx.recv()).await;
     assert!(
         no_write.is_err(),
         "D-70: OSC 52 read must NOT yield PTY write reply (got {no_write:?})"

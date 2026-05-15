@@ -65,14 +65,19 @@ pub enum UserEvent {
     ProfileSelected(String),
     ToggleSearch,
     ToggleSecureKeyboardEntry,
-    SpawnNewWindow,                   // D-82 Cmd-N
-    ReloadConfig,                     // M4 — Cmd-Shift-R + View → Reload Config
-    HyperlinkClicked { url: String }, // B1
-    ToastInfo(String),                // M2 helper for one-shot info toasts
+    SpawnNewWindow, // D-82 Cmd-N
+    ReloadConfig,   // M4 — Cmd-Shift-R + View → Reload Config
+    HyperlinkClicked {
+        url: String,
+    }, // B1
+    ToastInfo(String), // M2 helper for one-shot info toasts
     /// Plan 05-12 (POLISH-05 gap-closure): OSC 52 Store routed from the
     /// I/O thread's `clipboard_rx` drain task to App.clipboard_router.
     /// `kind_is_selection` keeps alacritty_terminal::ClipboardType out of this enum.
-    ClipboardStore { kind_is_selection: bool, data: String },
+    ClipboardStore {
+        kind_is_selection: bool,
+        data: String,
+    },
     // ───── Phase 6 (AUTH-01..03 + CS-01..03) — appended; never reorder ─────
     /// Menu `Vector → Sign in with GitHub` clicked, or codespace profile
     /// selected while no token is present (D-84 second trigger).
@@ -85,9 +90,13 @@ pub enum UserEvent {
         interval_secs: u64,
     },
     /// Device flow polled successfully; tokens already persisted to Keychain.
-    AuthCompleted { user_login: String },
+    AuthCompleted {
+        user_login: String,
+    },
     /// Device flow ended with cancel / expired / oauth-error.
-    AuthFailed { reason: String },
+    AuthFailed {
+        reason: String,
+    },
     /// Triggered by 401-after-refresh chain in CodespacesClient.
     AuthRequired,
     /// Menu `Vector → Sign out (@login)` clicked.

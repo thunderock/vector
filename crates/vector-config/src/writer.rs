@@ -109,9 +109,10 @@ fn collect_profile_names(doc: &DocumentMut) -> Vec<String> {
 
 fn atomic_write(path: &Path, content: &str) -> Result<(), WriterError> {
     let parent = path.parent().ok_or(WriterError::NoParent)?;
-    let file_name = path
-        .file_name()
-        .map_or_else(|| "config.toml".to_string(), |s| s.to_string_lossy().into_owned());
+    let file_name = path.file_name().map_or_else(
+        || "config.toml".to_string(),
+        |s| s.to_string_lossy().into_owned(),
+    );
     let tmp = parent.join(format!("{file_name}.tmp"));
     std::fs::write(&tmp, content)?;
     std::fs::rename(&tmp, path)?;

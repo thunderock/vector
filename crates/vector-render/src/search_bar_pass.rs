@@ -41,8 +41,7 @@ pub fn search_bar_layout(content_width: u32, no_match: bool) -> SearchBarLayout 
     let h = SEARCH_BAR_HEIGHT_PX as f32;
     let right_widths = [24.0_f32, 24.0, 24.0, 48.0, 24.0];
     let spacing = 4.0_f32;
-    let reserved: f32 =
-        right_widths.iter().sum::<f32>() + spacing * (right_widths.len() as f32);
+    let reserved: f32 = right_widths.iter().sum::<f32>() + spacing * (right_widths.len() as f32);
     let query_w = (content_width as f32 - reserved - spacing).max(0.0);
 
     let mut x = spacing;

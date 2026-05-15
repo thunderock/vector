@@ -19,11 +19,17 @@ fn cfg_two_profiles() -> ConfigFile {
     let mut profile = BTreeMap::new();
     profile.insert(
         "default".to_owned(),
-        ProfileBlock { kind: Some(Kind::Local), ..ProfileBlock::default() },
+        ProfileBlock {
+            kind: Some(Kind::Local),
+            ..ProfileBlock::default()
+        },
     );
     profile.insert(
         "work-cs".to_owned(),
-        ProfileBlock { kind: Some(Kind::Codespace), ..ProfileBlock::default() },
+        ProfileBlock {
+            kind: Some(Kind::Codespace),
+            ..ProfileBlock::default()
+        },
     );
     ConfigFile {
         default: ProfileBlock::default(),
@@ -37,7 +43,10 @@ fn toggle_search_opens_search_bar() {
     let mut app = make_app();
     assert!(!app.search_bar_open(), "precondition: starts closed");
     app.do_toggle_search();
-    assert!(app.search_bar_open(), "ToggleSearch must open the search bar");
+    assert!(
+        app.search_bar_open(),
+        "ToggleSearch must open the search bar"
+    );
 }
 
 #[test]

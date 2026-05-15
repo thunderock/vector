@@ -34,7 +34,10 @@ fn new_pane_inherits_cwd_from_osc7() {
 
 #[test]
 fn new_pane_falls_back_to_proc_pidinfo() {
-    let view = PaneCwdView { cwd: None, pid: Some(1234) };
+    let view = PaneCwdView {
+        cwd: None,
+        pid: Some(1234),
+    };
     let cwd = spawn_cwd_for_with_proc(
         &view,
         |_| Some(PathBuf::from("/tmp/work")),
@@ -45,8 +48,10 @@ fn new_pane_falls_back_to_proc_pidinfo() {
 
 #[test]
 fn new_pane_falls_back_to_home() {
-    let view = PaneCwdView { cwd: None, pid: Some(1234) };
-    let cwd =
-        spawn_cwd_for_with_proc(&view, |_| None, || Some(PathBuf::from("/Users/test")));
+    let view = PaneCwdView {
+        cwd: None,
+        pid: Some(1234),
+    };
+    let cwd = spawn_cwd_for_with_proc(&view, |_| None, || Some(PathBuf::from("/Users/test")));
     assert_eq!(cwd, PathBuf::from("/Users/test"));
 }

@@ -87,7 +87,12 @@ impl ToastPass {
         surface_h_px: f32,
     ) {
         let l = toast_layout(mode);
-        let rgba = [l.bg_rgba[0], l.bg_rgba[1], l.bg_rgba[2], l.bg_rgba[3] * alpha];
+        let rgba = [
+            l.bg_rgba[0],
+            l.bg_rgba[1],
+            l.bg_rgba[2],
+            l.bg_rgba[3] * alpha,
+        ];
         let rect = [0.0, top_y_px, content_w_px, l.height_px as f32];
         self.chrome
             .update_quad(queue, rect, rgba, [surface_w_px, surface_h_px]);

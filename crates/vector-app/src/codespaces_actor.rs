@@ -76,9 +76,7 @@ pub fn spawn_start_then_poll(
         match client.start(&name).await {
             Ok(()) | Err(ClientError::StartFailed { status: 409 }) => {
                 // 409 already swallowed inside client.start; belt-and-braces.
-                let _ = proxy.send_event(UserEvent::ToastInfo(
-                    "starting codespace…".into(),
-                ));
+                let _ = proxy.send_event(UserEvent::ToastInfo("starting codespace…".into()));
             }
             Err(ClientError::Unauthenticated) => {
                 let _ = proxy.send_event(UserEvent::AuthRequired);

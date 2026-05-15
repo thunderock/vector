@@ -70,7 +70,8 @@ fn derive_profile_name_decollides() {
 fn append_preserves_existing_blocks() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");
-    let source = "# my config\n[default]\ntheme = \"x\"\n\n[profile.work-local]\nkind = \"local\"\n";
+    let source =
+        "# my config\n[default]\ntheme = \"x\"\n\n[profile.work-local]\nkind = \"local\"\n";
     fs::write(&path, source).unwrap();
     append_codespace_profile(&path, "test-cs", "o/test-cs-xyz12", "#7a3aaf").unwrap();
     let after = fs::read_to_string(&path).unwrap();

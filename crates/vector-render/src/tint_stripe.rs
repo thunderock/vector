@@ -148,10 +148,7 @@ impl TintStripePipeline {
     pub fn quad_for(content_width_px: u32) -> [[f32; 2]; 6] {
         let w = content_width_px as f32;
         let h = 28.0;
-        [
-            [0.0, 0.0], [w, 0.0], [0.0, h],
-            [w, 0.0],  [w, h],   [0.0, h],
-        ]
+        [[0.0, 0.0], [w, 0.0], [0.0, h], [w, 0.0], [w, h], [0.0, h]]
     }
 }
 
@@ -164,8 +161,5 @@ fn ndc_quad(_surface_w_px: u32, surface_h_px: u32) -> [[f32; 2]; 6] {
     let x1 = 1.0;
     let y0 = 1.0;
     let y1 = 1.0 - h_ndc;
-    [
-        [x0, y0], [x1, y0], [x0, y1],
-        [x1, y0], [x1, y1], [x0, y1],
-    ]
+    [[x0, y0], [x1, y0], [x0, y1], [x1, y0], [x1, y1], [x0, y1]]
 }

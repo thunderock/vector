@@ -57,7 +57,9 @@ impl WinitWindowFactory<'_> {
     ) -> Result<Arc<Window>, winit::error::OsError> {
         let win = self.event_loop.create_window(attrs)?;
         // SAFETY: window_event/SpawnNewWindow runs on main thread per winit contract.
-        unsafe { apply_tabbing_mode_disallowed(&win); }
+        unsafe {
+            apply_tabbing_mode_disallowed(&win);
+        }
         Ok(Arc::new(win))
     }
 }

@@ -6,7 +6,12 @@ use winit::event::ElementState;
 use winit::keyboard::{Key, SmolStr};
 
 fn cmd() -> ModState {
-    ModState { shift: false, alt: false, ctrl: false, cmd: true }
+    ModState {
+        shift: false,
+        alt: false,
+        ctrl: false,
+        cmd: true,
+    }
 }
 
 #[test]

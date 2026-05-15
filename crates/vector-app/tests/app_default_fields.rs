@@ -3,8 +3,8 @@
 //! Tests that App::new initialises both state machines with closed/empty defaults
 //! before any shortcut is dispatched.
 
-use tokio::sync::mpsc;
 use std::sync::{atomic::AtomicBool, Arc};
+use tokio::sync::mpsc;
 
 #[test]
 fn app_search_bar_starts_closed() {

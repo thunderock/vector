@@ -41,9 +41,9 @@ pub fn state_label(state: CodespaceState) -> &'static str {
         | CodespaceState::Updating
         | CodespaceState::Rebuilding
         | CodespaceState::Created => "Starting",
-        CodespaceState::Shutdown
-        | CodespaceState::ShuttingDown
-        | CodespaceState::Archived => "Shutdown",
+        CodespaceState::Shutdown | CodespaceState::ShuttingDown | CodespaceState::Archived => {
+            "Shutdown"
+        }
         CodespaceState::Failed => "Failed",
         CodespaceState::Unknown | CodespaceState::Unrecognized => "Unknown",
     }

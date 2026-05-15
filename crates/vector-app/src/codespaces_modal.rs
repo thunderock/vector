@@ -11,8 +11,7 @@ use std::sync::Arc;
 use objc2::rc::Retained;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSFont, NSPanel, NSTextAlignment, NSTextField,
-    NSWindowStyleMask,
+    NSBackingStoreType, NSColor, NSFont, NSPanel, NSTextAlignment, NSTextField, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use tokio_util::sync::CancellationToken;
@@ -54,8 +53,7 @@ impl CodespacesPickerModal {
         panel.setLevel(objc2_app_kit::NSFloatingWindowLevel);
         panel.center();
 
-        let rows_container_frame =
-            NSRect::new(NSPoint::new(8.0, 32.0), NSSize::new(624.0, 416.0));
+        let rows_container_frame = NSRect::new(NSPoint::new(8.0, 32.0), NSSize::new(624.0, 416.0));
         let footer = make_label(
             mtm,
             "loading codespaces…",
@@ -108,7 +106,8 @@ impl CodespacesPickerModal {
             self.state = LoadState::Ready(Arc::new(v));
         }
         let footer_text = format!("polling {name} ({})…", state_label(new_state));
-        self.footer.setStringValue(&NSString::from_str(&footer_text));
+        self.footer
+            .setStringValue(&NSString::from_str(&footer_text));
         self.rerender(mtm);
     }
 
@@ -197,7 +196,8 @@ impl CodespacesPickerModal {
             );
             content.addSubview(&row);
             self.row_fields.lock().push(row);
-            self.footer.setStringValue(&NSString::from_str("0 codespaces"));
+            self.footer
+                .setStringValue(&NSString::from_str("0 codespaces"));
             return;
         }
 
@@ -248,7 +248,8 @@ impl CodespacesPickerModal {
             "{count} codespace{plural} · last refreshed just now",
             plural = if count == 1 { "" } else { "s" }
         );
-        self.footer.setStringValue(&NSString::from_str(&footer_text));
+        self.footer
+            .setStringValue(&NSString::from_str(&footer_text));
     }
 
     pub fn dismiss(&self) {

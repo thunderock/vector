@@ -204,7 +204,9 @@ fn main() -> Result<()> {
 /// (M4 / D-69: bundled Cmd-Shift-R reload-config keybind).
 fn spawn_config_watcher_thread(proxy: EventLoopProxy<UserEvent>) -> Option<thread::JoinHandle<()>> {
     let home = std::env::var_os("HOME")?;
-    let config_dir = std::path::PathBuf::from(&home).join(".config").join("vector");
+    let config_dir = std::path::PathBuf::from(&home)
+        .join(".config")
+        .join("vector");
     let config_path = config_dir.join("config.toml");
     let themes_dir = config_dir.join("themes");
 
@@ -249,14 +251,12 @@ fn spawn_config_watcher_thread(proxy: EventLoopProxy<UserEvent>) -> Option<threa
                                             .send_event(UserEvent::ConfigReloaded(Arc::new(cfg)));
                                     }
                                     Err(e) => {
-                                        let _ = proxy.send_event(UserEvent::ConfigError(
-                                            e.to_string(),
-                                        ));
+                                        let _ =
+                                            proxy.send_event(UserEvent::ConfigError(e.to_string()));
                                     }
                                 },
                                 Err(e) => {
-                                    let _ =
-                                        proxy.send_event(UserEvent::ConfigError(e.to_string()));
+                                    let _ = proxy.send_event(UserEvent::ConfigError(e.to_string()));
                                 }
                             }
                         }

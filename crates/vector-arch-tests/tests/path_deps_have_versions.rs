@@ -48,7 +48,11 @@ fn root_and_all_members_have_versioned_path_deps() {
         if let Some(ws_table) = ws.as_table() {
             // Iterate workspace.dependencies via wrapped Value to share check_section.
             let wrapped = toml::Value::Table(ws_table.clone());
-            check_section("Cargo.toml [workspace.dependencies]", &wrapped, "dependencies");
+            check_section(
+                "Cargo.toml [workspace.dependencies]",
+                &wrapped,
+                "dependencies",
+            );
         }
     }
     // Direct sections on root are uncommon but handle them gracefully.

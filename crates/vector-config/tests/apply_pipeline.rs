@@ -17,11 +17,8 @@ fn parse_error_keeps_last_good() {
     );
 
     // Valid TOML — must update.
-    let _plan = try_load_or_keep(
-        "[default.font]\nfamily = \"Fira Code\"\n",
-        &mut last_good,
-    )
-    .unwrap();
+    let _plan =
+        try_load_or_keep("[default.font]\nfamily = \"Fira Code\"\n", &mut last_good).unwrap();
     assert_eq!(
         last_good
             .as_ref()

@@ -32,7 +32,11 @@ async fn commit_sends_utf8() {
     assert!(sent, "commit must return true when bytes enqueued");
     let bytes = write_rx.recv().await.expect("commit must write to PTY");
     // UTF-8 encoding of "こん" = 0xe3 0x81 0x93 0xe3 0x82 0x93
-    assert_eq!(bytes, "こん".as_bytes(), "PTY must receive exact UTF-8 bytes");
+    assert_eq!(
+        bytes,
+        "こん".as_bytes(),
+        "PTY must receive exact UTF-8 bytes"
+    );
     assert!(!ime.is_active(), "after commit preedit is cleared");
     assert_eq!(ime.preedit(), "");
 }

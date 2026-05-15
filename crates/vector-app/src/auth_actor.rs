@@ -61,10 +61,7 @@ impl std::fmt::Debug for AuthCancellation {
 
 /// Spawn the device-flow state machine on `handle`. Returns the cancel handle
 /// the modal stashes so its Cancel button can abort.
-pub fn spawn_device_flow(
-    handle: &Handle,
-    proxy: EventLoopProxy<UserEvent>,
-) -> AuthCancellation {
+pub fn spawn_device_flow(handle: &Handle, proxy: EventLoopProxy<UserEvent>) -> AuthCancellation {
     let cancel = AuthCancellation::new();
     let cancel_clone = cancel.clone();
     handle.spawn(async move {
@@ -173,10 +170,6 @@ async fn run_flow(proxy: EventLoopProxy<UserEvent>, cancel: AuthCancellation) {
 
 async fn fetch_login(token: &Zeroizing<String>) -> Result<String, String> {
     let octo = build_octocrab(token, None).map_err(|e| e.to_string())?;
-    let user: octocrab::models::Author = octo
-        .current()
-        .user()
-        .await
-        .map_err(|e| e.to_string())?;
+    let user: octocrab::models::Author = octo.current().user().await.map_err(|e| e.to_string())?;
     Ok(user.login)
 }

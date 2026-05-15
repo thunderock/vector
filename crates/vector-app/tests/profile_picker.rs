@@ -4,7 +4,10 @@ use vector_app::profile_picker::{match_profiles, PickerEntry, ProfilePicker};
 use vector_config::Kind;
 
 fn e(name: &str, kind: Kind) -> PickerEntry {
-    PickerEntry { name: name.to_owned(), kind }
+    PickerEntry {
+        name: name.to_owned(),
+        kind,
+    }
 }
 
 #[test]

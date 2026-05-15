@@ -49,7 +49,7 @@ fn atomic_rename_single_event() {
     let _w = spawn_watcher(&cfg, &themes, tx).unwrap();
 
     std::thread::sleep(Duration::from_millis(50)); // let watcher arm
-    // Simulate vim atomic-save: write to tmp, then rename onto config.toml (Pitfall 1).
+                                                   // Simulate vim atomic-save: write to tmp, then rename onto config.toml (Pitfall 1).
     std::fs::write(&tmp, "[default]\n# atomic\n").unwrap();
     std::fs::rename(&tmp, &cfg).unwrap();
     std::thread::sleep(Duration::from_millis(350));

@@ -80,6 +80,8 @@ impl ProfilePicker {
 
     #[must_use]
     pub fn select_active(&self) -> Option<&PickerEntry> {
-        self.filtered.get(self.selected_idx).map(|&i| &self.entries[i])
+        self.filtered
+            .get(self.selected_idx)
+            .map(|&i| &self.entries[i])
     }
 }

@@ -189,10 +189,7 @@ pub mod appkit_impl {
 
     impl VectorInputView {
         /// Construct a new `VectorInputView` on the main thread, wrapping `state`.
-        pub fn new_with_state(
-            mtm: objc2::MainThreadMarker,
-            state: ImeState,
-        ) -> Retained<Self> {
+        pub fn new_with_state(mtm: objc2::MainThreadMarker, state: ImeState) -> Retained<Self> {
             let this = Self::alloc(mtm).set_ivars(Mutex::new(state));
             unsafe { msg_send![super(this), init] }
         }

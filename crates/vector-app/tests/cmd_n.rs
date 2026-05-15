@@ -25,9 +25,10 @@ startup_command = "cd /tmp && exec $SHELL"
 fn cmd_shift_r_reload_config_keybind() {
     // M4 / D-69: bundled default config ships a Cmd-Shift-R → reload-config keybind.
     let cfg = parse(vector_app::DEFAULT_CONFIG_TOML).expect("DEFAULT_CONFIG_TOML parses");
-    let has_reload = cfg.keybind.iter().any(|kb| {
-        kb.action == Action::ReloadConfig && kb.key.eq_ignore_ascii_case("cmd-shift-r")
-    });
+    let has_reload = cfg
+        .keybind
+        .iter()
+        .any(|kb| kb.action == Action::ReloadConfig && kb.key.eq_ignore_ascii_case("cmd-shift-r"));
     assert!(
         has_reload,
         "M4 / D-69: bundled default config MUST ship a Cmd-Shift-R → reload-config keybind"

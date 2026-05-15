@@ -49,7 +49,9 @@ impl EventListener for ForwardingListener {
                 self.send_pty(reply.into_bytes());
             }
             Event::ClipboardStore(kind, data) => {
-                let _ = self.clipboard_tx.try_send(ClipboardEvent::Store(kind, data));
+                let _ = self
+                    .clipboard_tx
+                    .try_send(ClipboardEvent::Store(kind, data));
             }
             Event::ClipboardLoad(_, _) => {
                 // D-70: OSC 52 reads always denied in v1; never invoke the callback.

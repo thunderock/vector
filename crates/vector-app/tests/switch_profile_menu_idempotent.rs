@@ -11,15 +11,24 @@ fn make_cfg() -> ConfigFile {
     let mut profile = BTreeMap::new();
     profile.insert(
         "default".to_owned(),
-        ProfileBlock { kind: Some(Kind::Local), ..ProfileBlock::default() },
+        ProfileBlock {
+            kind: Some(Kind::Local),
+            ..ProfileBlock::default()
+        },
     );
     profile.insert(
         "work-cs".to_owned(),
-        ProfileBlock { kind: Some(Kind::Codespace), ..ProfileBlock::default() },
+        ProfileBlock {
+            kind: Some(Kind::Codespace),
+            ..ProfileBlock::default()
+        },
     );
     profile.insert(
         "prod".to_owned(),
-        ProfileBlock { kind: Some(Kind::DevTunnel), ..ProfileBlock::default() },
+        ProfileBlock {
+            kind: Some(Kind::DevTunnel),
+            ..ProfileBlock::default()
+        },
     );
     ConfigFile {
         default: ProfileBlock::default(),

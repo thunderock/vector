@@ -8,7 +8,10 @@ struct MockGrid {
 
 impl GridAccess for MockGrid {
     fn cell_char(&self, row: usize, col: usize) -> Option<char> {
-        self.rows.get(row).and_then(|r| r.get(col)).and_then(|c| c.0)
+        self.rows
+            .get(row)
+            .and_then(|r| r.get(col))
+            .and_then(|c| c.0)
     }
     fn cell_is_wide_spacer(&self, row: usize, col: usize) -> bool {
         self.rows
