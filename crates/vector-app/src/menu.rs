@@ -309,7 +309,7 @@ pub fn submenu_rows_for(cfg: &ConfigFile) -> Vec<(String, bool)> {
     cfg.profile
         .iter()
         .map(|(name, block)| match block.kind {
-            Some(Kind::Codespace) | Some(Kind::DevTunnel) => {
+            Some(Kind::Codespace | Kind::DevTunnel) => {
                 (format!("{name} (phase 6+)"), false)
             }
             // Default (None) and explicit Local are first-class.

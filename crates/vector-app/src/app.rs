@@ -771,7 +771,13 @@ impl App {
     /// use `LoadOp::Load` so each compositor paints onto the same view.
     /// Plan 05-16: after the pane loop, invoke the chrome pass (tint, search bar,
     /// toast, picker) via `aw.chrome_pipelines` (parallel field to render_host).
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::manual_let_else
+    )]
     fn render_window(&mut self, id: WindowId, sel: Option<((u16, u16), (u16, u16))>) {
         // Plan 05-16: tick the toast stack so Info toasts auto-expire after 5 s.
         self.toasts.tick(std::time::Instant::now());
@@ -843,7 +849,7 @@ impl App {
 
         // Per-pane render block — `host` borrow is scoped here so chrome pass can
         // borrow aw.chrome_pipelines independently afterwards.
-        let (frame_width, frame_height, frame_view) = {
+        let (frame_width, frame_height, ()) = {
             let Some(host) = aw.render_host.as_mut() else {
                 return;
             };
@@ -943,7 +949,7 @@ impl App {
             // Return surface dimensions for the chrome pass encoder (no frame needed).
             (width, height, ())
         };
-        let _ = frame_view; // suppress unused warning; texture view lifetime ended with frame.present()
+        // frame_view lifetime ended with frame.present() above.
 
         // Plan 05-16: chrome pass — AFTER per-pane compositor loop, BEFORE next frame.
         // Snapshot App-level state BEFORE borrowing aw (avoids borrow conflict with
@@ -960,8 +966,7 @@ impl App {
                 let bar_top_y = rect.y_px + rect.h_px
                     - vector_render::SEARCH_BAR_HEIGHT_PX as f32;
                 let no_match = self.search_bar.cache.as_ref()
-                    .map(|c| c.matches().is_empty())
-                    .unwrap_or(false);
+                    .is_some_and(|c| c.matches().is_empty());
                 let layout = vector_render::search_bar_layout(content_w as u32, no_match);
                 (bar_top_y, content_w, layout.bg_rgba)
             })
@@ -1095,9 +1100,9 @@ impl App {
         if s.len() != 6 {
             return None;
         }
-        let r = u8::from_str_radix(&s[0..2], 16).ok()? as f32 / 255.0;
-        let g = u8::from_str_radix(&s[2..4], 16).ok()? as f32 / 255.0;
-        let b = u8::from_str_radix(&s[4..6], 16).ok()? as f32 / 255.0;
+        let r = f32::from(u8::from_str_radix(&s[0..2], 16).ok()?) / 255.0;
+        let g = f32::from(u8::from_str_radix(&s[2..4], 16).ok()?) / 255.0;
+        let b = f32::from(u8::from_str_radix(&s[4..6], 16).ok()?) / 255.0;
         Some([r, g, b, 1.0])
     }
 
@@ -1412,6 +1417,7 @@ impl ApplicationHandler<UserEvent> for App {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::PaneOutput { pane_id, bytes } => {
@@ -1760,7 +1766,7 @@ impl ApplicationHandler<UserEvent> for App {
                                     let t = self.term.lock();
                                     selection_to_string(
                                         &range,
-                                        &crate::term_grid_access::TermGridAccess(&*t),
+                                        &crate::term_grid_access::TermGridAccess(&t),
                                         SelectionMode::Stream,
                                     )
                                 };
@@ -1932,7 +1938,7 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                     Ime::Preedit(text, cursor_range) => {
                         // empty preedit string signals preedit cancel.
-                        let offset = cursor_range.map(|(start, _)| start).unwrap_or(0);
+                        let offset = cursor_range.map_or(0, |(start, _)| start);
                         if text.is_empty() {
                             self.ime.clear();
                         } else {

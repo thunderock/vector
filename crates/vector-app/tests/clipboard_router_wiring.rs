@@ -31,6 +31,7 @@ fn allow_policy_routes_to_write_pasteboard() {
 fn no_policy_routes_to_action_toast_with_three_buttons() {
     let router = make_router(None);
     let event = ClipboardEvent::Store(ClipboardType::Clipboard, "secret".into());
+    #[allow(clippy::match_wildcard_for_single_variants)]
     match router.handle(event, "zsh") {
         ClipboardAction::ShowPrompt(toast) => match &toast.mode {
             ToastMode::Action { buttons } => assert_eq!(

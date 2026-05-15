@@ -37,6 +37,7 @@ fn cfg_with_tint(tint: &str) -> std::sync::Arc<ConfigFile> {
 
 /// Summary of which chrome surfaces should draw given the current App state.
 /// A pure snapshot from App fields — no wgpu involved.
+#[allow(clippy::struct_excessive_bools)]
 pub struct ChromeDrawPlan {
     pub draw_tint: bool,
     pub draw_search_bar: bool,

@@ -29,6 +29,7 @@ fn user_event_phase6_variants_exist() {
 
 #[test]
 fn auth_cancellation_is_send_sync() {
-    fn _check_send_sync<T: Send + Sync>() {}
-    _check_send_sync::<AuthCancellation>();
+    #[allow(dead_code)]
+    fn check_send_sync<T: Send + Sync>() {}
+    check_send_sync::<AuthCancellation>();
 }
