@@ -12,12 +12,10 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-base64.workspace = true
 bytes.workspace = true
 fuzzy-matcher.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
-thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tokio.workspace = true
@@ -33,7 +31,6 @@ vector-config = { path = "../vector-config", version = "2026.5.10" }
 vector-fonts = { path = "../vector-fonts", version = "2026.5.10" }
 vector-input = { path = "../vector-input", version = "2026.5.10" }
 vector-mux = { path = "../vector-mux", version = "2026.5.10" }
-vector-pty = { path = "../vector-pty", version = "2026.5.10" }
 vector-render = { path = "../vector-render", version = "2026.5.10" }
 vector-term = { path = "../vector-term", version = "2026.5.10" }
 # Phase 6 / AUTH-01 — auth_actor needs octocrab to fetch @login post-tokens,
@@ -94,3 +91,8 @@ resources = [
     "resources/Fonts/JetBrainsMono-Regular.ttf",
     "resources/Fonts/LICENSE-JetBrainsMono.txt",
 ]
+
+[package.metadata.cargo-machete]
+# objc2-quartz-core provides CALayer method impls via ObjC dispatch;
+# no `use` import needed but the crate must be linked.
+ignored = ["objc2-quartz-core"]

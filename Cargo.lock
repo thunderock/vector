@@ -4131,7 +4131,6 @@ version = "2026.5.10"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64",
  "bytes",
  "cargo-husky",
  "chrono",
@@ -4144,7 +4143,6 @@ dependencies = [
  "parking_lot",
  "raw-window-handle",
  "regex",
- "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
@@ -4155,7 +4153,6 @@ dependencies = [
  "vector-fonts",
  "vector-input",
  "vector-mux",
- "vector-pty",
  "vector-render",
  "vector-term",
  "wgpu",
@@ -4226,11 +4223,9 @@ version = "2026.5.10"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
- "async-trait",
  "clap",
  "crossterm",
  "parking_lot",
- "regex",
  "scopeguard",
  "tokio",
  "tracing",
@@ -4273,7 +4268,6 @@ dependencies = [
  "portable-pty",
  "thiserror 2.0.18",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -4335,20 +4329,10 @@ dependencies = [
 [[package]]
 name = "vector-tunnels"
 version = "2026.5.10"
-dependencies = [
- "anyhow",
- "thiserror 2.0.18",
- "tracing",
-]
 
 [[package]]
 name = "vector-ui"
 version = "2026.5.10"
-dependencies = [
- "anyhow",
- "thiserror 2.0.18",
- "tracing",
-]
 
 [[package]]
 name = "version_check"

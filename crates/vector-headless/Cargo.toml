@@ -20,8 +20,6 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sy
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-async-trait = { workspace = true }
-regex = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29"
 scopeguard = "1"

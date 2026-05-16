@@ -6,10 +6,5 @@ rust-version.workspace = true
 license.workspace = true
 description = "Non-grid UI surfaces — tab bar, picker, settings — Phase 4+."
 
-[dependencies]
-anyhow.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
-
 [lints]
 workspace = true
