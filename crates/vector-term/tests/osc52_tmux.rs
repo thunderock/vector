@@ -60,8 +60,11 @@ fn dcs_round_trip_through_tmux() {
 
     std::thread::sleep(std::time::Duration::from_millis(500));
 
+    // DCS passthrough requires an interactive outer terminal to receive the sequence
+    // and write to the system clipboard. In headless CI (no $TERM_PROGRAM / $TMUX /
+    // WindowServer), pbpaste is always empty — skip the clipboard assertion.
     #[cfg(target_os = "macos")]
-    {
+    if std::env::var("CI").is_err() {
         let out = std::process::Command::new("pbpaste")
             .output()
             .expect("pbpaste");
