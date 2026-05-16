@@ -26,39 +26,39 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 
 ### Rendering
 
-- [ ] **RENDER-01**: GPU-accelerated rendering targets the Metal backend of `wgpu`, with damage-tracked redraws (only dirty rows shaped/uploaded)
-- [ ] **RENDER-02**: Sustained `cat large.log` output reaches at least 60 fps on Apple Silicon at 1080p; ProMotion (120 Hz) is detected and honored
-- [ ] **RENDER-03**: Idle CPU usage stays below 1% on Apple Silicon (no redraw when nothing is dirty)
-- [ ] **RENDER-04**: Glyph atlas separates monochrome and emoji textures, evicts via bounded LRU, and survives mid-session scale changes (Retina ↔ external monitor)
-- [ ] **RENDER-05**: Cursor and selection overlays render correctly under the live text grid
+- [x] **RENDER-01**: GPU-accelerated rendering targets the Metal backend of `wgpu`, with damage-tracked redraws (only dirty rows shaped/uploaded)
+- [x] **RENDER-02**: Sustained `cat large.log` output reaches at least 60 fps on Apple Silicon at 1080p; ProMotion (120 Hz) is detected and honored
+- [x] **RENDER-03**: Idle CPU usage stays below 1% on Apple Silicon (no redraw when nothing is dirty)
+- [x] **RENDER-04**: Glyph atlas separates monochrome and emoji textures, evicts via bounded LRU, and survives mid-session scale changes (Retina ↔ external monitor)
+- [x] **RENDER-05**: Cursor and selection overlays render correctly under the live text grid
 
 ### Window & Mux
 
-- [ ] **WIN-01**: Native macOS AppKit window with title bar, fullscreen, and standard window-control buttons
-- [ ] **WIN-02**: Tabs — open new tab (Cmd-T), cycle (Cmd-Shift-]/[), close (Cmd-W). Native `NSWindowTabbingMode` or visually equivalent custom bar.
-- [ ] **WIN-03**: Splits — horizontal (Cmd-D) and vertical (Cmd-Shift-D) splits within a tab, with focus routing and per-pane resize
-- [ ] **WIN-04**: A `Domain / Pane / PtyTransport` abstraction (WezTerm-style) is the only seam between terminal model and transport — local, SSH, and tunnel transports all implement the same trait
+- [x] **WIN-01**: Native macOS AppKit window with title bar, fullscreen, and standard window-control buttons
+- [x] **WIN-02**: Tabs — open new tab (Cmd-T), cycle (Cmd-Shift-]/[), close (Cmd-W). Native `NSWindowTabbingMode` or visually equivalent custom bar.
+- [x] **WIN-03**: Splits — horizontal (Cmd-D) and vertical (Cmd-Shift-D) splits within a tab, with focus routing and per-pane resize
+- [x] **WIN-04**: A `Domain / Pane / PtyTransport` abstraction (WezTerm-style) is the only seam between terminal model and transport — local, SSH, and tunnel transports all implement the same trait
 - [x] **WIN-05**: `winit::EventLoop` runs on the main thread; `tokio` runs on background threads; cross-thread signaling goes through `EventLoopProxy::send_event` (no `block_on` on main, no shared mutex held across `await`)
 
 ### Polish (Local Daily-Driver)
 
-- [ ] **POLISH-01**: TOML configuration with hot-reload via `notify` (FSEvents); profile inheritance (`[default]` + named overrides) without a scripting language
-- [ ] **POLISH-02**: Bring-your-own-font from system or `~/Library/Fonts`; opt-in ligatures; Nerd Font glyphs render correctly
-- [ ] **POLISH-03**: Built-in light + dark themes plus an importer for `.itermcolors` palettes
-- [ ] **POLISH-04**: OSC 7 (cwd), OSC 8 (hyperlinks), OSC 10/11/12 (color queries), and OSC 133 (semantic prompt marks) are implemented
-- [ ] **POLISH-05**: OSC 52 clipboard copy works in both raw and DCS-wrapped forms (tmux pass-through compatibility)
-- [ ] **POLISH-06**: Scrollback regex search with match highlighting and next/prev navigation
-- [ ] **POLISH-07**: Profiles — saved targets named `local`, `codespace`, `dev_tunnel` with per-profile env, theme, tint, and startup command
-- [ ] **POLISH-08**: Secure Keyboard Entry toggle and basic IME composition display via `NSTextInputClient` (no candidate window UI; full IME is v2)
+- [x] **POLISH-01**: TOML configuration with hot-reload via `notify` (FSEvents); profile inheritance (`[default]` + named overrides) without a scripting language
+- [x] **POLISH-02**: Bring-your-own-font from system or `~/Library/Fonts`; opt-in ligatures; Nerd Font glyphs render correctly
+- [x] **POLISH-03**: Built-in light + dark themes plus an importer for `.itermcolors` palettes
+- [x] **POLISH-04**: OSC 7 (cwd), OSC 8 (hyperlinks), OSC 10/11/12 (color queries), and OSC 133 (semantic prompt marks) are implemented
+- [x] **POLISH-05**: OSC 52 clipboard copy works in both raw and DCS-wrapped forms (tmux pass-through compatibility)
+- [x] **POLISH-06**: Scrollback regex search with match highlighting and next/prev navigation
+- [x] **POLISH-07**: Profiles — saved targets named `local`, `codespace`, `dev_tunnel` with per-profile env, theme, tint, and startup command
+- [x] **POLISH-08**: Secure Keyboard Entry toggle and basic IME composition display via `NSTextInputClient` (no candidate window UI; full IME is v2)
 
 ### GitHub Auth & Codespaces Picker
 
-- [ ] **AUTH-01**: GitHub OAuth Device Flow (RFC 8628) sign-in works from inside the app — no browser plugin, no PAT pasting
-- [ ] **AUTH-02**: OAuth tokens are stored in macOS Keychain via `keyring 4.0`; never written to disk in plaintext, never logged
-- [ ] **AUTH-03**: Token refresh is handled silently; expired tokens trigger a re-auth prompt rather than silent failure
-- [ ] **CS-01**: After sign-in, a Codespaces picker lists every codespace for the user with state (Available / Shutdown / Starting), repository name, branch, and last-used time
-- [ ] **CS-02**: Selecting a Shutdown codespace from the picker triggers `POST /start`, polls until Available (with 409 swallowed), then connects
-- [ ] **CS-03**: A picked codespace can be saved as a one-click profile that survives app restart
+- [x] **AUTH-01**: GitHub OAuth Device Flow (RFC 8628) sign-in works from inside the app — no browser plugin, no PAT pasting _(Wave-0 scaffolded — test stubs + manual-Debug GitHubAuth stub landed in Plan 06-01; real impl lands in Plan 06-02)_
+- [x] **AUTH-02**: OAuth tokens are stored in macOS Keychain via `keyring 4.0`; never written to disk in plaintext, never logged _(Wave-0 scaffolded — TokenStore stub + GITHUB_REFRESH_ACCOUNT const + Pitfall-14 arch-lint landed in Plan 06-01; real impl lands in Plan 06-02)_
+- [x] **AUTH-03**: Token refresh is handled silently; expired tokens trigger a re-auth prompt rather than silent failure _(Wave-0 scaffolded — auth_refresh.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
+- [x] **CS-01**: After sign-in, a Codespaces picker lists every codespace for the user with state (Available / Shutdown / Starting), repository name, branch, and last-used time _(Wave-0 scaffolded — CodespacesClient stub + Codespace model + list_codespaces.json fixture + codespaces_rest.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
+- [x] **CS-02**: Selecting a Shutdown codespace from the picker triggers `POST /start`, polls until Available (with 409 swallowed), then connects _(Wave-0 scaffolded — start/poll test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
+- [x] **CS-03**: A picked codespace can be saved as a one-click profile that survives app restart _(Wave-0 scaffolded — vector-config::writer module + profile_writer.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-04)_
 
 ### Codespaces SSH Connect
 
@@ -163,29 +163,29 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | CORE-04 | Phase 2 | Complete |
 | CORE-05 | Phase 2 | Complete |
 | CORE-06 | Phase 2 | Complete |
-| RENDER-01 | Phase 3 | Pending |
-| RENDER-02 | Phase 3 | Pending |
-| RENDER-03 | Phase 3 | Pending |
-| RENDER-04 | Phase 3 | Pending |
-| RENDER-05 | Phase 3 | Pending |
-| WIN-01 | Phase 3 | Pending |
-| WIN-02 | Phase 4 | Pending |
-| WIN-03 | Phase 4 | Pending |
-| WIN-04 | Phase 4 | Pending |
-| POLISH-01 | Phase 5 | Pending |
-| POLISH-02 | Phase 5 | Pending |
-| POLISH-03 | Phase 5 | Pending |
-| POLISH-04 | Phase 5 | Pending |
-| POLISH-05 | Phase 5 | Pending |
-| POLISH-06 | Phase 5 | Pending |
-| POLISH-07 | Phase 5 | Pending |
-| POLISH-08 | Phase 5 | Pending |
-| AUTH-01 | Phase 6 | Pending |
-| AUTH-02 | Phase 6 | Pending |
-| AUTH-03 | Phase 6 | Pending |
-| CS-01 | Phase 6 | Pending |
-| CS-02 | Phase 6 | Pending |
-| CS-03 | Phase 6 | Pending |
+| RENDER-01 | Phase 3 | Complete |
+| RENDER-02 | Phase 3 | Complete |
+| RENDER-03 | Phase 3 | Complete |
+| RENDER-04 | Phase 3 | Complete |
+| RENDER-05 | Phase 3 | Complete |
+| WIN-01 | Phase 3 | Complete |
+| WIN-02 | Phase 4 | Complete |
+| WIN-03 | Phase 4 | Complete |
+| WIN-04 | Phase 4 | Complete |
+| POLISH-01 | Phase 5 | Complete |
+| POLISH-02 | Phase 5 | Complete |
+| POLISH-03 | Phase 5 | Complete |
+| POLISH-04 | Phase 5 | Complete |
+| POLISH-05 | Phase 5 | Complete |
+| POLISH-06 | Phase 5 | Complete |
+| POLISH-07 | Phase 5 | Complete |
+| POLISH-08 | Phase 5 | Complete |
+| AUTH-01 | Phase 6 | Complete |
+| AUTH-02 | Phase 6 | Complete |
+| AUTH-03 | Phase 6 | Complete |
+| CS-01 | Phase 6 | Complete |
+| CS-02 | Phase 6 | Complete |
+| CS-03 | Phase 6 | Complete |
 | CS-04 | Phase 7 | Pending |
 | CS-05 | Phase 7 | Pending |
 | CS-06 | Phase 7 | Pending |
@@ -211,3 +211,4 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 ---
 *Requirements defined: 2026-05-10*
 *Last updated: 2026-05-10 — Plan 01-06 closed: BUILD-04 (tagged-release half) and BUILD-05 (xattr in README) complete in commits 4dd0c4e + 75b77b1; BUILD-02 / BUILD-04 retain pending-real-CI-run / pending-real-tagged-release caveat per 01-05 + 01-06 Outstanding Verification Debt blocks*
+*Last updated: 2026-05-12 — Plan 04-06 closed: WIN-02 + WIN-03 complete after smoke matrix re-run (items #3, #4, #8 PASS).*

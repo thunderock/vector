@@ -9,13 +9,24 @@ description = "PtyTransport + Domain traits + LocalDomain — Phase 2 (D-38)."
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+libc = { workspace = true }
+libproc = { workspace = true }
+parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 vector-pty = { path = "../vector-pty", version = "2026.5.10" }
+vector-term = { path = "../vector-term", version = "2026.5.10" }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+libc = { workspace = true }
+libproc = { workspace = true }
+parking_lot = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+vector-config = { path = "../vector-config", version = "2026.5.10" }
+vector-term = { path = "../vector-term", version = "2026.5.10" }
 
 [lints]
 workspace = true

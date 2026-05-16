@@ -7,9 +7,26 @@ license.workspace = true
 description = "GitHub Codespaces auth + list + connect — Phases 6/7 (octocrab + tonic)."
 
 [dependencies]
-anyhow.workspace = true
+chrono.workspace = true
+http.workspace = true
+oauth2.workspace = true
+octocrab.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio-util.workspace = true
 tracing.workspace = true
+urlencoding.workspace = true
+zeroize.workspace = true
+vector-secrets = { path = "../vector-secrets", version = "2026.5.10" }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "test-util"] }
+wiremock.workspace = true
 
 [lints]
 workspace = true

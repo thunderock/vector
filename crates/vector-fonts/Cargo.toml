@@ -8,8 +8,9 @@ description = "Font discovery + rasterization — Phase 3 (crossfont / cosmic-te
 
 [dependencies]
 anyhow.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
+crossfont.workspace = true
+parking_lot.workspace = true
+unicode-width.workspace = true
 
 [lints]
 workspace = true

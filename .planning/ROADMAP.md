@@ -81,11 +81,11 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   4. Switching from a Retina internal display to a non-Retina external monitor (and back) keeps the glyph atlas correct — no broken glyphs, no visible re-rasterization stutter beyond the first frame.
   5. Selecting text and moving the cursor with arrow keys composites the selection rectangle and cursor over the live grid without flicker.
 **Plans**: 5 plans
-  - [ ] 03-01-PLAN.md — Wave 1: wgpu surface lifecycle + clear-color frame + Wave-0 test stubs + workspace deps + Term::damage wrapper
-  - [ ] 03-02-PLAN.md — Wave 2: crossfont rasterizer + bundled JetBrains Mono + two-atlas wgpu textures + bounded LRU eviction
-  - [ ] 03-03-PLAN.md — Wave 3: cell pipeline + cursor pipeline + Grid→quads compositor + truecolor/256-color + offscreen render harness
-  - [ ] 03-04-PLAN.md — Wave 4: vector-input xterm keymap (≥80 cases) + Cmd-V bracketed paste + click-drag selection + write/resize mpsc into I/O actor
-  - [ ] 03-05-PLAN.md — Wave 5: PTY coalesce + render-on-dirty + LPM throttle + DPR atlas clear + resize debounce + first-paint gate + manual smoke matrix (autonomous=false)
+  - [x] 03-01-PLAN.md — Wave 1: wgpu surface lifecycle + clear-color frame + Wave-0 test stubs + workspace deps + Term::damage wrapper
+  - [x] 03-02-PLAN.md — Wave 2: crossfont rasterizer + bundled JetBrains Mono + two-atlas wgpu textures + bounded LRU eviction
+  - [x] 03-03-PLAN.md — Wave 3: cell pipeline + cursor pipeline + Grid→quads compositor + truecolor/256-color + offscreen render harness
+  - [x] 03-04-PLAN.md — Wave 4: vector-input xterm keymap (≥80 cases) + Cmd-V bracketed paste + click-drag selection + write/resize mpsc into I/O actor
+  - [x] 03-05-PLAN.md — Wave 5: PTY coalesce + render-on-dirty + LPM throttle + DPR atlas clear + resize debounce + first-paint gate + manual smoke matrix (autonomous=false)
 **Stack additions**: `wgpu 29`, `winit 0.30`, `objc2-app-kit 0.3`, `crossfont 0.9`, `unicode-width 0.2`, `bytemuck 1`, `etagere 0.2`, `parking_lot 0.12`, `pollster 0.4`, `bytes 1`.
 **Risks & notes**:
   - Two atlases (monochrome + color emoji), bounded LRU eviction (Pitfall 2).
@@ -103,8 +103,14 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   2. Cmd-D splits the active pane horizontally; Cmd-Shift-D splits vertically. Each pane independently runs a shell and accepts focus, with arrow-key or hjkl-style focus routing.
   3. Resizing the window propagates new sizes to all panes and child shells; `tput cols` in any pane reports the correct width.
   4. The `Domain / Pane / PtyTransport` abstraction is the only seam between the terminal model and the transport — verified by a grep that finds zero `enum PaneSource` discriminations inside `vector-term`.
-**Plans**: TBD
-**Stack additions**: `vector-mux` crate (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>`.
+**Plans**: 6 plans
+  - [x] 04-01-PLAN.md — Wave 0: workspace deps + 13 Wave-0 test stubs + SpawnedPane struct + LocalPty child_pid/master_fd accessors (preserves D-38)
+  - [x] 04-02-PLAN.md — Wave 1: Mux singleton + Window/Tab/PaneNode tree + split mutation + close cascade + directional focus + resize-nudge + WIN-04 grep arch-lint live
+  - [x] 04-03-PLAN.md — Wave 2: per-pane PTY actor router (JoinSet<PaneId>) + UserEvent migration + Mux async helpers + cwd inheritance (libproc::pidcwd) + foreground-process tracking (D-57) + real-PTY integration tests
+  - [x] 04-04-PLAN.md — Wave 3: vector-input EncodedKey enum + 14 Mux shortcuts + multi-window NSWindowTabbingMode + per-pane Compositor + active-pane border (D-66) + inactive cursor outline
+  - [x] 04-05-PLAN.md — Wave 4: per-TabWindow first-paint gate + focus-change redraw discipline + per-window resize debounce + manual smoke matrix (autonomous=false) — partial: Task 1 fully landed (22a8272); Task 2 smoke matrix returned 6/9 PASS, 3 FAILs (#3 visible side-by-side render / #4 tput cols per-pane viewport math / #8 visible D-66 border) routed to Plan 04-06 gap-closure
+  - [x] 04-06-PLAN.md — Wave 6 (gap-closure, autonomous=false): AppWindow → per-pane Compositor map migration; per-pane RedrawRequested LoadOp chain; per-pane viewport SIGWINCH via Mux::resize_window; visible D-66 active-pane border at focus change; closes Gap 1/2/3 from 04-VERIFICATION.md (smoke items #3, #4, #8); flips WIN-02 + WIN-03 to Complete
+**Stack additions**: `vector-mux` crate (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>` (WezTerm-style `Mux::get()` singleton, recursive split tree, `EventLoopProxy<UserEvent>` for I/O→UI signaling), `Box<dyn PtyTransport>`.
 **Risks & notes**:
   - The `Domain/Pane/PtyTransport` seam established here is a load-bearing decision — Phases 7, 8, and 9 all depend on it. Embedding transport logic in the terminal model is Architecture Anti-Pattern 1.
   - No layout save/restore, no broadcast-input — Pitfall 21 scope creep guard.
@@ -120,7 +126,23 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   3. `printf '\e]52;c;%s\a' "$(echo hello | base64)"` puts "hello" in the macOS clipboard. Inside real tmux 3.4+ on a Codespace (smoke-tested manually before phase boundary), the DCS-wrapped form `\eP\e]52;c;…\a\e\\` round-trips correctly.
   4. Scrollback regex search highlights matches with next/prev navigation; OSC 7 (cwd), OSC 8 (hyperlinks), OSC 10/11/12 (color queries), and OSC 133 (semantic prompt marks) are observable in a shell-integration smoke test.
   5. Saved profiles named `local`, `codespace`, `dev_tunnel` exist in the config with per-profile env, theme, tint, and startup command. Secure Keyboard Entry can be toggled from a menu item; basic IME composition displays under the cursor (no candidate window UI).
-**Plans**: TBD
+**Plans**: 16 plans (10 original + 6 gap-closure 2026-05-12 after verifier surfaced wiring gaps post-smoke)
+  - [x] 05-01-PLAN.md — Wave 0: D-83 hardening (workspace lints + path-dep arch-lint + cargo-deny pre-commit + cargo-machete CI) + 22 Wave-0 test stubs + 10 workspace deps
+  - [x] 05-02-PLAN.md — Wave 1: vector-config schema + loader (POLISH-01, POLISH-07)
+  - [x] 05-03-PLAN.md — Wave 1: vector-theme palette + chrome tokens + Vector Light/Dark builtins + .itermcolors importer (POLISH-03)
+  - [x] 05-04-PLAN.md — Wave 2: notify-debouncer-full watcher + apply pipeline diff_config + parse-error keep-last-good (POLISH-01, POLISH-02)
+  - [x] 05-05-PLAN.md — Wave 1: OSC sniffer + ForwardingListener + OSC 8 hyperlink grouping (POLISH-04)
+  - [x] 05-06-PLAN.md — Wave 1: OSC 52 raw + DCS-wrapped + 58-byte outbound chunking + tmux smoke (POLISH-05)
+  - [x] 05-07-PLAN.md — Wave 2: Cmd-C selection-string + ligatures + Nerd Font + SearchBar smart-case + 1000-cap cache (POLISH-02, POLISH-06)
+  - [x] 05-08-PLAN.md — Wave 3: Logic — Tint stripe pipeline + Profile picker + Toast state machine + Clipboard router + OSC 7 consumers (POLISH-07)
+  - [x] 05-10-PLAN.md — Wave 4: Wiring & rendering scaffolding (POLISH-04, POLISH-06, POLISH-07)
+  - [x] 05-09-PLAN.md — Wave 5: Secure Keyboard Entry + IME data machine + vector-secrets API + manual 10-item smoke matrix checkpoint (POLISH-08)
+  - [x] 05-11-PLAN.md — Wave 1 (gap-closure): impl GridAccess for Term + Cmd-C real selection + Switch Profile submenu dynamic rebuild (gap #5 + #6) (POLISH-06, POLISH-07)
+  - [x] 05-12-PLAN.md — Wave 1 (gap-closure): App.clipboard_router field + UserEvent::ClipboardStore + ForwardingListener clip_tx drain task (gap #7) (POLISH-05)
+  - [x] 05-13-PLAN.md — Wave 1 (gap-closure): vector-input keymap EncodedKey::App(AppShortcut) for Cmd-N/F/Shift-P/Shift-R (gap #2 pure data) (POLISH-06, POLISH-07, POLISH-08)
+  - [x] 05-14-PLAN.md — Wave 2 (gap-closure): App.search_bar + App.profile_picker fields + EncodedKey::App handler bodies + ungrouped Cmd-N + config reload (gap #2 App-side + gap #3) (POLISH-01, POLISH-06, POLISH-07)
+  - [x] 05-15-PLAN.md — Wave 2 (gap-closure): declare_class! NSTextInputClient subclass + App.ime field + WindowEvent::Ime dispatch + set_ime_allowed (gap #4) (POLISH-08)
+  - [x] 05-16-PLAN.md — Wave 3 (gap-closure): RenderHost owns TintStripe+SearchBar+Toast+Picker pipelines + per-frame chrome orchestration UI-SPEC §11 order + smoke matrix re-run (gap #1) (POLISH-04, POLISH-06, POLISH-07)
 **Stack additions**: `serde + toml 1.1.2`, `notify` (FSEvents on macOS), `keyring 4.0` initialized here for later phases, `vector-config`, `vector-theme`, `vector-secrets`.
 **Risks & notes**:
   - **DCS-wrapped OSC 52 through tmux is a known pitfall (Pitfall 8).** Smoke-test on real tmux 3.4+ with `set -g allow-passthrough on` before declaring the phase done. Truncation at ~60 chars is a real bug to design around.
@@ -138,8 +160,15 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   3. Selecting a Shutdown codespace triggers `POST /user/codespaces/{name}/start`, swallows 409 Conflict, polls `state` at 1s for up to 2 minutes, and shows progress until Available.
   4. A picked codespace can be saved as a one-click profile (kind = `codespace`, codespace_name + tint persisted) that survives app restart. Clicking "Connect" on a profile shows a placeholder toast (Phase 7 wires it).
   5. Token refresh on 401 silently re-runs device flow; expired tokens never silently fail — the user sees a re-auth prompt.
-**Plans**: TBD
-**Stack additions**: `oauth2 5.0` device flow, `octocrab 0.50`, `reqwest 0.13` (rustls), `keyring 4.0`.
+**Plans**: 7 plans
+  - [x] 06-01-PLAN.md — Wave 0: vector-codespaces scaffold + workspace deps + Wave-0 test stubs + Pitfall-14 arch-lint
+  - [x] 06-02-PLAN.md — Wave 1: OAuth Device Flow driver (oauth2 5.0) + Keychain TokenStore + manual Debug discipline (AUTH-01, AUTH-02)
+  - [x] 06-03-PLAN.md — Wave 1: CodespacesClient REST (list/get/start/poll) + 401 silent-refresh chain (CS-01, CS-02, AUTH-03)
+  - [x] 06-04-PLAN.md — Wave 1: vector-config writer append_codespace_profile + derive_profile_name with atomic rename (CS-03)
+  - [x] 06-05-PLAN.md — Wave 2: UserEvent extensions + AuthDeviceFlowModal NSPanel + Sign in/out menu items + Cmd-Shift-G keymap
+  - [x] 06-06-PLAN.md — Wave 2: CodespacesPickerModal NSPanel + codespaces_actor + Connect/Start/Save flows + relative-time formatter
+  - [ ] 06-07-PLAN.md — Wave 3: manual UAT smoke matrix (autonomous=false) — 11 items spanning AUTH-01..03 + CS-01..03 + token-leak audit
+**Stack additions**: `oauth2 5.0` device flow, `octocrab 0.50`, `reqwest 0.13` (rustls-tls), `keyring-core 1.0` + `apple-native-keyring-store 1.0` (already wired in vector-secrets), `serde_json 1`, `chrono 0.4`, `urlencoding 2`, `tokio-util 0.7 sync`, `http 1`, `wiremock 0.6` (dev), `zeroize 1`.
 **Risks & notes**:
   - Use classic OAuth scopes (`codespace`, `read:user`); fine-grained PATs are explicitly broken with Codespaces (`cli/cli#7819`).
   - Manual `Debug` impls on every token-bearing struct — never derive (Pitfall 14).
@@ -222,9 +251,9 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 | 1. Foundation & CI/DMG Pipeline | 6/6 | Implementation complete; verifier next | 2026-05-10 |
 | 2. Headless Terminal Core | 0/5 | Plans created | - |
 | 3. GPU Renderer & First Paint | 0/0 | Not started | - |
-| 4. Mux — Tabs & Splits | 0/0 | Not started | - |
-| 5. Polish (Local Daily-Driver) | 0/0 | Not started | - |
-| 6. GitHub Auth + Codespaces Picker | 0/0 | Not started | - |
+| 4. Mux — Tabs & Splits | 5/5 | Plans complete; 04-05 partial sign-off (6/9 smoke PASS, #3/#4/#8 FAIL routed to Plan 04-06 gap-closure); verifier next | - |
+| 5. Polish (Local Daily-Driver) | 15/16 | In Progress|  |
+| 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
 | 8. Dev Tunnels Integration | 0/0 | Not started | - |
 | 9. Persistence + Reconnect + tmux Auto-Attach | 0/0 | Not started | - |
@@ -277,7 +306,7 @@ At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Ev
 
 **Requirements:** TBD (likely a new `AI-*` family in REQUIREMENTS.md when promoted)
 
-**Plans:** 0 plans
+**Plans:** 15/16 plans executed
 
 **Trigger:** After milestone v1.0.0 ships (Phase 10 release). Per PROJECT.md key decision: "must not gate terminal-core work."
 

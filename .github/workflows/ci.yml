@@ -87,6 +87,31 @@ jobs:
         with:
           command: check advisories licenses bans sources
 
+  # D-83 #4: cargo-machete catches unused workspace deps. Not branch-protection required.
+  unused-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bnjbvr/cargo-machete@v0.9.2
+
+  # POLISH-05 automated half: real tmux 3.4+ DCS round-trip. Not branch-protection required.
+  # continue-on-error: clipboard passthrough requires an interactive outer terminal;
+  # detached CI sessions have nowhere to DCS-pass-through to, so pbpaste is always empty.
+  tmux-smoke:
+    needs: [test]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-tmux-smoke
+      - run: brew install tmux
+      - run: cargo test -p vector-term --test osc52_tmux -- --ignored
+
   build-arm64:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     needs: [lint, test, deny]

@@ -1,13 +1,43 @@
 //! AppKit menu bar install per UI-SPEC §"Menu bar items (Phase 1)".
 
+use std::sync::OnceLock;
+
 use objc2::rc::Retained;
 use objc2::runtime::Sel;
 use objc2::sel;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::NSString;
+use winit::event_loop::EventLoopProxy;
 
-/// SAFETY: must be called on the macOS main thread (winit's `resumed` guarantees this).
+use vector_config::{ConfigFile, Kind};
+
+use crate::UserEvent;
+
+pub use auth_target::AuthMenuTarget;
+
+/// Newtype that asserts main-thread-only access to a `Retained<NSMenu>`. AppKit
+/// objects are `!Sync` by default; access is always gated by `MainThreadMarker`
+/// at the call sites below, which makes parking the handle in a `static`
+/// `OnceLock` safe in practice. `dispatch2::MainThreadBound` would be the
+/// upstream equivalent; we keep the dependency surface tight here.
+struct MainThreadOnly<T>(T);
+// SAFETY: every consumer below holds a `MainThreadMarker`, so the contained
+// `Retained<NSMenu>` is only ever read on the AppKit main thread.
+unsafe impl<T> Sync for MainThreadOnly<T> {}
+unsafe impl<T> Send for MainThreadOnly<T> {}
+
+/// MEDIUM-4 (05-REVIEWS.md): direct handle to the Switch Profile NSMenu.
+/// Populated exactly once by `add_switch_profile_submenu()` at install time;
+/// consumed by `rebuild_switch_profile_submenu()`. No NSApplication.mainMenu
+/// walk — the original index-0 + title-string approach was fragile.
+static SWITCH_PROFILE_SUBMENU: OnceLock<MainThreadOnly<Retained<NSMenu>>> = OnceLock::new();
+
+/// Install the standard AppKit menu bar (UI-SPEC).
+///
+/// # Safety
+/// Caller must invoke this on the macOS main thread; winit's `resumed`
+/// callback guarantees that invariant for production callers.
 pub unsafe fn install_main_menu() {
     let mtm = MainThreadMarker::new().expect("must be called on main thread");
     let app = NSApplication::sharedApplication(mtm);
@@ -49,6 +79,13 @@ fn app_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     );
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
     add_disabled(mtm, &submenu, "Preferences\u{2026}", ",");
+    // Plan 05-10 UI-SPEC §5.8 — Switch Profile submenu. Populated dynamically
+    // from the active ConfigFile at first-paint; for now ship a disabled
+    // placeholder so the menu-bar surface is discoverable.
+    add_switch_profile_submenu(mtm, &submenu);
+    // Plan 05-10 D-80 — Secure Keyboard Entry (no shortcut). Key-only so the
+    // App's keymap can pump `UserEvent::ToggleSecureKeyboardEntry`.
+    add_disabled(mtm, &submenu, "Secure Keyboard Entry", "");
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
     add_services(mtm, &submenu);
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
@@ -68,14 +105,20 @@ fn app_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     item
 }
 
-// File menu (UI-SPEC): New Window (Cmd-N, disabled), New Tab (Cmd-T, disabled),
-// separator, Close (Cmd-W, performClose:).
+// File menu (UI-SPEC): New Window (Cmd-N, disabled — Phase 5/D-65), New Tab
+// (Cmd-T, Plan 04-04 enabled — no AppKit action; winit KeyboardInput sees Cmd-T
+// and routes to `MuxCommand::NewTab` which our App handles), separator,
+// Close (Cmd-W, performClose:).
 fn file_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     let item = NSMenuItem::new(mtm);
     let submenu = NSMenu::new(mtm);
     submenu.setTitle(&NSString::from_str("File"));
-    add_disabled(mtm, &submenu, "New Window", "n");
-    add_disabled(mtm, &submenu, "New Tab", "t");
+    // Plan 05-10 D-82: New Window enabled via key-only — winit KeyboardInput sees
+    // Cmd-N and the App's keymap dispatch routes to `UserEvent::SpawnNewWindow`.
+    add_key_only(mtm, &submenu, "New Window", "n");
+    // Plan 04-04: "New Tab" enabled (not greyed); key event flows through winit
+    // to our keymap which encodes it as `EncodedKey::Mux(MuxCommand::NewTab)`.
+    add_key_only(mtm, &submenu, "New Tab", "t");
     submenu.addItem(&NSMenuItem::separatorItem(mtm));
     add(mtm, &submenu, "Close", sel!(performClose:), "w");
     item.setSubmenu(Some(&submenu));
@@ -104,7 +147,7 @@ fn edit_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     item
 }
 
-// View menu (UI-SPEC): Enter Full Screen — Cmd-Ctrl-F.
+// View menu (UI-SPEC): Enter Full Screen — Cmd-Ctrl-F. Plan 05-10 M4: Reload Config — Cmd-Shift-R.
 fn view_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
     let item = NSMenuItem::new(mtm);
     let submenu = NSMenu::new(mtm);
@@ -116,6 +159,15 @@ fn view_menu(mtm: MainThreadMarker) -> Retained<NSMenuItem> {
         sel!(toggleFullScreen:),
         "f",
         NSEventModifierFlags::Command | NSEventModifierFlags::Control,
+    );
+    // Plan 05-10 M4 / D-69: "Reload Config" — Cmd-Shift-R. Key-only; the App
+    // keymap routes the keystroke to `UserEvent::ReloadConfig`.
+    add_key_only_with_modifiers(
+        mtm,
+        &submenu,
+        "Reload Config",
+        "r",
+        NSEventModifierFlags::Command | NSEventModifierFlags::Shift,
     );
     item.setSubmenu(Some(&submenu));
     item
@@ -163,6 +215,17 @@ fn add(mtm: MainThreadMarker, menu: &NSMenu, title: &str, action: Sel, key: &str
     menu.addItem(&mi);
 }
 
+/// Append a menu entry whose only purpose is to show the key equivalent in the
+/// menu — the keystroke flows through to winit because no AppKit action is
+/// installed. Used by Plan 04-04 for Cmd-T (App handles it via the keymap).
+fn add_key_only(mtm: MainThreadMarker, menu: &NSMenu, title: &str, key: &str) {
+    let mi = NSMenuItem::new(mtm);
+    mi.setTitle(&NSString::from_str(title));
+    mi.setKeyEquivalent(&NSString::from_str(key));
+    // Leave the item enabled (default) and no action installed.
+    menu.addItem(&mi);
+}
+
 /// Append a greyed-out item: no `setAction`, explicitly `setEnabled(false)`.
 fn add_disabled(mtm: MainThreadMarker, menu: &NSMenu, title: &str, key: &str) {
     let mi = NSMenuItem::new(mtm);
@@ -205,6 +268,82 @@ fn add_disabled_with_modifiers(
     menu.addItem(&mi);
 }
 
+/// Append a key-only item with explicit modifier mask. Stays enabled but installs
+/// no AppKit action, so the keystroke flows through winit to the App's keymap.
+fn add_key_only_with_modifiers(
+    mtm: MainThreadMarker,
+    menu: &NSMenu,
+    title: &str,
+    key: &str,
+    modifiers: NSEventModifierFlags,
+) {
+    let mi = NSMenuItem::new(mtm);
+    mi.setTitle(&NSString::from_str(title));
+    mi.setKeyEquivalent(&NSString::from_str(key));
+    mi.setKeyEquivalentModifierMask(modifiers);
+    menu.addItem(&mi);
+}
+
+/// Plan 05-10 UI-SPEC §5.8 / Plan 05-11 (POLISH-07) — install the Switch Profile
+/// submenu and capture its NSMenu in `SWITCH_PROFILE_SUBMENU` for later rebuilds
+/// (MEDIUM-4). The submenu is left empty at install time; the first
+/// `UserEvent::ConfigReloaded` fills it via `rebuild_switch_profile_submenu`.
+fn add_switch_profile_submenu(mtm: MainThreadMarker, menu: &NSMenu) {
+    let item = NSMenuItem::new(mtm);
+    item.setTitle(&NSString::from_str("Switch Profile"));
+    let sub = NSMenu::new(mtm);
+    sub.setTitle(&NSString::from_str("Switch Profile"));
+    item.setSubmenu(Some(&sub));
+    menu.addItem(&item);
+    // MEDIUM-4: store the submenu reference so rebuild doesn't walk mainMenu.
+    // `set` is idempotent — first call wins; reinstalling the menu (rare) is a no-op.
+    let _ = SWITCH_PROFILE_SUBMENU.set(MainThreadOnly(sub));
+}
+
+/// Plan 05-11 (POLISH-07, UI-SPEC §6.4) — produce the `(label, enabled)` rows
+/// that the Switch Profile submenu should display for `cfg`. Local profiles are
+/// enabled; Codespace/DevTunnel profiles ship with `(phase 6+)` suffix and are
+/// disabled. Rows are in `BTreeMap` (alphabetical) order.
+#[must_use]
+pub fn submenu_rows_for(cfg: &ConfigFile) -> Vec<(String, bool)> {
+    cfg.profile
+        .iter()
+        .map(|(name, block)| match block.kind {
+            Some(Kind::Codespace | Kind::DevTunnel) => (format!("{name} (phase 6+)"), false),
+            // Default (None) and explicit Local are first-class.
+            _ => (name.clone(), true),
+        })
+        .collect()
+}
+
+/// Plan 05-11 (POLISH-07, MEDIUM-4) — drain and repopulate the Switch Profile
+/// submenu from `cfg`. Looks up the submenu via the `SWITCH_PROFILE_SUBMENU`
+/// OnceLock — no NSApplication.mainMenu walk. Caller must be on the main thread.
+///
+/// # Safety
+/// AppKit NSMenu mutation must occur on the macOS main thread; callers pass
+/// `MainThreadMarker` to prove that invariant.
+pub unsafe fn rebuild_switch_profile_submenu(mtm: MainThreadMarker, cfg: &ConfigFile) {
+    let Some(bound) = SWITCH_PROFILE_SUBMENU.get() else {
+        tracing::warn!(
+            "rebuild_switch_profile_submenu called before add_switch_profile_submenu install"
+        );
+        return;
+    };
+    let submenu: &NSMenu = &bound.0;
+    // Drain — repeatedly remove index 0 until empty.
+    while submenu.numberOfItems() > 0 {
+        submenu.removeItemAtIndex(0);
+    }
+    for (label, enabled) in submenu_rows_for(cfg) {
+        if enabled {
+            add_key_only(mtm, submenu, &label, "");
+        } else {
+            add_disabled(mtm, submenu, &label, "");
+        }
+    }
+}
+
 /// Add the "Services" submenu wired to NSApp.setServicesMenu.
 fn add_services(mtm: MainThreadMarker, menu: &NSMenu) {
     let item = NSMenuItem::new(mtm);
@@ -215,4 +354,170 @@ fn add_services(mtm: MainThreadMarker, menu: &NSMenu) {
     app.setServicesMenu(Some(&services_menu));
     item.setSubmenu(Some(&services_menu));
     menu.addItem(&item);
+}
+
+// ---- Phase 6 / AUTH-01 — auth menu items + dynamic rebuild --------------
+
+struct AuthMenuRefs {
+    sign_in: Retained<NSMenuItem>,
+    sign_out: Retained<NSMenuItem>,
+    /// Held so NSMenuItem's weak target reference stays live. Never read
+    /// after install — the ObjC runtime drives the actions.
+    #[allow(dead_code)]
+    target: Retained<AuthMenuTarget>,
+}
+// SAFETY: every consumer below holds a `MainThreadMarker`; AppKit objects are
+// only ever read/written on the main thread.
+unsafe impl Sync for AuthMenuRefs {}
+unsafe impl Send for AuthMenuRefs {}
+
+static AUTH_MENU_REFS: OnceLock<MainThreadOnly<AuthMenuRefs>> = OnceLock::new();
+
+/// Install Phase-6 auth + codespaces menu items at the top of the existing
+/// `Vector` menu. Idempotent — second invocation is a no-op (OnceLock semantics).
+///
+/// # Safety
+/// AppKit mutation; caller must be on the macOS main thread.
+pub unsafe fn install_auth_menu_items(mtm: MainThreadMarker, proxy: EventLoopProxy<UserEvent>) {
+    let app = NSApplication::sharedApplication(mtm);
+    let Some(main_menu) = app.mainMenu() else {
+        tracing::warn!("install_auth_menu_items: no main menu installed yet");
+        return;
+    };
+    // The `Vector` (app) menu is the first top-level menu item's submenu.
+    let Some(app_item) = main_menu.itemAtIndex(0) else {
+        tracing::warn!("install_auth_menu_items: main menu has no items");
+        return;
+    };
+    let Some(app_submenu) = app_item.submenu() else {
+        tracing::warn!("install_auth_menu_items: app item has no submenu");
+        return;
+    };
+
+    let target = AuthMenuTarget::new(mtm, proxy);
+    let target_obj: &objc2::runtime::AnyObject = (*target).as_ref();
+
+    // Sign in with GitHub — no key equivalent.
+    let sign_in = NSMenuItem::new(mtm);
+    sign_in.setTitle(&NSString::from_str("Sign in with GitHub"));
+    unsafe {
+        sign_in.setAction(Some(sel!(signIn:)));
+        sign_in.setTarget(Some(target_obj));
+    }
+
+    // Sign out (@login) — hidden until token present.
+    let sign_out = NSMenuItem::new(mtm);
+    sign_out.setTitle(&NSString::from_str("Sign out"));
+    unsafe {
+        sign_out.setAction(Some(sel!(signOut:)));
+        sign_out.setTarget(Some(target_obj));
+    }
+    sign_out.setHidden(true);
+
+    // Codespaces… — Cmd-Shift-G (Plan 06-06 handler).
+    let codespaces = NSMenuItem::new(mtm);
+    codespaces.setTitle(&NSString::from_str("Codespaces\u{2026}"));
+    codespaces.setKeyEquivalent(&NSString::from_str("g"));
+    codespaces
+        .setKeyEquivalentModifierMask(NSEventModifierFlags::Command | NSEventModifierFlags::Shift);
+    unsafe {
+        codespaces.setAction(Some(sel!(openCodespaces:)));
+        codespaces.setTarget(Some(target_obj));
+    }
+
+    let sep = NSMenuItem::separatorItem(mtm);
+
+    // Insert at the very top of the Vector menu, above "About Vector".
+    app_submenu.insertItem_atIndex(&sign_in, 0);
+    app_submenu.insertItem_atIndex(&sign_out, 1);
+    app_submenu.insertItem_atIndex(&codespaces, 2);
+    app_submenu.insertItem_atIndex(&sep, 3);
+
+    let refs = AuthMenuRefs {
+        sign_in,
+        sign_out,
+        target,
+    };
+    let _ = AUTH_MENU_REFS.set(MainThreadOnly(refs));
+}
+
+/// Toggle Sign-in / Sign-out visibility based on Keychain state, and update
+/// the Sign-out title to include `@{login}` when known.
+///
+/// # Safety
+/// AppKit mutation; caller must be on the macOS main thread.
+pub unsafe fn rebuild_auth_menu_section(
+    _mtm: MainThreadMarker,
+    token_present: bool,
+    login: Option<&str>,
+) {
+    let Some(bound) = AUTH_MENU_REFS.get() else {
+        tracing::warn!("rebuild_auth_menu_section called before install_auth_menu_items");
+        return;
+    };
+    let refs = &bound.0;
+    refs.sign_in.setHidden(token_present);
+    refs.sign_out.setHidden(!token_present);
+    let title = match login {
+        Some(l) if token_present => format!("Sign out (@{l})"),
+        _ => "Sign out".to_string(),
+    };
+    refs.sign_out.setTitle(&NSString::from_str(&title));
+}
+
+mod auth_target {
+    use objc2::define_class;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2::{msg_send, DefinedClass, MainThreadOnly};
+    use objc2_app_kit::NSResponder;
+    use parking_lot::Mutex;
+    use winit::event_loop::EventLoopProxy;
+
+    use crate::UserEvent;
+
+    pub struct Ivars {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    const _: fn() = || {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Mutex<Ivars>>();
+    };
+
+    define_class!(
+        // SAFETY: NSResponder is the AppKit base for objects in the responder
+        // chain; we do not override any of its methods.
+        #[unsafe(super(NSResponder))]
+        #[name = "VectorAuthMenuTarget"]
+        #[ivars = Mutex<Ivars>]
+        pub struct AuthMenuTarget;
+
+        impl AuthMenuTarget {
+            #[unsafe(method(signIn:))]
+            fn sign_in(&self, _sender: &AnyObject) {
+                let _ = self.ivars().lock().proxy.send_event(UserEvent::AuthSignInRequested);
+            }
+
+            #[unsafe(method(signOut:))]
+            fn sign_out(&self, _sender: &AnyObject) {
+                let _ = self.ivars().lock().proxy.send_event(UserEvent::SignOut);
+            }
+
+            #[unsafe(method(openCodespaces:))]
+            fn open_codespaces(&self, _sender: &AnyObject) {
+                let _ = self.ivars().lock().proxy.send_event(UserEvent::OpenCodespacesPicker);
+            }
+        }
+    );
+
+    impl AuthMenuTarget {
+        pub fn new(
+            mtm: objc2::MainThreadMarker,
+            proxy: EventLoopProxy<UserEvent>,
+        ) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(Mutex::new(Ivars { proxy }));
+            unsafe { msg_send![super(this), init] }
+        }
+    }
 }

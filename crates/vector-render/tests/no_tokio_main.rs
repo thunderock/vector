@@ -11,7 +11,11 @@ const FORBIDDEN: &[&str] = &[
     "Runtime::new()",
 ];
 
-const BLOCK_ON_ALLOWLIST: &[&str] = &[];
+const BLOCK_ON_ALLOWLIST: &[&str] = &[
+    // wgpu init is synchronous-by-design; pollster::block_on bridges its async API
+    // on the main thread, never on a tokio reactor (D-09 — main-thread, not I/O).
+    "pipeline.rs",
+];
 
 #[test]
 fn forbidden_tokio_patterns_absent_from_src() {

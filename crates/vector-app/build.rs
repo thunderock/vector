@@ -15,4 +15,10 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs/heads");
     println!("cargo:rerun-if-env-changed=VECTOR_BUILD_SHA_OVERRIDE");
+
+    // POLISH-08 / D-80 — Carbon framework for EnableSecureEventInput /
+    // DisableSecureEventInput. macOS-only; harmless link directive on other
+    // hosts because we never build the SKE module off-target.
+    #[cfg(target_os = "macos")]
+    println!("cargo:rustc-link-lib=framework=Carbon");
 }

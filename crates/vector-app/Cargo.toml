@@ -12,22 +12,67 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-thiserror.workspace = true
+bytes.workspace = true
+fuzzy-matcher.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tokio.workspace = true
+wgpu.workspace = true
 winit.workspace = true
 objc2.workspace = true
 objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 objc2-quartz-core.workspace = true
 raw-window-handle.workspace = true
+vector-codespaces = { path = "../vector-codespaces", version = "2026.5.10" }
+vector-config = { path = "../vector-config", version = "2026.5.10" }
+vector-fonts = { path = "../vector-fonts", version = "2026.5.10" }
+vector-input = { path = "../vector-input", version = "2026.5.10" }
+vector-mux = { path = "../vector-mux", version = "2026.5.10" }
+vector-render = { path = "../vector-render", version = "2026.5.10" }
+vector-term = { path = "../vector-term", version = "2026.5.10" }
+# Phase 6 / AUTH-01 — auth_actor needs octocrab to fetch @login post-tokens,
+# and zeroize to handle the access token without leaking.
+octocrab.workspace = true
+zeroize.workspace = true
+# Phase 6 / Plan 06-06 — codespaces_actor + picker modal use
+# tokio-util CancellationToken for cooperative poll cancellation
+# and chrono for last_used_at elapsed math.
+tokio-util.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
+async-trait = { workspace = true }
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
+# Re-enter our own crate with `test-hooks` so integration tests in `tests/` see
+# the cfg(test)-style mock for SKE Carbon FFI (POLISH-08 / D-80).
+vector-app = { path = ".", version = "2026.5.10", features = ["test-hooks"] }
 
-[lints]
-workspace = true
+[features]
+default = []
+# POLISH-08 / D-80 — replace Carbon SKE FFI with atomic counters so integration
+# tests can assert enable/disable without orphaning the test runner's terminal.
+test-hooks = []
+
+# vector-app cannot use `[lints] workspace = true` because it must override
+# the workspace's `unsafe_code = "deny"` to permit AppKit FFI: NSTextInputClient
+# (D-81), SKE Carbon (D-80), NSPasteboard (Cmd-C / OSC 52). All other lint rules
+# mirror the workspace exactly so behavior remains consistent.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+await_holding_lock = "deny"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unnecessary_wraps = "allow"
+doc_markdown = "allow"
+unnecessary_debug_formatting = "allow"
 
 [package.metadata.bundle]
 name = "Vector"
@@ -42,3 +87,12 @@ with first-class GitHub Codespaces and Dev Tunnels support.
 """
 osx_minimum_system_version = "13.0"
 osx_info_plist_exts = ["resources/Info.plist.partial"]
+resources = [
+    "resources/Fonts/JetBrainsMono-Regular.ttf",
+    "resources/Fonts/LICENSE-JetBrainsMono.txt",
+]
+
+[package.metadata.cargo-machete]
+# objc2-quartz-core provides CALayer method impls via ObjC dispatch;
+# no `use` import needed but the crate must be linked.
+ignored = ["objc2-quartz-core"]

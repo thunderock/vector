@@ -1,2 +1,115 @@
-//! Vector app shell crate. The binary entry is `main.rs`; this file is empty
-//! by convention so `cargo doc` produces a valid landing page.
+//! Vector app shell crate. The binary entry is `main.rs`; this library exposes
+//! the modules so integration tests (and Plan 04-04's multi_window_tabbing test)
+//! can drive them without spinning up a real event loop.
+
+#![allow(unsafe_code)]
+
+use vector_mux::PaneId;
+
+/// M4 / D-69 — bundled default config TOML. Written to `~/.config/vector/config.toml`
+/// on first launch when the file is absent. Ships the Cmd-Shift-R reload-config keybind
+/// as the FSEvents-missed fallback (Plan 05-04 watcher; Plan 05-10 menu fallback).
+pub const DEFAULT_CONFIG_TOML: &str = "[default]\ntheme = \"vector-dark\"\n\n# M4 / D-69: Cmd-Shift-R fallback for FSEvents-missed config reloads.\n[[keybind]]\nkey = \"cmd-shift-r\"\naction = \"reload-config\"\n";
+
+pub mod app;
+pub mod auth_actor;
+pub mod auth_modal;
+pub mod chrome;
+pub mod clipboard_router;
+pub mod codespaces_actor;
+pub mod codespaces_modal;
+pub mod frame_tick;
+pub mod hyperlink_dispatch;
+pub mod ime;
+pub mod input_bridge;
+pub mod lpm;
+pub mod menu;
+pub mod mux_commands;
+pub mod overlay;
+pub mod profile_picker;
+pub mod pty_actor;
+pub mod relative_time;
+pub mod render_host;
+pub mod search_bar;
+pub mod ske;
+pub mod tab_window;
+pub mod term_grid_access;
+pub mod toast;
+
+pub use mux_commands::{WindowFactory, WinitWindowFactory, VECTOR_TABBING_IDENTIFIER};
+pub use tab_window::TabWindow;
+
+/// Phase-4 cross-thread event variants. Plan 04-03 keyed PtyOutput / Resized by PaneId.
+/// Plan 05-10 extends with chrome / config / hyperlink / Cmd-N variants.
+#[derive(Debug, Clone)]
+pub enum UserEvent {
+    PaneOutput {
+        pane_id: PaneId,
+        bytes: Vec<u8>,
+    },
+    PaneResized {
+        pane_id: PaneId,
+        rows: u16,
+        cols: u16,
+    },
+    PaneExited(PaneId),
+    PaneTitleChanged {
+        pane_id: PaneId,
+        label: String,
+    },
+    LpmChanged(bool),
+    // Plan 05-10 additions (additive; no Phase 1-4 renames):
+    ConfigReloaded(std::sync::Arc<vector_config::ConfigFile>),
+    ConfigError(String),
+    OpenProfilePicker,
+    ProfileSelected(String),
+    ToggleSearch,
+    ToggleSecureKeyboardEntry,
+    SpawnNewWindow, // D-82 Cmd-N
+    ReloadConfig,   // M4 — Cmd-Shift-R + View → Reload Config
+    HyperlinkClicked {
+        url: String,
+    }, // B1
+    ToastInfo(String), // M2 helper for one-shot info toasts
+    /// Plan 05-12 (POLISH-05 gap-closure): OSC 52 Store routed from the
+    /// I/O thread's `clipboard_rx` drain task to App.clipboard_router.
+    /// `kind_is_selection` keeps alacritty_terminal::ClipboardType out of this enum.
+    ClipboardStore {
+        kind_is_selection: bool,
+        data: String,
+    },
+    // ───── Phase 6 (AUTH-01..03 + CS-01..03) — appended; never reorder ─────
+    /// Menu `Vector → Sign in with GitHub` clicked, or codespace profile
+    /// selected while no token is present (D-84 second trigger).
+    AuthSignInRequested,
+    /// Device flow obtained user_code; main thread should open AuthDeviceFlowModal.
+    AuthDisplayCode {
+        user_code: String,
+        verification_uri: String,
+        expires_at: std::time::SystemTime,
+        interval_secs: u64,
+    },
+    /// Device flow polled successfully; tokens already persisted to Keychain.
+    AuthCompleted {
+        user_login: String,
+    },
+    /// Device flow ended with cancel / expired / oauth-error.
+    AuthFailed {
+        reason: String,
+    },
+    /// Triggered by 401-after-refresh chain in CodespacesClient.
+    AuthRequired,
+    /// Menu `Vector → Sign out (@login)` clicked.
+    SignOut,
+    /// Plan 06-06 will wire this — menu `Codespaces…` or Cmd-Shift-G.
+    OpenCodespacesPicker,
+    /// Plan 06-06 will wire this — codespace list arrived.
+    CodespacesLoaded(std::sync::Arc<Vec<vector_codespaces::Codespace>>),
+    /// Plan 06-06 will wire this.
+    CodespacesLoadFailed(String),
+    /// Plan 06-06 will wire this — single-row state change from poll task.
+    CodespaceStateChanged {
+        name: String,
+        state: vector_codespaces::CodespaceState,
+    },
+}

@@ -7,9 +7,22 @@ license.workspace = true
 description = "GPU pipeline, glyph atlas, damage tracking — Phase 3 (wgpu, Metal)."
 
 [dependencies]
+alacritty_terminal.workspace = true
 anyhow.workspace = true
+bytemuck.workspace = true
+etagere.workspace = true
+parking_lot.workspace = true
+pollster.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+vector-fonts = { path = "../vector-fonts", version = "2026.5.10" }
+vector-term = { path = "../vector-term", version = "2026.5.10" }
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+alacritty_terminal.workspace = true
+bytes.workspace = true
 
 [lints]
 workspace = true

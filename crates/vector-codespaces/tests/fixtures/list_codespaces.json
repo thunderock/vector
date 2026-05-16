@@ -1,0 +1,45 @@
+{
+  "total_count": 5,
+  "codespaces": [
+    {
+      "name": "octocat-hello-world-abc123",
+      "state": "Available",
+      "repository": { "full_name": "octocat/hello-world" },
+      "git_status": { "ref": "main" },
+      "last_used_at": "2026-05-13T10:00:00Z",
+      "display_name": "hello-world"
+    },
+    {
+      "name": "colligo-vector-x7k2m1n8",
+      "state": "Starting",
+      "repository": { "full_name": "colligo/vector" },
+      "git_status": { "ref": "phase3" },
+      "last_used_at": "2026-05-14T14:00:00Z",
+      "display_name": null
+    },
+    {
+      "name": "adobe-design-system-v2",
+      "state": "Shutdown",
+      "repository": { "full_name": "adobe/design-system" },
+      "git_status": { "ref": "v2.0" },
+      "last_used_at": "2026-05-13T09:00:00Z",
+      "display_name": null
+    },
+    {
+      "name": "myorg-legacy-app-q9p2m",
+      "state": "Failed",
+      "repository": { "full_name": "myorg/legacy-app" },
+      "git_status": { "ref": "hotfix" },
+      "last_used_at": "2026-05-11T17:00:00Z",
+      "display_name": null
+    },
+    {
+      "name": "anon-repo-r3a4b",
+      "state": "Hibernated",
+      "repository": { "full_name": "anonymous/repo" },
+      "git_status": { "ref": "main" },
+      "last_used_at": "2026-04-30T08:00:00Z",
+      "display_name": null
+    }
+  ]
+}
