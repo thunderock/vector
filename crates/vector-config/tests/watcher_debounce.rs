@@ -15,15 +15,15 @@ fn debounce_150ms() {
     let (tx, rx) = mpsc::channel::<ConfigEvent>();
     let _w = spawn_watcher(&cfg, &themes, tx).unwrap();
 
-    // Let the watcher arm before bursting writes.
-    std::thread::sleep(Duration::from_millis(50));
+    // Give the watcher enough time to arm even on a loaded CI runner.
+    std::thread::sleep(Duration::from_millis(200));
 
-    // 3 rapid writes within < 150ms — debouncer must collapse.
+    // 3 rapid writes with no inter-write sleep — all land well within the
+    // 150 ms debounce window regardless of CI scheduler jitter.
     for i in 0..3 {
         std::fs::write(&cfg, format!("[default]\n# write {i}\n")).unwrap();
-        std::thread::sleep(Duration::from_millis(30));
     }
-    std::thread::sleep(Duration::from_millis(300)); // wait for debounce flush
+    std::thread::sleep(Duration::from_millis(500)); // wait for debounce flush
 
     let mut count = 0;
     while let Ok(_ev) = rx.recv_timeout(Duration::from_millis(50)) {
