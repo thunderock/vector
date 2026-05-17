@@ -59,7 +59,12 @@ pub fn dmg_universal(
 
 fn finalize(sh: &Shell, version: &str, tip: bool, _staged_bin: &str) -> Result<()> {
     super::icon::generate_icns(sh).context("generate icon.icns")?;
-    cmd!(sh, "cargo bundle --release -p vector-app").run()?;
+    // cargo-bundle 0.10 only copies [package.metadata.bundle].resources when
+    // invoked from the crate's own directory. Running from the workspace root
+    // silently drops them — causing fonts to be missing and the terminal blank.
+    sh.change_dir("crates/vector-app");
+    cmd!(sh, "cargo bundle --release").run()?;
+    sh.change_dir("../..");
     let app_path = "target/release/bundle/osx/Vector.app";
     let bundled_bin = format!("{app_path}/Contents/MacOS/vector-app");
 
