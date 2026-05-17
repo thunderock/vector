@@ -35,19 +35,16 @@ impl FontStack {
     /// `dpr` is reserved for future per-DPR rasterizers — crossfont 0.9's CoreText backend takes
     /// no DPR at construction; we pre-multiply into `size_pt` so the CoreText pixel grid lines up.
     pub fn load_bundled(dpr: f32, size_pt: f32) -> Result<Self> {
-        let _ttf_path = locate_bundled_font()?;
+        if locate_bundled_font().is_none() {
+            tracing::warn!(
+                "JetBrains Mono not found in bundle; will fall back to system monospace"
+            );
+        }
         let mut rasterizer = Rasterizer::new().context("Rasterizer::new")?;
-        let desc = FontDesc::new(
-            "JetBrains Mono",
-            Style::Description {
-                slant: Slant::Normal,
-                weight: Weight::Normal,
-            },
-        );
         let size = Size::new(size_pt * dpr.max(1.0));
-        let font_key = rasterizer
-            .load_font(&desc, size)
-            .context("load_font JetBrains Mono")?;
+        // Try JetBrains Mono first; fall back to Menlo so the terminal is never
+        // blank just because the font file is missing from the .app bundle.
+        let font_key = load_font_with_fallback(&mut rasterizer, size)?;
         let metrics: Metrics = rasterizer.metrics(font_key, size).context("font metrics")?;
         let cell_metrics = CellMetrics {
             width_px: f_to_u32(metrics.average_advance),
@@ -101,6 +98,29 @@ impl FontStack {
     }
 }
 
+fn load_font_with_fallback(rasterizer: &mut Rasterizer, size: Size) -> Result<FontKey> {
+    let preferred = FontDesc::new(
+        "JetBrains Mono",
+        Style::Description {
+            slant: Slant::Normal,
+            weight: Weight::Normal,
+        },
+    );
+    rasterizer.load_font(&preferred, size).or_else(|_| {
+        tracing::warn!("JetBrains Mono unavailable; falling back to Menlo");
+        let fallback = FontDesc::new(
+            "Menlo",
+            Style::Description {
+                slant: Slant::Normal,
+                weight: Weight::Normal,
+            },
+        );
+        rasterizer
+            .load_font(&fallback, size)
+            .context("load_font: neither JetBrains Mono nor Menlo available")
+    })
+}
+
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 fn f_to_u32(v: f64) -> u32 {
     v.round().clamp(1.0, f64::from(u32::MAX)) as u32
@@ -111,33 +131,40 @@ fn f_to_i32(v: f64) -> i32 {
     v.round().clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
-/// Bundle path first (`Vector.app/Contents/Resources/Fonts/`), dev workspace path second.
-fn locate_bundled_font() -> Result<PathBuf> {
+/// Best-effort lookup — returns `None` instead of erroring so a missing font
+/// never breaks rendering. Checks two cargo-bundle layouts plus the dev path.
+fn locate_bundled_font() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             if let Some(grandparent) = parent.parent() {
-                let bundled = grandparent
+                // cargo-bundle 0.10 preserves the source `resources/` prefix.
+                let with_prefix = grandparent
+                    .join("Resources")
+                    .join("resources")
+                    .join("Fonts")
+                    .join("JetBrainsMono-Regular.ttf");
+                if with_prefix.exists() {
+                    return Some(with_prefix);
+                }
+                let flat = grandparent
                     .join("Resources")
                     .join("Fonts")
                     .join("JetBrainsMono-Regular.ttf");
-                if bundled.exists() {
-                    return Ok(bundled);
+                if flat.exists() {
+                    return Some(flat);
                 }
             }
         }
     }
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let dev_path = manifest
-        .parent()
-        .ok_or_else(|| anyhow!("CARGO_MANIFEST_DIR has no parent"))?
+        .parent()?
         .join("vector-app")
         .join("resources")
         .join("Fonts")
         .join("JetBrainsMono-Regular.ttf");
     if dev_path.exists() {
-        return Ok(dev_path);
+        return Some(dev_path);
     }
-    Err(anyhow!(
-        "JetBrains Mono not found at bundle or dev path: {dev_path:?}"
-    ))
+    None
 }
