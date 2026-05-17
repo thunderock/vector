@@ -1,6 +1,5 @@
 /target
 /xtask/target
-Cargo.lock
 **/*.rs.bk
 .DS_Store
 crates/vector-app/resources/icon.iconset/
