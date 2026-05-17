@@ -1,0 +1,35 @@
+name: dev-build
+
+on:
+  push:
+
+env:
+  CARGO_TERM_COLOR: always
+  MACOSX_DEPLOYMENT_TARGET: "13.0"
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "1"
+  RUST_BACKTRACE: short
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dev-build
+      - name: Install build tools
+        run: |
+          brew install create-dmg librsvg
+          cargo install cargo-bundle@0.10.0 --locked
+      - name: Build xtask
+        run: cargo build --release --manifest-path xtask/Cargo.toml
+      - name: Build DMG (arm64)
+        run: ./xtask/target/release/xtask dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vector-arm64-${{ github.ref_name }}
+          path: target/dmg/Vector-*.dmg
+          retention-days: 14
