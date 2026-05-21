@@ -62,10 +62,10 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 
 ### Dev Tunnels Connect
 
-- [ ] **DT-01**: A 1–2 day spike at the start of the Dev Tunnels phase commits a written decision among (a) subprocess `code tunnel client`, (b) vendor `microsoft/dev-tunnels/rs/` at a pinned SHA, (c) defer to v2 — before any integration code is written
-- [ ] **DT-02**: A signed-in user can list active Dev Tunnels alongside Codespaces in the picker
-- [ ] **DT-03**: Connecting to a Dev Tunnel opens a remote shell in a Vector pane, end-to-end, using whichever transport the spike chose
-- [ ] **DT-04**: Dev Tunnel sessions are visually distinct from local sessions (tinted tab + `[remote]` badge so the user always knows what they're typing into)
+- [x] **DT-01**: A 1–2 day spike at the start of the Dev Tunnels phase commits a written decision among (a) subprocess `code tunnel client`, (b) vendor `microsoft/dev-tunnels/rs/` at a pinned SHA, (c) defer to v2 — before any integration code is written
+- [x] **DT-02**: A signed-in user can list active Dev Tunnels alongside Codespaces in the picker
+- [x] **DT-03**: Connecting to a Dev Tunnel opens a remote shell in a Vector pane, end-to-end, using whichever transport the spike chose
+- [x] **DT-04**: Dev Tunnel sessions are visually distinct from local sessions (tinted tab + `[remote]` badge so the user always knows what they're typing into)
 
 ### Persistence & Reconnect
 
@@ -175,10 +175,10 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | CS-01 | Phase 6 | Complete |
 | CS-02 | Phase 6 | Complete |
 | CS-03 | Phase 6 | Complete |
-| DT-01 | Phase 7 | Pending |
-| DT-02 | Phase 7 | Pending |
-| DT-03 | Phase 7 | Pending |
-| DT-04 | Phase 7 | Pending |
+| DT-01 | Phase 7 | Complete |
+| DT-02 | Phase 7 | Complete |
+| DT-03 | Phase 7 | Complete |
+| DT-04 | Phase 7 | Complete |
 | PERSIST-01 | Phase 9 | Pending |
 | PERSIST-02 | Phase 9 | Pending |
 | PERSIST-03 | Phase 9 | Pending |

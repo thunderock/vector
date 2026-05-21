@@ -209,7 +209,14 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   3. If the spike chose (a) or (b): clicking a tunnel opens a remote shell in a new pane via the chosen transport.
   4. The connected pane is visually distinct from local (tinted tab + `[remote]` badge) so the user always knows what they're typing into.
   5. If the spike chose (c): the decision document is committed, REQUIREMENTS.md moves DT-02..04 to v2 with reason, and Phase 8 closes as "spike + decision document".
-**Plans**: TBD
+**Plans**: 7 plans
+  - [x] 08-01-foundations-scaffold-PLAN.md — Wave 1: vendor SDK + russh patch + 3 new crates + arch-lint extension + Wave-0 test stubs
+  - [ ] 08-02-microsoft-oauth-PLAN.md — Wave 2: Microsoft OAuth Device Flow driver + Keychain TokenStore (D-03..06)
+  - [ ] 08-03-tunnel-agent-binary-PLAN.md — Wave 2: vector-tunnel-agent Linux binary (RelayTunnelHost + PTY spawn + JSON protocol loop, D-A1/D-07..15)
+  - [ ] 08-04-mac-client-transport-PLAN.md — Wave 2: vector-tunnels REST + DevTunnelTransport (PtyTransport impl) + connect-tunnel helper
+  - [ ] 08-05-picker-ui-and-actor-PLAN.md — Wave 3: DevTunnelsPickerModal + MicrosoftAuthDeviceFlowModal + devtunnels_actor + Cmd-Shift-T + Microsoft-blue tint (D-11/D-17, UI-SPEC §S1+S2)
+  - [ ] 08-06-agent-distribution-PLAN.md — Wave 3: cargo-deb metadata + agent-release.yml CI cross-compile x86_64+aarch64 .deb (D-01)
+  - [ ] 08-07-uat-smoke-matrix-PLAN.md — Wave 4: DT-01 spike doc + 9-item manual smoke matrix sign-off
 **Research-spike-required flag**: **YES.** Day 1 is a mandatory 1–2 day spike. Do not estimate the rest of the phase until the spike resolves the decision tree.
 **Stack additions** (conditional on spike outcome): `microsoft/dev-tunnels` at pinned SHA OR subprocess `code tunnel client` OR none (deferred). Existing `russh 0.60` + `vector-ssh` from Phase 7 carry over.
 **Risks & notes**:
@@ -263,7 +270,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 | 5. Polish (Local Daily-Driver) | 15/16 | In Progress|  |
 | 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
-| 8. Dev Tunnels Integration | 0/0 | Not started | - |
+| 8. Dev Tunnels Integration | 1/7 | In Progress|  |
 | 9. Persistence + Reconnect + tmux Auto-Attach | 0/0 | Not started | - |
 | 10. Hardening & Release | 0/0 | Not started | - |
 
@@ -314,7 +321,7 @@ At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Ev
 
 **Requirements:** TBD (likely a new `AI-*` family in REQUIREMENTS.md when promoted)
 
-**Plans:** 15/16 plans executed
+**Plans:** 1/7 plans executed
 
 **Trigger:** After milestone v1.0.0 ships (Phase 10 release). Per PROJECT.md key decision: "must not gate terminal-core work."
 
