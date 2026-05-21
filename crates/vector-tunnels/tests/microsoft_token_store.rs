@@ -71,7 +71,10 @@ fn load_when_never_saved_returns_ok_none_not_err() {
     let _ = store.clear();
 
     let loaded = store.load();
-    assert!(loaded.is_ok(), "load on fresh store should be Ok(None), got {loaded:?}");
+    assert!(
+        loaded.is_ok(),
+        "load on fresh store should be Ok(None), got {loaded:?}"
+    );
     assert!(loaded.unwrap().is_none());
 }
 
