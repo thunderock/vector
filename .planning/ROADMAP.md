@@ -211,7 +211,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   5. If the spike chose (c): the decision document is committed, REQUIREMENTS.md moves DT-02..04 to v2 with reason, and Phase 8 closes as "spike + decision document".
 **Plans**: 7 plans
   - [x] 08-01-foundations-scaffold-PLAN.md — Wave 1: vendor SDK + russh patch + 3 new crates + arch-lint extension + Wave-0 test stubs
-  - [ ] 08-02-microsoft-oauth-PLAN.md — Wave 2: Microsoft OAuth Device Flow driver + Keychain TokenStore (D-03..06)
+  - [x] 08-02-microsoft-oauth-PLAN.md — Wave 2: Microsoft OAuth Device Flow driver + Keychain TokenStore (D-03..06)
   - [x] 08-03-tunnel-agent-binary-PLAN.md — Wave 2: vector-tunnel-agent Linux binary (RelayTunnelHost + PTY spawn + JSON protocol loop, D-A1/D-07..15)
   - [x] 08-04-mac-client-transport-PLAN.md — Wave 2: vector-tunnels REST + DevTunnelTransport (PtyTransport impl) + connect-tunnel helper
   - [ ] 08-05-picker-ui-and-actor-PLAN.md — Wave 3: DevTunnelsPickerModal + MicrosoftAuthDeviceFlowModal + devtunnels_actor + Cmd-Shift-T + Microsoft-blue tint (D-11/D-17, UI-SPEC §S1+S2)
