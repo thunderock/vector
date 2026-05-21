@@ -74,8 +74,8 @@ tokio-util = "0.7"
 tokio-tungstenite = "0.29"
 # Phase 8: Microsoft dev-tunnels SDK pinned at the same SHA VS Code's CLI uses.
 tunnels = { git = "https://github.com/microsoft/dev-tunnels", rev = "64048c1409ff56cb958b879de7ea069ec71edc8b", features = ["connections"] }
-vector-tunnel-protocol = { path = "crates/vector-tunnel-protocol" }
-vector-tunnels = { path = "crates/vector-tunnels" }
+vector-tunnel-protocol = { path = "crates/vector-tunnel-protocol", version = "2026.5.10" }
+vector-tunnels = { path = "crates/vector-tunnels", version = "2026.5.10" }
 toml = "1.1.2"
 toml_edit = "0.22"
 tracing = "0.1"

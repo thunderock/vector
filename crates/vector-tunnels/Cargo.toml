@@ -21,8 +21,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "io-util"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
-vector-mux = { path = "../vector-mux" }
-vector-secrets = { path = "../vector-secrets" }
+vector-mux = { path = "../vector-mux", version = "2026.5.10" }
+vector-secrets = { path = "../vector-secrets", version = "2026.5.10" }
 vector-tunnel-protocol = { workspace = true }
 chrono = { workspace = true }
 keyring-core = { workspace = true }
