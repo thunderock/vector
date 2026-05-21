@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use xshell::Shell;
 
+mod agent_dist;
 mod dmg;
 mod icon;
 mod release;
@@ -26,6 +27,8 @@ enum Cmd {
     },
     /// Bump CalVer + run git-cliff + commit + tag (no push).
     Release,
+    /// Build the vector-tunnel-agent .deb for the host arch (Linux only).
+    AgentDist,
 }
 
 fn main() -> Result<()> {
@@ -42,6 +45,7 @@ fn main() -> Result<()> {
             universal: false, ..
         } => dmg::dmg_local(&sh),
         Cmd::Release => release::release(&sh),
+        Cmd::AgentDist => agent_dist::run(),
     }
 }
 

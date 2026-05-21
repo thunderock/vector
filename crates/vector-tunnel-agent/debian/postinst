@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+# v1: no system service (D-02). Agent runs as the invoking user.
+echo "vector-tunnel-agent installed. Run it with: vector-tunnel-agent"
+echo "On first run, complete the device-code sign-in printed to stdout."
+exit 0
