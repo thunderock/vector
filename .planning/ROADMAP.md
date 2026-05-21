@@ -216,7 +216,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - [x] 08-04-mac-client-transport-PLAN.md — Wave 2: vector-tunnels REST + DevTunnelTransport (PtyTransport impl) + connect-tunnel helper
   - [x] 08-05-picker-ui-and-actor-PLAN.md — Wave 3: DevTunnelsPickerModal + MicrosoftAuthDeviceFlowModal + devtunnels_actor + Cmd-Shift-T + Microsoft-blue tint (D-11/D-17, UI-SPEC §S1+S2)
   - [x] 08-06-agent-distribution-PLAN.md — Wave 3: cargo-deb metadata + agent-release.yml CI cross-compile x86_64+aarch64 .deb (D-01)
-  - [ ] 08-07-uat-smoke-matrix-PLAN.md — Wave 4: DT-01 spike doc + 9-item manual smoke matrix sign-off
+  - [ ] 08-07-uat-smoke-matrix-PLAN.md — Wave 4: DT-01 spike doc + 9-item manual smoke matrix sign-off (Task 1 template authored 2026-05-21 commit b5d006e; Task 2 checkpoint:human-verify — user must walk 08-SMOKE.md end-to-end on real hardware before Phase 8 closes)
 **Research-spike-required flag**: **YES.** Day 1 is a mandatory 1–2 day spike. Do not estimate the rest of the phase until the spike resolves the decision tree.
 **Stack additions** (conditional on spike outcome): `microsoft/dev-tunnels` at pinned SHA OR subprocess `code tunnel client` OR none (deferred). Existing `russh 0.60` + `vector-ssh` from Phase 7 carry over.
 **Risks & notes**:
