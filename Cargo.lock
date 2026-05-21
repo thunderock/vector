@@ -5666,8 +5666,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "vector-tunnel-agent"
+version = "2026.5.10"
+dependencies = [
+ "anyhow",
+ "base64",
+ "keyring-core",
+ "oauth2",
+ "portable-pty",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "vector-tunnel-protocol",
+]
+
+[[package]]
+name = "vector-tunnel-protocol"
+version = "2026.5.10"
+dependencies = [
+ "base64",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "vector-tunnels"
 version = "2026.5.10"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64",
+ "chrono",
+ "keyring-core",
+ "oauth2",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "vector-mux",
+ "vector-secrets",
+ "vector-tunnel-protocol",
+ "wiremock",
+ "zeroize",
+]
 
 [[package]]
 name = "vector-ui"
@@ -6643,3 +6692,18 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[patch.unused]]
+name = "russh"
+version = "0.37.1"
+source = "git+https://github.com/microsoft/vscode-russh?branch=main#0bced23016d869dc847b25840268896fd0969b69"
+
+[[patch.unused]]
+name = "russh-cryptovec"
+version = "0.7.0"
+source = "git+https://github.com/microsoft/vscode-russh?branch=main#0bced23016d869dc847b25840268896fd0969b69"
+
+[[patch.unused]]
+name = "russh-keys"
+version = "0.37.1"
+source = "git+https://github.com/microsoft/vscode-russh?branch=main#0bced23016d869dc847b25840268896fd0969b69"

@@ -10,6 +10,8 @@ members = [
     "crates/vector-ssh",
     "crates/vector-codespaces",
     "crates/vector-tunnels",
+    "crates/vector-tunnel-agent",
+    "crates/vector-tunnel-protocol",
     "crates/vector-config",
     "crates/vector-secrets",
     "crates/vector-fonts",
@@ -69,6 +71,11 @@ tempfile = "3"
 thiserror = "2"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "sync"] }
 tokio-util = "0.7"
+tokio-tungstenite = "0.29"
+# Phase 8: Microsoft dev-tunnels SDK pinned at the same SHA VS Code's CLI uses.
+tunnels = { git = "https://github.com/microsoft/dev-tunnels", rev = "64048c1409ff56cb958b879de7ea069ec71edc8b", features = ["connections"] }
+vector-tunnel-protocol = { path = "crates/vector-tunnel-protocol" }
+vector-tunnels = { path = "crates/vector-tunnels" }
 toml = "1.1.2"
 toml_edit = "0.22"
 tracing = "0.1"
@@ -97,3 +104,12 @@ unnecessary_debug_formatting = "allow"
 # D-83 sub-items #1 + #2 arch-lint tests are hosted by the `vector-arch-tests`
 # member crate (no library, no binary — only ships `tests/*.rs`).
 # Tests must live at workspace level (single source of truth) per CONTEXT D-83 #2.
+
+# Phase 8 D-A2: unify russh under Microsoft's fork so the `tunnels` SDK
+# (pinned to russh 0.37 internally) and Vector's own code resolve to one
+# russh in the dep graph. This downgrades workspace russh from 0.60 to 0.37
+# at the API surface for any crate that uses it directly.
+[patch.crates-io]
+russh = { git = "https://github.com/microsoft/vscode-russh", branch = "main" }
+russh-keys = { git = "https://github.com/microsoft/vscode-russh", branch = "main" }
+russh-cryptovec = { git = "https://github.com/microsoft/vscode-russh", branch = "main" }

@@ -1,0 +1,30 @@
+[package]
+name = "vector-tunnel-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Vector Tunnel Agent — Linux user-space binary that hosts a Dev Tunnel and serves PTY shells (Phase 8 D-A1 Path 2c)."
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "vector-tunnel-agent"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+portable-pty = { workspace = true }
+vector-tunnel-protocol = { workspace = true }
+base64 = { workspace = true }
+oauth2 = { workspace = true }
+keyring-core = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+# tunnels = { workspace = true }  # Wave 1 (Plan 08-03) wires; keep out of dep graph this wave to keep Wave 0 minimal-surface

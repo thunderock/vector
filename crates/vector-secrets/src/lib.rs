@@ -51,6 +51,7 @@ impl Secrets {
     pub const VECTOR_SERVICE: &str = "vector";
     pub const GITHUB_OAUTH_ACCOUNT: &str = "github_oauth_token";
     pub const GITHUB_REFRESH_ACCOUNT: &str = "github_refresh_token";
+    pub const MICROSOFT_REFRESH_ACCOUNT: &str = "microsoft_refresh_token";
 
     pub fn new(service: impl Into<String>) -> Self {
         Self {
