@@ -365,19 +365,32 @@ impl App {
             unsafe { menu::rebuild_auth_menu_section(mtm, true, Some(user_login)) };
         }
         self.pending_auth_cancellation = None;
-        self.toasts
-            .show(ToastBanner::info(format!("signed in as @{user_login}")));
+        self.toasts.show(ToastBanner::info(format!(
+            "signed in as @{user_login} — pick a Codespace"
+        )));
+        // Auto-advance to the Codespaces picker so the user isn't stranded at
+        // the local shell with no signal the next step is Cmd-Shift-G.
+        if let Some(proxy) = &self.proxy {
+            let _ = proxy.send_event(UserEvent::OpenCodespacesPicker);
+        }
         self.request_redraw_all();
         tracing::info!(user_login, "auth_completed");
     }
 
     fn handle_auth_failed(&mut self, reason: &str) {
-        if let Some(mtm) = objc2::MainThreadMarker::new() {
-            if let Some(modal) = self.auth_modal.take() {
-                modal.dismiss(mtm);
+        // Only dismiss the modal on terminal user-driven outcomes. Transient
+        // oauth/network errors (e.g. parse failure, init failure) must NOT
+        // tear down the modal — the user still needs to see the device code
+        // and decide whether to retry or cancel manually.
+        let user_terminal = matches!(reason, "cancelled" | "expired");
+        if user_terminal {
+            if let Some(mtm) = objc2::MainThreadMarker::new() {
+                if let Some(modal) = self.auth_modal.take() {
+                    modal.dismiss(mtm);
+                }
             }
+            self.pending_auth_cancellation = None;
         }
-        self.pending_auth_cancellation = None;
         // UI-SPEC §6.1 toast copy mapping.
         let toast_text = match reason {
             "cancelled" => "sign-in cancelled".to_string(),
@@ -392,16 +405,14 @@ impl App {
     // ---- Phase 6 / CS-01..03 — picker handlers --------------------------
 
     fn handle_open_codespaces_picker(&mut self) {
-        // Build client lazily from Keychain.
-        if self.codespaces_client.is_none() {
-            let Some(c) = crate::codespaces_actor::build_client_from_keychain() else {
-                tracing::info!("OpenCodespacesPicker: no token — routing to AuthRequired");
-                if let Some(proxy) = &self.proxy {
-                    let _ = proxy.send_event(UserEvent::AuthRequired);
-                }
-                return;
-            };
-            self.codespaces_client = Some(c);
+        // Short-circuit to AuthRequired if no token in Keychain. Avoids
+        // showing an empty picker to a user who hasn't signed in yet.
+        if !crate::codespaces_actor::has_keychain_token() {
+            tracing::info!("OpenCodespacesPicker: no token — routing to AuthRequired");
+            if let Some(proxy) = &self.proxy {
+                let _ = proxy.send_event(UserEvent::AuthRequired);
+            }
+            return;
         }
         let Some(mtm) = objc2::MainThreadMarker::new() else {
             tracing::warn!("OpenCodespacesPicker: not on main thread");
@@ -413,16 +424,28 @@ impl App {
         let Some(handle) = self.tokio_handle.clone() else {
             return;
         };
-        let Some(client) = self.codespaces_client.clone() else {
-            return;
-        };
+        // Lazily build the CodespacesClient for downstream start/poll calls.
+        // Listing itself uses a direct reqwest path, but `start` / `poll` still
+        // go through octocrab. Building here (once per session) under the
+        // entered tokio runtime context avoids the tower::buffer panic.
+        if self.codespaces_client.is_none() {
+            if let Some(c) = crate::codespaces_actor::build_client_from_keychain(&handle) {
+                self.codespaces_client = Some(c);
+            } else {
+                tracing::warn!("OpenCodespacesPicker: client build failed despite token present");
+            }
+        }
         // Dismiss prior modal (if any) before showing a fresh one.
         if let Some(prev) = self.codespaces_modal.take() {
             prev.dismiss();
         }
         let modal = crate::codespaces_modal::CodespacesPickerModal::show(mtm);
         self.codespaces_modal = Some(modal);
-        crate::codespaces_actor::spawn_fetch_codespaces(&handle, proxy, client);
+        // Use direct reqwest fetch — bypasses octocrab/tower entirely, so the
+        // list call has zero buffer surface. If the token is rejected (401),
+        // the actor emits AuthRequired and the picker is dismissed by the
+        // AuthRequired arm.
+        crate::codespaces_actor::spawn_fetch_codespaces_direct(&handle, proxy);
     }
 
     fn handle_codespaces_loaded(
@@ -458,18 +481,20 @@ impl App {
         }
     }
 
-    /// Connect to currently selected codespace (Phase-6 stub: emits placeholder
-    /// toast per UI-SPEC §6.1; Phase 7 replaces with real SSH transport).
+    /// Connect placeholder — real remote-shell wiring lives in the future
+    /// tunnels phase. For now, show a toast so the picker stays usable.
     fn codespaces_connect_selected(&mut self) {
         let Some(modal) = self.codespaces_modal.as_ref() else {
             return;
         };
-        if modal.selected().is_some() {
-            self.toasts.show(ToastBanner::info(
-                "codespace ssh transport not yet wired — phase 7",
-            ));
-            self.request_redraw_all();
-        }
+        let Some(cs) = modal.selected() else {
+            return;
+        };
+        self.toasts.show(ToastBanner::info(format!(
+            "connect to {} — not implemented yet",
+            cs.name
+        )));
+        self.request_redraw_all();
     }
 
     /// Start the currently selected Shutdown-family codespace (CS-02).
@@ -828,6 +853,11 @@ impl App {
             _ => None,
         };
         let Some((leaves, layout)) = layout_snapshot else {
+            tracing::warn!(
+                mux_wid = ?mux_window_id,
+                mux_present = mux.is_some(),
+                "render_window: layout_snapshot is None — skipping frame"
+            );
             return;
         };
 
@@ -845,12 +875,23 @@ impl App {
             .next()
             .map(|c| (c.cell_width_px(), c.cell_height_px()))
         else {
+            tracing::warn!("render_window: compositors empty after first-paint — skipping frame");
             return;
         };
+        tracing::warn!(
+            cell_w,
+            cell_h,
+            leaves = leaves.len(),
+            "render_window: DBG about to render"
+        );
 
         // Per-pane render block — `host` borrow is scoped here so chrome pass can
-        // borrow aw.chrome_pipelines independently afterwards.
-        let (frame_width, frame_height, ()) = {
+        // borrow aw.chrome_pipelines independently afterwards. The acquired frame
+        // is carried OUT of this block and re-used by the chrome pass below, so the
+        // surface is acquired + presented exactly once per render_window call
+        // (acquiring twice would advance the swapchain and overwrite the terminal
+        // frame with a blank chrome-only texture — see debug session black-screen-render).
+        let (frame, frame_width, frame_height) = {
             let Some(host) = aw.render_host.as_mut() else {
                 return;
             };
@@ -946,11 +987,10 @@ impl App {
                 }
                 first = false;
             }
-            frame.present();
-            // Return surface dimensions for the chrome pass encoder (no frame needed).
-            (width, height, ())
+            // Do NOT present here. The chrome pass below reuses the same surface
+            // texture so terminal + chrome land in a single presented frame.
+            (frame, width, height)
         };
-        // frame_view lifetime ended with frame.present() above.
 
         // Plan 05-16: chrome pass — AFTER per-pane compositor loop, BEFORE next frame.
         // Snapshot App-level state BEFORE borrowing aw (avoids borrow conflict with
@@ -1022,15 +1062,15 @@ impl App {
         // Now borrow aw for the chrome pass.
         // HIGH-2 borrow disjointness: aw.render_host and aw.chrome_pipelines are
         // separate fields; simultaneous &mut borrows are safe via field projection.
+        // The frame acquired above is reused here so we present terminal + chrome
+        // as a single swapchain image.
         let Some(aw) = self.windows.get_mut(&id) else {
+            // Window vanished between blocks — present what we have and return.
+            frame.present();
             return;
         };
         if let (Some(host), Some(chrome)) = (aw.render_host.as_mut(), aw.chrome_pipelines.as_mut())
         {
-            let frame = match host.acquire_frame() {
-                Ok(Some(f)) => f,
-                Ok(None) | Err(_) => return, // skip chrome frame if surface unavailable
-            };
             let encoder = host
                 .device()
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -1118,6 +1158,9 @@ impl App {
             } // rpass dropped
             host.queue().submit(std::iter::once(enc.finish()));
             frame.present();
+        } else {
+            // No chrome pipelines available — still present the terminal frame.
+            frame.present();
         }
     }
 
@@ -1143,6 +1186,85 @@ impl App {
         Some([r, g, b, 1.0])
     }
 
+    /// First-paint sync: winit's initial Resized(physical) fires before the lazy
+    /// compositor exists, so cell_metrics_px is None and the resize handler
+    /// skips queueing pending_resize. Without this sync the tab dims stay at
+    /// the create_tab_async initial 80×24 and the grid renders as a top-left
+    /// rectangle inside a larger surface. Called from ensure_compositors_for_pane
+    /// after the first compositor's cell metrics are known.
+    fn sync_tab_dims_to_surface(
+        &mut self,
+        window_id: WindowId,
+        mux_window_id: MuxWindowId,
+        tab_cols: u16,
+        tab_rows: u16,
+        cell_w: u32,
+        cell_h: u32,
+    ) {
+        let Some(mux) = Mux::try_get() else {
+            return;
+        };
+        let (sw, sh) = match self
+            .windows
+            .get(&window_id)
+            .and_then(|aw| aw.render_host.as_ref())
+        {
+            Some(h) => h.surface_size(),
+            None => return,
+        };
+        if sw == 0 || sh == 0 {
+            return;
+        }
+        let cols = u16::try_from((sw / cell_w.max(1)).max(1)).unwrap_or(u16::MAX);
+        let rows = u16::try_from((sh / cell_h.max(1)).max(1)).unwrap_or(u16::MAX);
+        if (cols, rows) == (tab_cols, tab_rows) {
+            return;
+        }
+        let walk = mux.resize_window(mux_window_id, rows, cols);
+        if let Some(router) = self.router.clone() {
+            let router = router.lock();
+            for (pane_id, prows, pcols) in &walk {
+                router.send_resize(*pane_id, *prows, *pcols);
+            }
+        }
+    }
+
+    /// Resolve cell metrics for a window. If no compositor exists yet, lazily
+    /// build the first one sized to the full surface (under `seed_pane_id`) and
+    /// return its cell metrics. Returns None on init failure / no render host.
+    fn resolve_or_init_cell_metrics(
+        &mut self,
+        window_id: WindowId,
+        seed_pane_id: PaneId,
+    ) -> Option<(u32, u32)> {
+        let aw = self.windows.get_mut(&window_id)?;
+        let host = aw.render_host.as_ref()?;
+        if let Some(m) = aw
+            .compositors
+            .values()
+            .next()
+            .map(|c| (c.cell_width_px(), c.cell_height_px()))
+        {
+            return Some(m);
+        }
+        let (sw, sh) = host.surface_size();
+        let viewport_offset = [0.0_f32, 0.0_f32];
+        #[allow(clippy::cast_precision_loss)]
+        let viewport_size = [sw as f32, sh as f32];
+        match host.new_compositor_for_viewport(viewport_offset, viewport_size) {
+            Ok(comp) => {
+                let cw = comp.cell_width_px();
+                let ch = comp.cell_height_px();
+                aw.compositors.insert(seed_pane_id, comp);
+                Some((cw, ch))
+            }
+            Err(err) => {
+                tracing::error!(?err, "lazy Compositor init failed");
+                None
+            }
+        }
+    }
+
     /// Plan 04-06 (Gap 1 plumbing): lazily create a per-pane Compositor for
     /// every Mux leaf in the tab that holds `seed_pane_id`. No-op if the window
     /// has no render host. Idempotent — only creates compositors for leaves not
@@ -1154,8 +1276,40 @@ impl App {
         let Some((mux_window_id, tab_id)) = mux.locate_pane(seed_pane_id) else {
             return;
         };
-        // Snapshot leaves + viewport + layout under a single with_tab read lock.
+        // Back-fill the winit→mux mapping if `resumed()` lost the race against Mux::install.
+        self.winit_to_mux_window
+            .entry(window_id)
+            .or_insert(mux_window_id);
+        // Snapshot leaves + initial tab dims under a single with_tab read lock.
         let snapshot = mux.with_tab(mux_window_id, tab_id, |tab| {
+            (tab.root.leaves(), tab.last_cols, tab.last_rows)
+        });
+        let Some((leaves_initial, tab_cols, tab_rows)) = snapshot else {
+            return;
+        };
+        let first_build = self
+            .windows
+            .get(&window_id)
+            .is_some_and(|aw| aw.compositors.is_empty());
+        let Some((cell_w, cell_h)) = self.resolve_or_init_cell_metrics(window_id, seed_pane_id)
+        else {
+            return;
+        };
+        if cell_w == 0 || cell_h == 0 {
+            return;
+        }
+        if first_build {
+            self.sync_tab_dims_to_surface(
+                window_id,
+                mux_window_id,
+                tab_cols,
+                tab_rows,
+                cell_w,
+                cell_h,
+            );
+        }
+        // Re-snapshot the (possibly updated) layout for per-pane viewport build.
+        let snapshot2 = mux.with_tab(mux_window_id, tab_id, |tab| {
             let viewport = Rect {
                 x: 0,
                 y: 0,
@@ -1165,46 +1319,14 @@ impl App {
             let layout = compute_layout(&tab.root, viewport);
             (tab.root.leaves(), layout)
         });
-        let Some((leaves, layout)) = snapshot else {
-            return;
-        };
+        let (leaves, layout) =
+            snapshot2.unwrap_or((leaves_initial, std::collections::HashMap::default()));
         let Some(aw) = self.windows.get_mut(&window_id) else {
             return;
         };
         let Some(host) = aw.render_host.as_ref() else {
             return;
         };
-        // For the very first compositor we don't know cell metrics yet; build
-        // it sized to the full surface and read its metrics back. Subsequent
-        // panes use those metrics to derive their viewport pixel rects.
-        let (cell_w, cell_h) = if let Some(m) = aw
-            .compositors
-            .values()
-            .next()
-            .map(|c| (c.cell_width_px(), c.cell_height_px()))
-        {
-            m
-        } else {
-            let (sw, sh) = host.surface_size();
-            let viewport_offset = [0.0_f32, 0.0_f32];
-            #[allow(clippy::cast_precision_loss)]
-            let viewport_size = [sw as f32, sh as f32];
-            match host.new_compositor_for_viewport(viewport_offset, viewport_size) {
-                Ok(comp) => {
-                    let cw = comp.cell_width_px();
-                    let ch = comp.cell_height_px();
-                    aw.compositors.insert(seed_pane_id, comp);
-                    (cw, ch)
-                }
-                Err(err) => {
-                    tracing::error!(?err, "lazy Compositor init failed");
-                    return;
-                }
-            }
-        };
-        if cell_w == 0 || cell_h == 0 {
-            return;
-        }
         for pane_id in leaves {
             if aw.compositors.contains_key(&pane_id) {
                 continue;
@@ -1523,10 +1645,13 @@ impl ApplicationHandler<UserEvent> for App {
             }
             UserEvent::PaneTitleChanged { pane_id, label } => {
                 // D-79 B2: append `: {cwd_stem}` when OSC 7 ring is non-empty.
-                let cwd = Mux::try_get()
+                // Plan 07-04 / CS-06: append ` [remote]` for non-Local transports.
+                let (cwd, kind) = Mux::try_get()
                     .and_then(|m| m.pane(pane_id))
-                    .and_then(|p| p.cwd.lock().clone());
-                let title = vector_mux::format_tab_title(&label, cwd.as_deref());
+                    .map_or((None, vector_mux::TransportKind::Local), |p| {
+                        (p.cwd.lock().clone(), p.transport_kind())
+                    });
+                let title = vector_mux::format_tab_title(&label, cwd.as_deref(), kind);
                 tracing::info!(?pane_id, %title, "pane title changed");
                 if let Some(aw) = self.primary_window() {
                     aw.window.set_title(&format!("Vector — {title}"));
@@ -1677,10 +1802,20 @@ impl ApplicationHandler<UserEvent> for App {
                         modal.dismiss(mtm);
                     }
                 }
+                // Dismiss the codespaces picker if it's open — the user is no
+                // longer authenticated, so the picker has nothing to show.
+                if let Some(picker) = self.codespaces_modal.take() {
+                    picker.dismiss();
+                }
                 self.handle_auth_sign_in_requested();
             }
             UserEvent::SignOut => {
                 let _ = vector_codespaces::TokenStore::new().clear();
+                // Drop the cached client + picker — both reference the now-cleared token.
+                self.codespaces_client = None;
+                if let Some(picker) = self.codespaces_modal.take() {
+                    picker.dismiss();
+                }
                 if let Some(mtm) = objc2::MainThreadMarker::new() {
                     unsafe { menu::rebuild_auth_menu_section(mtm, false, None) };
                 }

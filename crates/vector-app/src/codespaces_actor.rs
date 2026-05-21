@@ -8,7 +8,7 @@ use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 use winit::event_loop::EventLoopProxy;
 
-use vector_codespaces::{ClientError, CodespacesClient};
+use vector_codespaces::{AuthError, ClientError, CodespacesClient, GitHubAuth};
 
 use crate::UserEvent;
 
@@ -110,11 +110,62 @@ pub fn spawn_start_then_poll(
 
 /// Construct a CodespacesClient from the Keychain-stored access token, or
 /// None if no token is present (caller falls back to AuthRequired).
+///
+/// `handle` is required because `Octocrab::builder().build()` constructs a
+/// `tower::buffer::Buffer` whose worker is spawned via the current tokio
+/// runtime. Calling from the winit main thread without entering the runtime
+/// context panics with "there is no reactor running". We enter the runtime
+/// context for the duration of the build.
 #[must_use]
-pub fn build_client_from_keychain() -> Option<Arc<CodespacesClient>> {
+pub fn build_client_from_keychain(handle: &Handle) -> Option<Arc<CodespacesClient>> {
     use vector_codespaces::{build_octocrab, TokenStore};
     let store = TokenStore::new();
     let access = store.load_access()?;
+    let _guard = handle.enter();
     let octo = build_octocrab(&access, None).ok()?;
     Some(Arc::new(CodespacesClient::new(octo)))
+}
+
+/// Returns true if a GitHub access token is present in the Keychain. Used by
+/// the picker-open path to short-circuit to AuthRequired before opening a
+/// modal that would just show "no codespaces" for an unauthenticated user.
+#[must_use]
+pub fn has_keychain_token() -> bool {
+    vector_codespaces::TokenStore::new().load_access().is_some()
+}
+
+/// One-shot list fetch via direct reqwest (bypasses octocrab/tower entirely).
+/// Reads the token from the Keychain inside the tokio task so the main thread
+/// never touches the secret. Emits:
+///   - `CodespacesLoaded(list)` on success
+///   - `AuthRequired` if no token OR token rejected (401)
+///   - `CodespacesLoadFailed(msg)` on network/parse error
+pub fn spawn_fetch_codespaces_direct(handle: &Handle, proxy: EventLoopProxy<UserEvent>) {
+    handle.spawn(async move {
+        let Some(access) = vector_codespaces::TokenStore::new().load_access() else {
+            let _ = proxy.send_event(UserEvent::AuthRequired);
+            return;
+        };
+        let auth = match GitHubAuth::new() {
+            Ok(a) => a,
+            Err(e) => {
+                tracing::warn!(error = %e, "GitHubAuth::new failed");
+                let _ = proxy.send_event(UserEvent::CodespacesLoadFailed(e.to_string()));
+                return;
+            }
+        };
+        match auth.list_codespaces_direct(&access).await {
+            Ok(list) => {
+                let _ = proxy.send_event(UserEvent::CodespacesLoaded(Arc::new(list)));
+            }
+            Err(AuthError::Unauthorized) => {
+                tracing::info!("list_codespaces: 401 — routing to AuthRequired");
+                let _ = proxy.send_event(UserEvent::AuthRequired);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "list_codespaces_direct failed");
+                let _ = proxy.send_event(UserEvent::CodespacesLoadFailed(e.to_string()));
+            }
+        }
+    });
 }

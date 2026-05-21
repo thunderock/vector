@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "GitHub Codespaces auth + list + connect — Phases 6/7 (octocrab + tonic)."
+description = "GitHub OAuth Device Flow + Codespaces REST list/start (Phase 6)."
 
 [dependencies]
 chrono.workspace = true

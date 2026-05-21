@@ -14,4 +14,6 @@ pub enum AuthError {
     Expired,
     #[error("refresh token absent — must re-run device flow")]
     NoRefreshToken,
+    #[error("token rejected (401) — must re-run device flow")]
+    Unauthorized,
 }

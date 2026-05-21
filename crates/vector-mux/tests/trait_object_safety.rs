@@ -3,7 +3,7 @@
 //! Compile-time check: if these lines compile, the traits are object-safe.
 //! The end-to-end test also proves CORE-04/05 reach through the trait surface.
 
-use vector_mux::{CodespaceDomain, DevTunnelDomain, Domain, LocalDomain, PtyTransport};
+use vector_mux::{DevTunnelDomain, Domain, LocalDomain, PtyTransport};
 
 #[test]
 fn pty_transport_is_object_safe() {
@@ -42,32 +42,14 @@ fn local_domain_constructs_when_shell_resolves() {
     }
 }
 
-#[test]
-fn codespace_domain_compiles_with_unimplemented_body() {
-    let d = CodespaceDomain::new();
-    assert_eq!(d.label(), "codespace");
-    assert!(!d.is_alive());
-}
+// WIN-04: vector-mux must remain free of russh transitively. Remote transports
+// are installed via `Mux::create_tab_async_with_transport` from outside crates.
 
 #[test]
 fn devtunnel_domain_compiles_with_unimplemented_body() {
     let d = DevTunnelDomain::new();
     assert_eq!(d.label(), "dev_tunnel");
     assert!(!d.is_alive());
-}
-
-#[test]
-#[should_panic(expected = "Phase 7")]
-fn codespace_spawn_panics_with_phase_marker() {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(async {
-        let d = CodespaceDomain::new();
-        let _ = d.spawn(vector_mux::SpawnCommand::default()).await;
-    });
 }
 
 #[test]

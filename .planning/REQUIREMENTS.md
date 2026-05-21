@@ -1,7 +1,7 @@
 # Requirements: Vector
 
 **Defined:** 2026-05-10
-**Core Value:** Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
+**Core Value:** Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), get a fast remote shell — no VS Code, no browser. Local-terminal niceties are table-stakes; the differentiator is that a Dev-Tunnels session feels native, not bolted on.
 
 ## v1 Requirements
 
@@ -60,19 +60,12 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [x] **CS-02**: Selecting a Shutdown codespace from the picker triggers `POST /start`, polls until Available (with 409 swallowed), then connects _(Wave-0 scaffolded — start/poll test stubs landed in Plan 06-01; real impl lands in Plan 06-03)_
 - [x] **CS-03**: A picked codespace can be saved as a one-click profile that survives app restart _(Wave-0 scaffolded — vector-config::writer module + profile_writer.rs test stubs landed in Plan 06-01; real impl lands in Plan 06-04)_
 
-### Codespaces SSH Connect
-
-- [ ] **CS-04**: Connecting to a codespace opens a remote shell in a Vector pane, end-to-end, via subprocess `gh codespace ssh --stdio` as the v1 transport
-- [ ] **CS-05**: Vector generates and registers an SSH keypair (ed25519) per machine — no manual ssh-add dance for the user
-- [ ] **CS-06**: A connected codespace tab is visually distinct (tinted tab + "remote" badge in the tab title) so the user always knows what they're typing into
-- [ ] **CS-07**: Resize events propagate through the SSH transport (`window-change` request) so remote `vim`/`tmux` reflow correctly
-
 ### Dev Tunnels Connect
 
 - [ ] **DT-01**: A 1–2 day spike at the start of the Dev Tunnels phase commits a written decision among (a) subprocess `code tunnel client`, (b) vendor `microsoft/dev-tunnels/rs/` at a pinned SHA, (c) defer to v2 — before any integration code is written
 - [ ] **DT-02**: A signed-in user can list active Dev Tunnels alongside Codespaces in the picker
 - [ ] **DT-03**: Connecting to a Dev Tunnel opens a remote shell in a Vector pane, end-to-end, using whichever transport the spike chose
-- [ ] **DT-04**: Dev Tunnel sessions are visually distinct from Codespaces sessions (different tab tint color)
+- [ ] **DT-04**: Dev Tunnel sessions are visually distinct from local sessions (tinted tab + `[remote]` badge so the user always knows what they're typing into)
 
 ### Persistence & Reconnect
 
@@ -91,10 +84,6 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 ## v2 Requirements
 
 Deferred to a future release. Tracked but not in the current roadmap.
-
-### Native Codespaces Transport
-
-- **CS-V2-01**: Replace subprocess `gh codespace ssh --stdio` with native `russh` + `tonic` over the `cli/cli` port-16634 gRPC management API; vendor the `.proto` files from `cli/cli/internal/codespaces/rpc/`
 
 ### Distribution & Signing
 
@@ -186,14 +175,10 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | CS-01 | Phase 6 | Complete |
 | CS-02 | Phase 6 | Complete |
 | CS-03 | Phase 6 | Complete |
-| CS-04 | Phase 7 | Pending |
-| CS-05 | Phase 7 | Pending |
-| CS-06 | Phase 7 | Pending |
-| CS-07 | Phase 7 | Pending |
-| DT-01 | Phase 8 | Pending |
-| DT-02 | Phase 8 | Pending |
-| DT-03 | Phase 8 | Pending |
-| DT-04 | Phase 8 | Pending |
+| DT-01 | Phase 7 | Pending |
+| DT-02 | Phase 7 | Pending |
+| DT-03 | Phase 7 | Pending |
+| DT-04 | Phase 7 | Pending |
 | PERSIST-01 | Phase 9 | Pending |
 | PERSIST-02 | Phase 9 | Pending |
 | PERSIST-03 | Phase 9 | Pending |
@@ -204,9 +189,11 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | HARDEN-04 | Phase 10 | Pending |
 
 **Coverage:**
-- v1 requirements: 51 total (5 BUILD + 6 CORE + 5 RENDER + 5 WIN + 8 POLISH + 3 AUTH + 7 CS + 4 DT + 4 PERSIST + 4 HARDEN)
-- Mapped to phases: 51 (100%)
+- v1 requirements: 47 total (5 BUILD + 6 CORE + 5 RENDER + 5 WIN + 8 POLISH + 3 AUTH + 3 CS + 4 DT + 4 PERSIST + 4 HARDEN)
+- Mapped to phases: 47 (100%)
 - Unmapped: 0
+
+**Pivot note (2026-05-19):** CS-04..07 (Codespaces SSH Connect) dropped — see ROADMAP §Phase 7. The original "pick a Codespace, get a remote shell" use case turned out to be the wrong product. The real use case is VS Code Remote Tunnels: the user runs `code tunnel` on their own remote machine (EC2, home server, etc.) and Vector attaches over the Microsoft Dev Tunnels relay. DT-01..04 now own that flow. CS-V2-01 (native russh+tonic Codespaces transport) was also removed as no longer relevant. Phase 6 (CS-01..03 picker) shipped and stays code-complete — currently dormant unless someone repurposes it.
 
 ---
 *Requirements defined: 2026-05-10*

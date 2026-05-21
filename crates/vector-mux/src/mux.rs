@@ -19,6 +19,7 @@ use crate::local_domain::LocalDomain;
 use crate::pane::{Pane, PaneNode};
 use crate::split_tree::{self, Rect};
 use crate::tab::Tab;
+use crate::transport::PtyTransport;
 use crate::window::Window;
 
 static MUX: OnceLock<Arc<Mux>> = OnceLock::new();
@@ -27,7 +28,9 @@ pub struct Mux {
     windows: RwLock<HashMap<WindowId, Window>>,
     panes: RwLock<HashMap<PaneId, Arc<Pane>>>,
     ids: IdAllocator,
-    /// Phase 4 only; Phase 7 will add CodespaceDomain etc.
+    /// Local-shell domain. Remote transports are installed directly via
+    /// `create_tab_async_with_transport` rather than going through a Domain
+    /// trait (WIN-04: keeps russh out of vector-mux).
     #[allow(dead_code)]
     default_domain: Arc<LocalDomain>,
     /// Plan 05-12 (POLISH-05 gap-closure, HIGH-3): real clipboard channel passed
@@ -418,6 +421,28 @@ impl Mux {
             spawned.pid,
             spawned.master_fd,
         ));
+        Ok(self.install_tab(window_id, pane, rows, cols))
+    }
+
+    /// WIN-04: install an externally-constructed transport as a new tab.
+    /// Takes `Box<dyn PtyTransport>` directly so vector-mux stays free of
+    /// transport-implementation dependencies (russh, subprocess plumbing).
+    /// `pid` and `master_fd` are `None` for non-Local transports.
+    ///
+    /// Kept `async` for parity with `create_tab_async` so callers can `.await`
+    /// uniformly and a future tweak that performs async work (e.g. handshake
+    /// telemetry) won't ripple back through every call site.
+    #[allow(clippy::unused_async)]
+    pub async fn create_tab_async_with_transport(
+        self: &Arc<Self>,
+        window_id: WindowId,
+        transport: Box<dyn PtyTransport>,
+        rows: u16,
+        cols: u16,
+    ) -> Result<(TabId, PaneId)> {
+        let pane_id = self.allocate_pane_id();
+        let term = Arc::new(Mutex::new(self.build_term(cols, rows, 10_000)));
+        let pane = Arc::new(Pane::new(pane_id, term, transport, None, None));
         Ok(self.install_tab(window_id, pane, rows, cols))
     }
 
