@@ -252,7 +252,37 @@ None this plan. All artifacts are real:
   - Open a tab → remote shell works (Plan 08-04 transport + Plan 08-03 protocol)
   - `sudo apt remove vector-tunnel-agent` clean
 
+## Deferred — Awaiting Human Verification
+
+**Phase 8 execution proceeds without blocking on Task 3.** The orchestrator has elected to DEFER Task 3 (Debian package manual smoke on Linux) rather than block Wave 4. No Linux env is available on the dev Mac; the .deb smoke is tracked as a pending human-verification item and will be exercised by Plan 08-07's UAT smoke matrix (or sooner, ad-hoc, once a Linux box is at hand).
+
+**See:** `08-06-HUMAN-UAT.md` (status: partial, pending: 1).
+
+### Task 3 — Manual .deb smoke (Linux)
+
+**Status:** Pending — human UAT.
+
+**Verification steps** (verbatim from `08-06-agent-distribution-PLAN.md` §`<how-to-verify>`):
+
+1. On a Linux dev box (or Ubuntu VM), or Docker container `docker run -it --rm -v $PWD:/work -w /work rust:1.88-bookworm`:
+   ```sh
+   cargo install cargo-deb
+   cargo build --release -p vector-tunnel-agent
+   cargo deb -p vector-tunnel-agent --no-build
+   dpkg-deb --info target/debian/vector-tunnel-agent_*.deb        # metadata + maintainer + section: net
+   dpkg-deb --contents target/debian/vector-tunnel-agent_*.deb    # lists /usr/bin/vector-tunnel-agent
+   sudo apt install ./target/debian/vector-tunnel-agent_*.deb     # installs cleanly; postinst prints "installed"
+   vector-tunnel-agent --version                                   # prints version, exits 0
+   sudo apt remove vector-tunnel-agent                             # uninstalls cleanly; prerm runs
+   ```
+2. On Mac dev box: `cargo xtask agent-dist` should print "cross-compile to Linux is not supported locally." and exit 0. **(Already PASSED — see Self-Check section.)**
+3. After next `v*` tag push: verify `.github/workflows/agent-release.yml` runs end-to-end in the GitHub Actions tab and that both `vector-tunnel-agent_<ver>_amd64.deb` and `_arm64.deb` attach to the release.
+
+**Resume signal:** Type "approved" with brief notes on `dpkg-deb` output. If install fails on the test box, paste the error.
+
+**Impact while deferred:** None on Wave 4. The .deb distribution path is implementation-complete (Cargo.toml metadata + debian/ scripts + agent-release.yml workflow + xtask agent-dist) and validated structurally (cargo-deb path semantics + workflow YAML + arch matrix). Only the live `dpkg-deb`/`apt install`/`apt remove` round-trip on a real Linux host is unproven. DT-01 remains Complete (already closed by Plan 08-03's agent-binary half; Plan 08-06 closes the distribution half at the implementation layer).
+
 ---
 *Phase: 08-vs-code-remote-tunnels-connect*
 *Tasks 1-2 completed: 2026-05-21*
-*Task 3 (human UAT) status: awaiting user — see "Checkpoint Status" above*
+*Task 3 (human UAT) status: deferred — tracked in 08-06-HUMAN-UAT.md (will be exercised by Plan 08-07 smoke matrix or ad-hoc on next Linux access)*

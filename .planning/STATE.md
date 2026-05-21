@@ -164,6 +164,7 @@ Plan: 6 of 7
 
 ### Open Questions / Risk Register
 
+- **Phase 8 Plan 06 Task 3 (Debian .deb manual smoke) — DEFERRED to human UAT (2026-05-21).** No Linux env available on dev Mac; Wave 4 NOT blocked. Tracked in `.planning/phases/08-vs-code-remote-tunnels-connect/08-06-HUMAN-UAT.md` (status: partial, pending: 6 — cargo-deb build + dpkg-deb info + dpkg-deb contents + apt install + --version + apt remove). Will be exercised either ad-hoc by the user (`rust:1.88-bookworm` Docker container) or rolled into Plan 08-07's live tagged-release UAT smoke matrix. .deb distribution path is structurally complete (Cargo.toml + debian/ scripts + agent-release.yml + xtask agent-dist all green) but operationally unproven on real Linux until UAT lands.
 - **Phase 8 Dev Tunnels** — highest known v1 risk. Spike outcome unknown until phase start.
 - **Phase 7 native russh + gRPC path** (v1.x) — requires careful read of `cli/cli/internal/codespaces/grpc/client.go` and the `?internal=true&refresh=true` parameter behavior. Not a v1 blocker.
 - **`russh 0.37` vs `0.60` version conflict** — only matters if Phase 8 spike picks "vendor SDK". Resolution: fork + bump, or accept ~3MB binary duplication.
