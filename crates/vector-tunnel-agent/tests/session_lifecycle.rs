@@ -66,9 +66,8 @@ async fn pty_echo_round_trip() {
             r.read_line(&mut s).await.unwrap();
             s
         };
-        let line = match tokio::time::timeout(Duration::from_millis(500), line_fut).await {
-            Ok(s) => s,
-            Err(_) => continue,
+        let Ok(line) = tokio::time::timeout(Duration::from_millis(500), line_fut).await else {
+            continue;
         };
         if line.is_empty() {
             break;
@@ -132,9 +131,8 @@ async fn exit_frame_on_shell_exit() {
             let n = r.read_line(&mut s).await.unwrap_or(0);
             (n, s)
         };
-        let (n, line) = match tokio::time::timeout(Duration::from_millis(500), line_fut).await {
-            Ok(t) => t,
-            Err(_) => continue,
+        let Ok((n, line)) = tokio::time::timeout(Duration::from_millis(500), line_fut).await else {
+            continue;
         };
         if n == 0 {
             break; // wire EOF
@@ -204,9 +202,8 @@ async fn resize_forwards_to_pty() {
             let n = r.read_line(&mut s).await.unwrap_or(0);
             (n, s)
         };
-        let (n, line) = match tokio::time::timeout(Duration::from_millis(500), line_fut).await {
-            Ok(t) => t,
-            Err(_) => continue,
+        let Ok((n, line)) = tokio::time::timeout(Duration::from_millis(500), line_fut).await else {
+            continue;
         };
         if n == 0 {
             break;
