@@ -140,6 +140,8 @@ pub struct App {
     /// Plan 06-06 — Octocrab-backed client built lazily on first picker open
     /// from the Keychain access token. Reused across fetch / start / poll.
     codespaces_client: Option<std::sync::Arc<vector_codespaces::CodespacesClient>>,
+    /// Phase 8 / Plan 08-05 — DevTunnelsActor command sender; wired by main.rs.
+    devtunnels_cmd_tx: Option<mpsc::Sender<crate::devtunnels_actor::Command>>,
 }
 
 impl App {
@@ -183,7 +185,13 @@ impl App {
             pending_auth_cancellation: None,
             codespaces_modal: None,
             codespaces_client: None,
+            devtunnels_cmd_tx: None,
         }
+    }
+
+    /// Phase 8 / Plan 08-05 — wire the DevTunnelsActor command sender at startup.
+    pub fn set_devtunnels_cmd_tx(&mut self, tx: mpsc::Sender<crate::devtunnels_actor::Command>) {
+        self.devtunnels_cmd_tx = Some(tx);
     }
 
     /// Plan 06-05 / AUTH-01 — supply the EventLoopProxy so menu items and
@@ -692,6 +700,14 @@ impl App {
             AppShortcut::SignInWithGitHub => {
                 self.handle_auth_sign_in_requested();
             }
+            // Phase 8 / D-11 / Plan 08-05 — Cmd-Shift-T opens DevTunnels picker.
+            AppShortcut::OpenDevTunnelsPicker => {
+                // Task 2 wires the modal. For now the Load command pushes the
+                // UI-state machine forward via the actor's UserEvent emissions.
+                if let Some(tx) = &self.devtunnels_cmd_tx {
+                    let _ = tx.try_send(crate::devtunnels_actor::Command::Load);
+                }
+            }
         }
     }
 
@@ -759,6 +775,34 @@ impl App {
         }
         aw.pending_resize = None;
         aw.last_resize_at = None;
+    }
+
+    /// Phase 8 / Plan 08-05 — apply Microsoft blue tint to the chrome pipeline
+    /// when the pane with `pane_id` is or becomes active, and that pane's
+    /// `TransportKind` is `DevTunnel`. UI-SPEC §Color: blue is reserved
+    /// exclusively for active DevTunnel panes.
+    fn apply_devtunnel_tint_for_pane(&mut self, pane_id: PaneId) {
+        let Some(mux) = Mux::try_get() else {
+            return;
+        };
+        let Some(pane) = mux.pane(pane_id) else {
+            return;
+        };
+        if pane.transport_kind() != vector_mux::TransportKind::DevTunnel {
+            return;
+        }
+        for aw in self.windows.values_mut() {
+            let Some(host) = aw.render_host.as_ref() else {
+                continue;
+            };
+            let Some(chrome) = aw.chrome_pipelines.as_mut() else {
+                continue;
+            };
+            chrome.tint.set_color(
+                host.queue(),
+                Some(vector_render::tint_stripe::MICROSOFT_BLUE),
+            );
+        }
     }
 
     /// Plan 04-06 (Gap 3): when focus moves to `new_id`, paint the D-66 border
@@ -1846,6 +1890,73 @@ impl ApplicationHandler<UserEvent> for App {
                         modal.handle_state_change(mtm, &name, state);
                     }
                 }
+            }
+            // ───── Phase 8 / Plan 08-05 — DevTunnels + Microsoft sign-in ─────
+            UserEvent::MicrosoftDeviceFlowStarted { user_code, .. } => {
+                tracing::info!(%user_code, "microsoft_device_flow_started");
+                // Task 2: open MicrosoftAuthDeviceFlowModal.
+            }
+            UserEvent::MicrosoftSignedIn => {
+                self.toasts
+                    .show(ToastBanner::info("Signed in to Microsoft."));
+                self.request_redraw_all();
+            }
+            UserEvent::MicrosoftSignInCancelled => {
+                self.toasts
+                    .show(ToastBanner::info("Microsoft sign-in cancelled."));
+                self.request_redraw_all();
+            }
+            UserEvent::MicrosoftSignInFailed(reason) => {
+                tracing::warn!(%reason, "microsoft_sign_in_failed");
+                self.toasts.show(ToastBanner::info(format!(
+                    "Microsoft sign-in failed: {reason}"
+                )));
+                self.request_redraw_all();
+            }
+            UserEvent::DevTunnelsLoaded(views) => {
+                tracing::info!(n = views.len(), "devtunnels_loaded");
+                // Task 2: forward to DevTunnelsPickerModal.
+            }
+            UserEvent::DevTunnelsLoadFailed(msg) => {
+                tracing::warn!(%msg, "devtunnels_load_failed");
+            }
+            UserEvent::DevTunnelsAuthRequired => {
+                self.toasts.show(ToastBanner::info(
+                    "Sign in with GitHub or Microsoft to list Dev Tunnels.",
+                ));
+                self.request_redraw_all();
+            }
+            UserEvent::DevTunnelConnectRequested { tunnel_id } => {
+                if let Some(tx) = &self.devtunnels_cmd_tx {
+                    let _ = tx.try_send(crate::devtunnels_actor::Command::Connect {
+                        tunnel_id,
+                        rows: 24,
+                        cols: 80,
+                        window_id: vector_mux::WindowId(0),
+                    });
+                }
+            }
+            UserEvent::DevTunnelConnectStarted(tunnel_id) => {
+                self.toasts
+                    .show(ToastBanner::info(format!("Connecting to {tunnel_id}…")));
+                self.request_redraw_all();
+            }
+            UserEvent::DevTunnelPaneReady {
+                window_id,
+                tab_id,
+                pane_id,
+            } => {
+                tracing::info!(?window_id, ?tab_id, ?pane_id, "devtunnel_pane_ready");
+                // Apply Microsoft blue tint to the active pane's tint stripe.
+                self.apply_devtunnel_tint_for_pane(pane_id);
+                self.request_redraw_all();
+            }
+            UserEvent::DevTunnelConnectFailed { tunnel_id, reason } => {
+                tracing::warn!(%tunnel_id, %reason, "devtunnel_connect_failed");
+                self.toasts.show(ToastBanner::info(format!(
+                    "Could not connect to '{tunnel_id}': {reason}."
+                )));
+                self.request_redraw_all();
             }
         }
     }

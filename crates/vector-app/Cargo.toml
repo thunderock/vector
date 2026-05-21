@@ -33,6 +33,8 @@ vector-input = { path = "../vector-input", version = "2026.5.10" }
 vector-mux = { path = "../vector-mux", version = "2026.5.10" }
 vector-render = { path = "../vector-render", version = "2026.5.10" }
 vector-term = { path = "../vector-term", version = "2026.5.10" }
+# Phase 8 / Plan 08-05 — DevTunnels picker + Microsoft auth + actor.
+vector-tunnels = { path = "../vector-tunnels", version = "2026.5.10" }
 # Phase 6 / AUTH-01 — zeroize handles the access token without leaking.
 # (auth_actor previously used octocrab but switched to direct reqwest after
 # octocrab's tower::buffer service panicked in the field on @login fetch.)

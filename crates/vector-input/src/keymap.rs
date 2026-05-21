@@ -46,6 +46,8 @@ pub enum AppShortcut {
     OpenCodespacesPicker,
     /// Phase 6 / AUTH-01: menu fallback for sign-in (no default key binding).
     SignInWithGitHub,
+    /// Phase 8 / DT-02 / D-11: Cmd-Shift-T opens the Dev Tunnels picker.
+    OpenDevTunnelsPicker,
 }
 
 /// Encode a winit key event. Returns None for Released/Dead/Unidentified or unmapped keys.
@@ -100,6 +102,8 @@ fn match_app_shortcut(key: &Key, mods: ModState) -> Option<AppShortcut> {
             "G" | "g" => Some(AppShortcut::OpenCodespacesPicker),
             "P" | "p" => Some(AppShortcut::OpenProfilePicker),
             "R" | "r" => Some(AppShortcut::ReloadConfig),
+            // Phase 8 / D-11: Cmd-Shift-T opens Dev Tunnels picker (distinct from Cmd-T = NewTab).
+            "T" | "t" => Some(AppShortcut::OpenDevTunnelsPicker),
             _ => None,
         };
     }

@@ -6048,6 +6048,7 @@ dependencies = [
  "vector-mux",
  "vector-render",
  "vector-term",
+ "vector-tunnels",
  "wgpu",
  "winit",
  "zeroize",

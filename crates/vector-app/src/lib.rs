@@ -18,12 +18,16 @@ pub mod chrome;
 pub mod clipboard_router;
 pub mod codespaces_actor;
 pub mod codespaces_modal;
+// Phase 8 / Plan 08-05 — DevTunnels picker + Microsoft auth + actor.
+pub mod devtunnels_actor;
+pub mod devtunnels_modal;
 pub mod frame_tick;
 pub mod hyperlink_dispatch;
 pub mod ime;
 pub mod input_bridge;
 pub mod lpm;
 pub mod menu;
+pub mod microsoft_auth_modal;
 pub mod mux_commands;
 pub mod overlay;
 pub mod profile_picker;
@@ -111,5 +115,42 @@ pub enum UserEvent {
     CodespaceStateChanged {
         name: String,
         state: vector_codespaces::CodespaceState,
+    },
+    // ───── Phase 8 (DT-02/03/04) — appended; never reorder ─────
+    /// Microsoft device flow obtained user_code; main thread shows MicrosoftAuthDeviceFlowModal.
+    MicrosoftDeviceFlowStarted {
+        user_code: String,
+        verification_uri: String,
+        expires_in: std::time::Duration,
+        cancel: tokio_util::sync::CancellationToken,
+    },
+    /// Microsoft device flow completed; tokens persisted to Keychain.
+    MicrosoftSignedIn,
+    /// Microsoft sign-in ended with a non-user terminal error.
+    MicrosoftSignInFailed(String),
+    /// Microsoft sign-in cancelled by the user (Cancel button or modal close).
+    MicrosoftSignInCancelled,
+    /// DevTunnels picker REST list arrived (already filtered to vector-agent tunnels).
+    DevTunnelsLoaded(Vec<devtunnels_actor::TunnelView>),
+    /// DevTunnels list call failed (non-401 error).
+    DevTunnelsLoadFailed(String),
+    /// DevTunnels list returned 401 (or no Microsoft token present); picker should prompt sign-in.
+    DevTunnelsAuthRequired,
+    /// Picker requests a connect for tunnel_id.
+    DevTunnelConnectRequested {
+        tunnel_id: String,
+    },
+    /// Actor began the connect dance (relay handshake + transport install).
+    DevTunnelConnectStarted(String),
+    /// New DevTunnel pane installed via Mux::create_tab_async_with_transport.
+    DevTunnelPaneReady {
+        window_id: vector_mux::WindowId,
+        tab_id: vector_mux::TabId,
+        pane_id: PaneId,
+    },
+    /// Connect failed; toast UI-SPEC §Connection error & toast copy.
+    DevTunnelConnectFailed {
+        tunnel_id: String,
+        reason: String,
     },
 }

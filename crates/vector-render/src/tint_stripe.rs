@@ -18,6 +18,15 @@ use wgpu::{
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
+/// Phase 8 / D-17 / UI-SPEC §Color — Microsoft Dev Tunnels brand blue (#0078d4).
+/// Reserved exclusively for the active DevTunnel pane tint stripe.
+pub const MICROSOFT_BLUE: [f32; 4] = [0.0, 0.471, 0.831, 1.0];
+
+/// Phase 6 legacy — GitHub purple (#7a3aaf). Dormant in v1 (Codespaces path
+/// reverted in the Phase 7 pivot to Dev Tunnels). Kept as a constant so future
+/// Codespaces re-enable doesn't have to re-resolve the hex.
+pub const GITHUB_PURPLE: [f32; 4] = [0.478, 0.227, 0.686, 1.0];
+
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 struct Tint {

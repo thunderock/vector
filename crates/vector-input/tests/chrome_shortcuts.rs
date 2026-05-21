@@ -96,3 +96,28 @@ fn cmd_shift_d_still_returns_mux_split_vertical() {
         Some(EncodedKey::Mux(MuxCommand::SplitVertical))
     );
 }
+
+// Phase 8 / D-11: Cmd-Shift-T opens Dev Tunnels picker; Cmd-T alone stays NewTab.
+
+#[test]
+fn cmd_shift_t_opens_devtunnels_picker_upper() {
+    assert_eq!(
+        ch("T", cmd_shift()),
+        Some(EncodedKey::App(AppShortcut::OpenDevTunnelsPicker))
+    );
+}
+
+#[test]
+fn cmd_shift_t_opens_devtunnels_picker_lower() {
+    assert_eq!(
+        ch("t", cmd_shift()),
+        Some(EncodedKey::App(AppShortcut::OpenDevTunnelsPicker))
+    );
+}
+
+#[test]
+fn cmd_t_alone_still_returns_mux_new_tab_not_devtunnels() {
+    // Phase-4 regression guard: Cmd-T (no shift) must keep returning NewTab.
+    assert_eq!(ch("t", cmd()), Some(EncodedKey::Mux(MuxCommand::NewTab)));
+    assert_eq!(ch("T", cmd()), Some(EncodedKey::Mux(MuxCommand::NewTab)));
+}

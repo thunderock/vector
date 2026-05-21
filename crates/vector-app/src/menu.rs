@@ -300,6 +300,24 @@ fn add_switch_profile_submenu(mtm: MainThreadMarker, menu: &NSMenu) {
     let _ = SWITCH_PROFILE_SUBMENU.set(MainThreadOnly(sub));
 }
 
+/// Phase 8 / UI-SPEC §Copywriting Contract / S3 — Microsoft sign-in menu state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignInState {
+    SignedIn,
+    SignedOut,
+}
+
+/// Phase 8 / UI-SPEC §Copywriting Contract — pure-data helper returning the
+/// Microsoft sign-in menu rows for `state`. Each row is `(label, enabled)`. The
+/// returned strings MUST match UI-SPEC §Primary CTAs verbatim.
+#[must_use]
+pub fn microsoft_signin_menu_rows(state: SignInState) -> Vec<(String, bool)> {
+    match state {
+        SignInState::SignedOut => vec![("Sign in with Microsoft".to_string(), true)],
+        SignInState::SignedIn => vec![("Sign out of Microsoft".to_string(), true)],
+    }
+}
+
 /// Plan 05-11 (POLISH-07, UI-SPEC §6.4) — produce the `(label, enabled)` rows
 /// that the Switch Profile submenu should display for `cfg`. Local profiles are
 /// enabled; Codespace/DevTunnel profiles ship with `(phase 6+)` suffix and are
