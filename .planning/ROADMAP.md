@@ -270,7 +270,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 | 5. Polish (Local Daily-Driver) | 15/16 | In Progress|  |
 | 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
-| 8. Dev Tunnels Integration | 1/7 | In Progress|  |
+| 8. Dev Tunnels Integration | 6/7 | In Progress|  |
 | 9. Persistence + Reconnect + tmux Auto-Attach | 0/0 | Not started | - |
 | 10. Hardening & Release | 0/0 | Not started | - |
 
@@ -321,7 +321,7 @@ At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Ev
 
 **Requirements:** TBD (likely a new `AI-*` family in REQUIREMENTS.md when promoted)
 
-**Plans:** 1/7 plans executed
+**Plans:** 6/7 plans executed
 
 **Trigger:** After milestone v1.0.0 ships (Phase 10 release). Per PROJECT.md key decision: "must not gate terminal-core work."
 
