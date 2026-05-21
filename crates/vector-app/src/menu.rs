@@ -15,6 +15,7 @@ use vector_config::{ConfigFile, Kind};
 use crate::UserEvent;
 
 pub use auth_target::AuthMenuTarget;
+pub use microsoft_target::MicrosoftMenuTarget;
 
 /// Newtype that asserts main-thread-only access to a `Retained<NSMenu>`. AppKit
 /// objects are `!Sync` by default; access is always gated by `MainThreadMarker`
@@ -530,6 +531,177 @@ mod auth_target {
     );
 
     impl AuthMenuTarget {
+        pub fn new(
+            mtm: objc2::MainThreadMarker,
+            proxy: EventLoopProxy<UserEvent>,
+        ) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(Mutex::new(Ivars { proxy }));
+            unsafe { msg_send![super(this), init] }
+        }
+    }
+}
+
+// ───── Phase 8 / Plan 08-05 — Microsoft sign-in + DevTunnels picker ────────
+
+struct MicrosoftMenuRefs {
+    sign_in: Retained<NSMenuItem>,
+    sign_out: Retained<NSMenuItem>,
+    /// Held so NSMenuItem's weak target reference stays live.
+    #[allow(dead_code)]
+    target: Retained<MicrosoftMenuTarget>,
+}
+unsafe impl Sync for MicrosoftMenuRefs {}
+unsafe impl Send for MicrosoftMenuRefs {}
+
+static MICROSOFT_MENU_REFS: OnceLock<MainThreadOnly<MicrosoftMenuRefs>> = OnceLock::new();
+
+/// Install Microsoft sign-in/out items + Dev Tunnels picker item at the top of
+/// the Vector menu. Idempotent (OnceLock-gated).
+///
+/// # Safety
+/// Caller must be on the macOS main thread.
+pub unsafe fn install_microsoft_menu_items(
+    mtm: MainThreadMarker,
+    proxy: EventLoopProxy<UserEvent>,
+) {
+    let app = NSApplication::sharedApplication(mtm);
+    let Some(main_menu) = app.mainMenu() else {
+        tracing::warn!("install_microsoft_menu_items: no main menu installed yet");
+        return;
+    };
+    let Some(app_item) = main_menu.itemAtIndex(0) else {
+        tracing::warn!("install_microsoft_menu_items: main menu has no items");
+        return;
+    };
+    let Some(app_submenu) = app_item.submenu() else {
+        tracing::warn!("install_microsoft_menu_items: app item has no submenu");
+        return;
+    };
+
+    let target = MicrosoftMenuTarget::new(mtm, proxy);
+    let target_obj: &objc2::runtime::AnyObject = (*target).as_ref();
+
+    // "Sign in with Microsoft" — UI-SPEC verbatim.
+    let sign_in = NSMenuItem::new(mtm);
+    sign_in.setTitle(&NSString::from_str("Sign in with Microsoft"));
+    unsafe {
+        sign_in.setAction(Some(sel!(microsoftSignIn:)));
+        sign_in.setTarget(Some(target_obj));
+    }
+
+    // "Sign out of Microsoft" — UI-SPEC verbatim. Hidden until tokens present.
+    let sign_out = NSMenuItem::new(mtm);
+    sign_out.setTitle(&NSString::from_str("Sign out of Microsoft"));
+    unsafe {
+        sign_out.setAction(Some(sel!(microsoftSignOut:)));
+        sign_out.setTarget(Some(target_obj));
+    }
+    sign_out.setHidden(true);
+
+    // "Dev Tunnels…" — Cmd-Shift-T (UI-SPEC §Interaction Contract / D-11).
+    let devtunnels = NSMenuItem::new(mtm);
+    devtunnels.setTitle(&NSString::from_str("Dev Tunnels\u{2026}"));
+    devtunnels.setKeyEquivalent(&NSString::from_str("T"));
+    devtunnels
+        .setKeyEquivalentModifierMask(NSEventModifierFlags::Command | NSEventModifierFlags::Shift);
+    unsafe {
+        devtunnels.setAction(Some(sel!(openDevTunnels:)));
+        devtunnels.setTarget(Some(target_obj));
+    }
+
+    let sep = NSMenuItem::separatorItem(mtm);
+
+    // Insert below the Phase 6 GitHub items (typically at indices 0..3) but
+    // before "About Vector". Use a safe index: append at top via index 0..3
+    // — Phase 6's install pushes its items down naturally.
+    app_submenu.insertItem_atIndex(&sign_in, 0);
+    app_submenu.insertItem_atIndex(&sign_out, 1);
+    app_submenu.insertItem_atIndex(&devtunnels, 2);
+    app_submenu.insertItem_atIndex(&sep, 3);
+
+    let refs = MicrosoftMenuRefs {
+        sign_in,
+        sign_out,
+        target,
+    };
+    let _ = MICROSOFT_MENU_REFS.set(MainThreadOnly(refs));
+}
+
+/// Toggle "Sign in with Microsoft" / "Sign out of Microsoft" visibility based
+/// on token presence. Pure data swap; no main-menu walk (MEDIUM-4 invariant).
+///
+/// # Safety
+/// AppKit mutation; caller must be on the macOS main thread.
+pub unsafe fn rebuild_microsoft_signin_section(_mtm: MainThreadMarker, state: SignInState) {
+    let Some(bound) = MICROSOFT_MENU_REFS.get() else {
+        tracing::warn!(
+            "rebuild_microsoft_signin_section called before install_microsoft_menu_items"
+        );
+        return;
+    };
+    let refs = &bound.0;
+    let signed_in = matches!(state, SignInState::SignedIn);
+    refs.sign_in.setHidden(signed_in);
+    refs.sign_out.setHidden(!signed_in);
+}
+
+mod microsoft_target {
+    use objc2::define_class;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2::{msg_send, DefinedClass, MainThreadOnly};
+    use objc2_app_kit::NSResponder;
+    use parking_lot::Mutex;
+    use winit::event_loop::EventLoopProxy;
+
+    use crate::UserEvent;
+
+    pub struct Ivars {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    const _: fn() = || {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Mutex<Ivars>>();
+    };
+
+    define_class!(
+        #[unsafe(super(NSResponder))]
+        #[name = "VectorMicrosoftMenuTarget"]
+        #[ivars = Mutex<Ivars>]
+        pub struct MicrosoftMenuTarget;
+
+        impl MicrosoftMenuTarget {
+            #[unsafe(method(microsoftSignIn:))]
+            fn microsoft_sign_in(&self, _sender: &AnyObject) {
+                let _ = self
+                    .ivars()
+                    .lock()
+                    .proxy
+                    .send_event(UserEvent::MicrosoftSignInRequested);
+            }
+
+            #[unsafe(method(microsoftSignOut:))]
+            fn microsoft_sign_out(&self, _sender: &AnyObject) {
+                let _ = self
+                    .ivars()
+                    .lock()
+                    .proxy
+                    .send_event(UserEvent::MicrosoftSignOutRequested);
+            }
+
+            #[unsafe(method(openDevTunnels:))]
+            fn open_devtunnels(&self, _sender: &AnyObject) {
+                let _ = self
+                    .ivars()
+                    .lock()
+                    .proxy
+                    .send_event(UserEvent::OpenDevTunnelsPickerMenu);
+            }
+        }
+    );
+
+    impl MicrosoftMenuTarget {
         pub fn new(
             mtm: objc2::MainThreadMarker,
             proxy: EventLoopProxy<UserEvent>,

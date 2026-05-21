@@ -142,6 +142,10 @@ pub struct App {
     codespaces_client: Option<std::sync::Arc<vector_codespaces::CodespacesClient>>,
     /// Phase 8 / Plan 08-05 — DevTunnelsActor command sender; wired by main.rs.
     devtunnels_cmd_tx: Option<mpsc::Sender<crate::devtunnels_actor::Command>>,
+    /// Phase 8 / Plan 08-05 — live MicrosoftAuthDeviceFlowModal.
+    microsoft_auth_modal: Option<crate::microsoft_auth_modal::MicrosoftAuthDeviceFlowModal>,
+    /// Phase 8 / Plan 08-05 — live DevTunnelsPickerModal.
+    devtunnels_modal: Option<crate::devtunnels_modal::DevTunnelsPickerModal>,
 }
 
 impl App {
@@ -186,6 +190,8 @@ impl App {
             codespaces_modal: None,
             codespaces_client: None,
             devtunnels_cmd_tx: None,
+            microsoft_auth_modal: None,
+            devtunnels_modal: None,
         }
     }
 
@@ -702,12 +708,28 @@ impl App {
             }
             // Phase 8 / D-11 / Plan 08-05 — Cmd-Shift-T opens DevTunnels picker.
             AppShortcut::OpenDevTunnelsPicker => {
-                // Task 2 wires the modal. For now the Load command pushes the
-                // UI-state machine forward via the actor's UserEvent emissions.
-                if let Some(tx) = &self.devtunnels_cmd_tx {
-                    let _ = tx.try_send(crate::devtunnels_actor::Command::Load);
-                }
+                self.handle_open_devtunnels_picker();
             }
+        }
+    }
+
+    fn handle_open_devtunnels_picker(&mut self) {
+        let Some(mtm) = objc2::MainThreadMarker::new() else {
+            tracing::warn!("OpenDevTunnelsPicker: not on main thread");
+            return;
+        };
+        if let Some(prev) = self.devtunnels_modal.take() {
+            prev.dismiss();
+        }
+        let modal = crate::devtunnels_modal::DevTunnelsPickerModal::show(
+            mtm,
+            crate::devtunnels_modal::DevTunnelsModalCtx {
+                poll_cancel: tokio_util::sync::CancellationToken::new(),
+            },
+        );
+        self.devtunnels_modal = Some(modal);
+        if let Some(tx) = &self.devtunnels_cmd_tx {
+            let _ = tx.try_send(crate::devtunnels_actor::Command::Load);
         }
     }
 
@@ -1892,22 +1914,55 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             // ───── Phase 8 / Plan 08-05 — DevTunnels + Microsoft sign-in ─────
-            UserEvent::MicrosoftDeviceFlowStarted { user_code, .. } => {
+            UserEvent::MicrosoftDeviceFlowStarted {
+                user_code,
+                verification_uri,
+                expires_in,
+                cancel,
+            } => {
                 tracing::info!(%user_code, "microsoft_device_flow_started");
-                // Task 2: open MicrosoftAuthDeviceFlowModal.
+                if let Some(mtm) = objc2::MainThreadMarker::new() {
+                    if let Some(prev) = self.microsoft_auth_modal.take() {
+                        prev.dismiss();
+                    }
+                    let modal = crate::microsoft_auth_modal::MicrosoftAuthDeviceFlowModal::show(
+                        mtm,
+                        crate::microsoft_auth_modal::MicrosoftAuthModalCtx {
+                            user_code,
+                            verification_uri,
+                            expires_in,
+                            cancel,
+                        },
+                    );
+                    self.microsoft_auth_modal = Some(modal);
+                }
             }
             UserEvent::MicrosoftSignedIn => {
+                if let Some(modal) = self.microsoft_auth_modal.take() {
+                    modal.dismiss();
+                }
+                if let Some(mtm) = objc2::MainThreadMarker::new() {
+                    unsafe {
+                        menu::rebuild_microsoft_signin_section(mtm, menu::SignInState::SignedIn);
+                    }
+                }
                 self.toasts
                     .show(ToastBanner::info("Signed in to Microsoft."));
                 self.request_redraw_all();
             }
             UserEvent::MicrosoftSignInCancelled => {
+                if let Some(modal) = self.microsoft_auth_modal.take() {
+                    modal.dismiss();
+                }
                 self.toasts
                     .show(ToastBanner::info("Microsoft sign-in cancelled."));
                 self.request_redraw_all();
             }
             UserEvent::MicrosoftSignInFailed(reason) => {
                 tracing::warn!(%reason, "microsoft_sign_in_failed");
+                if let Some(modal) = self.microsoft_auth_modal.take() {
+                    modal.dismiss();
+                }
                 self.toasts.show(ToastBanner::info(format!(
                     "Microsoft sign-in failed: {reason}"
                 )));
@@ -1915,12 +1970,26 @@ impl ApplicationHandler<UserEvent> for App {
             }
             UserEvent::DevTunnelsLoaded(views) => {
                 tracing::info!(n = views.len(), "devtunnels_loaded");
-                // Task 2: forward to DevTunnelsPickerModal.
+                if let Some(modal) = self.devtunnels_modal.as_mut() {
+                    if let Some(mtm) = objc2::MainThreadMarker::new() {
+                        modal.handle_loaded(mtm, views);
+                    }
+                }
             }
             UserEvent::DevTunnelsLoadFailed(msg) => {
                 tracing::warn!(%msg, "devtunnels_load_failed");
+                if let Some(modal) = self.devtunnels_modal.as_mut() {
+                    if let Some(mtm) = objc2::MainThreadMarker::new() {
+                        modal.handle_load_failed(mtm, msg);
+                    }
+                }
             }
             UserEvent::DevTunnelsAuthRequired => {
+                if let Some(modal) = self.devtunnels_modal.as_mut() {
+                    if let Some(mtm) = objc2::MainThreadMarker::new() {
+                        modal.handle_auth_required(mtm);
+                    }
+                }
                 self.toasts.show(ToastBanner::info(
                     "Sign in with GitHub or Microsoft to list Dev Tunnels.",
                 ));
@@ -1947,8 +2016,10 @@ impl ApplicationHandler<UserEvent> for App {
                 pane_id,
             } => {
                 tracing::info!(?window_id, ?tab_id, ?pane_id, "devtunnel_pane_ready");
-                // Apply Microsoft blue tint to the active pane's tint stripe.
                 self.apply_devtunnel_tint_for_pane(pane_id);
+                if let Some(modal) = self.devtunnels_modal.take() {
+                    modal.dismiss();
+                }
                 self.request_redraw_all();
             }
             UserEvent::DevTunnelConnectFailed { tunnel_id, reason } => {
@@ -1957,6 +2028,27 @@ impl ApplicationHandler<UserEvent> for App {
                     "Could not connect to '{tunnel_id}': {reason}."
                 )));
                 self.request_redraw_all();
+            }
+            UserEvent::MicrosoftSignInRequested => {
+                if let Some(tx) = &self.devtunnels_cmd_tx {
+                    let _ = tx.try_send(crate::devtunnels_actor::Command::StartMicrosoftSignIn);
+                }
+            }
+            UserEvent::MicrosoftSignOutRequested => {
+                if let Some(tx) = &self.devtunnels_cmd_tx {
+                    let _ = tx.try_send(crate::devtunnels_actor::Command::SignOutMicrosoft);
+                }
+                if let Some(mtm) = objc2::MainThreadMarker::new() {
+                    unsafe {
+                        menu::rebuild_microsoft_signin_section(mtm, menu::SignInState::SignedOut);
+                    }
+                }
+                self.toasts
+                    .show(ToastBanner::info("Signed out of Microsoft."));
+                self.request_redraw_all();
+            }
+            UserEvent::OpenDevTunnelsPickerMenu => {
+                self.handle_open_devtunnels_picker();
             }
         }
     }

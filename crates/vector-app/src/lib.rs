@@ -153,4 +153,10 @@ pub enum UserEvent {
         tunnel_id: String,
         reason: String,
     },
+    /// Menu "Sign in with Microsoft" clicked.
+    MicrosoftSignInRequested,
+    /// Menu "Sign out of Microsoft" clicked.
+    MicrosoftSignOutRequested,
+    /// Menu "Dev Tunnels…" clicked (equivalent to Cmd-Shift-T keypress).
+    OpenDevTunnelsPickerMenu,
 }
