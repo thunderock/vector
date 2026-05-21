@@ -9,13 +9,17 @@ description = "Vector Tunnel Agent — Linux user-space binary that hosts a Dev 
 [lints]
 workspace = true
 
+[lib]
+name = "vector_tunnel_agent"
+path = "src/lib.rs"
+
 [[bin]]
 name = "vector-tunnel-agent"
 path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "signal"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde = { workspace = true }
@@ -27,4 +31,16 @@ oauth2 = { workspace = true }
 keyring-core = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }
-# tunnels = { workspace = true }  # Wave 1 (Plan 08-03) wires; keep out of dep graph this wave to keep Wave 0 minimal-surface
+clap = { workspace = true }
+dirs = { workspace = true }
+hostname = { workspace = true }
+nix = { workspace = true }
+chrono = { workspace = true }
+tokio-util = { workspace = true }
+tokio-tungstenite = { workspace = true }
+zeroize = { workspace = true }
+tunnels = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "signal", "test-util"] }

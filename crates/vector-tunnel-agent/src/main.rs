@@ -1,21 +1,32 @@
-//! vector-tunnel-agent — Linux user-space binary. Phase 8 Wave 0 = stub.
-//! Wave 1 (Plan 08-03) fills in `RelayTunnelHost` + PTY spawn + protocol loop.
+//! vector-tunnel-agent — Linux user-space binary entry point.
+//! Async runtime + CLI dispatch + tracing init.
+
+use clap::Parser;
+use tracing_subscriber::EnvFilter;
+
+use vector_tunnel_agent::{cli, host, token_cache};
 
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    let cmd = args.get(1).map(String::as_str);
-    match cmd {
-        Some("--reauth") => {
-            eprintln!("vector-tunnel-agent: --reauth not yet implemented (Phase 8 Wave 1)");
-            std::process::exit(2);
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,tunnels=warn,russh=warn")),
+        )
+        .init();
+
+    let cli = cli::Cli::parse();
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
+    rt.block_on(async {
+        match cli.command.unwrap_or(cli::Command::Run) {
+            cli::Command::Run => host::run().await,
+            cli::Command::Reauth => {
+                token_cache::clear()?;
+                host::run().await
+            }
+            cli::Command::Status => host::status().await,
         }
-        Some("--version") => {
-            println!("vector-tunnel-agent {}", env!("CARGO_PKG_VERSION"));
-            Ok(())
-        }
-        _ => {
-            eprintln!("vector-tunnel-agent: stub. Phase 8 Wave 1 (Plan 08-03) wires the run loop.");
-            std::process::exit(2);
-        }
-    }
+    })
 }

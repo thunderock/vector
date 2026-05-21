@@ -37,8 +37,12 @@ base64 = "0.22"
 bytemuck = { version = "1", features = ["derive"] }
 bytes = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+clap = { version = "4", features = ["derive"] }
 crossfont = "0.9"
+dirs = "5"
 etagere = "0.2"
+hostname = "0.4"
+nix = { version = "0.29", features = ["user", "fs"] }
 fuzzy-matcher = "0.3"
 http = "1"
 # keyring 4.x is the CLI binary crate; the library now lives in keyring-core.

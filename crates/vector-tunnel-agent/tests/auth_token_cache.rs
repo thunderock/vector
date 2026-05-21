@@ -15,7 +15,9 @@ use vector_tunnel_agent::token_cache::{self, AgentTokenError, CachedToken, Provi
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn with_temp_xdg<F: FnOnce()>(f: F) {
-    let _g = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _g = ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = tempfile::tempdir().unwrap();
     let prior = std::env::var_os("XDG_CONFIG_HOME");
     std::env::set_var("XDG_CONFIG_HOME", dir.path());
@@ -34,7 +36,9 @@ fn token_path_honors_xdg_config_home() {
     with_temp_xdg(|| {
         let p = token_cache::token_path();
         let xdg = std::env::var("XDG_CONFIG_HOME").unwrap();
-        let expected = std::path::Path::new(&xdg).join("vector").join("agent-token");
+        let expected = std::path::Path::new(&xdg)
+            .join("vector")
+            .join("agent-token");
         assert_eq!(p, expected);
     });
 }
@@ -91,7 +95,7 @@ fn load_corrupted_returns_err() {
         let err = token_cache::load().expect_err("should error");
         match err {
             AgentTokenError::Corrupted(_) => {}
-            other => panic!("expected Corrupted, got {other:?}"),
+            AgentTokenError::Io(e) => panic!("expected Corrupted, got Io: {e}"),
         }
     });
 }
