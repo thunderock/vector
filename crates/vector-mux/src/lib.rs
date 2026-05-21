@@ -3,14 +3,18 @@
 //! Phase 2 ships:
 //!   - `PtyTransport` + `Domain` traits in FINAL shape (Phases 7/8/9 only fill bodies).
 //!   - `LocalDomain` fully implemented atop `vector_pty::LocalPty`.
-//!   - `CodespaceDomain` + `DevTunnelDomain` stubs that `unimplemented!()` at runtime.
+//!   - `DevTunnelDomain` stub that `unimplemented!()` at runtime.
 //!
 //! Phase 4 Plan 02 adds:
 //!   - `Mux` singleton + `Window` + `Tab` + `Pane` + `PaneNode` split tree
 //!   - Pure-algorithm `split_tree` module: layout, mutation, directional focus, nudge
 //!   - `CloseResult` / `Direction` / `SplitDirection` mux-level enums
+//!
+//! WIN-04: vector-mux stays russh-free. The mux helper
+//! `create_tab_async_with_transport` takes a pre-built `Box<dyn PtyTransport>`
+//! so remote transports (built in higher crates) plug in without dragging SSH
+//! deps into the mux layer.
 
-pub use codespace_domain::CodespaceDomain;
 pub use cwd::{inherit_cwd, inherit_cwd_with};
 pub use devtunnel_domain::DevTunnelDomain;
 pub use domain::{Domain, SpawnCommand};
@@ -33,7 +37,6 @@ pub use tab::Tab;
 pub use transport::{PtyTransport, TransportKind};
 pub use window::Window;
 
-mod codespace_domain;
 pub mod cwd;
 mod devtunnel_domain;
 mod domain;

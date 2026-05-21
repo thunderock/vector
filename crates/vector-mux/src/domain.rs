@@ -21,9 +21,11 @@ pub struct SpawnCommand {
 
 /// A `Domain` knows how to spawn a `PtyTransport`. Locked in Phase 2 (D-38).
 ///
-/// Phase 2 ships `LocalDomain` fully; `CodespaceDomain` (Phase 7) and
-/// `DevTunnelDomain` (Phase 8) ship as compile-time stubs with `unimplemented!()`
-/// bodies — trait shape is final, only impls fill in later.
+/// `LocalDomain` ships fully; `DevTunnelDomain` is a compile-time stub
+/// with an `unimplemented!()` body — trait shape is final, real impl lands
+/// in the tunnels phase. Remote transports are installed directly via
+/// `Mux::create_tab_async_with_transport` so vector-mux stays russh-free
+/// (WIN-04).
 #[async_trait::async_trait]
 pub trait Domain: Send + Sync {
     /// Open a new shell session. Returns a transport that the caller wires

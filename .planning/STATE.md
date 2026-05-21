@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Executing Phase 06
-stopped_at: Completed 06-06-PLAN.md
-last_updated: "2026-05-15T17:34:06.407Z"
+status: Phase 7 descoped (pivot to VS Code Remote Tunnels)
+stopped_at: Phase 8 UI-SPEC approved
+last_updated: "2026-05-21T18:56:53.991Z"
 progress:
   total_phases: 11
   completed_phases: 5
-  total_plans: 45
-  completed_plans: 44
+  total_plans: 50
+  completed_plans: 48
 ---
 
 # Project State: Vector
@@ -18,14 +18,16 @@ progress:
 
 ## Project Reference
 
-**Core value:** Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
+**Core value:** Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), get a fast remote shell — no VS Code, no browser. Local-terminal niceties are table-stakes; the differentiator is that a Dev-Tunnels session feels native, not bolted on.
 
-**Current focus:** Phase 06 — github-auth-codespaces-picker
+**Pivoted 2026-05-19:** Phase 7 descoped from GitHub Codespaces to "Remote SSH transport scaffolding (groundwork for Phase 8 tunnels)". Codespace-specific code reverted; transport scaffolding kept. See PROJECT.md + ROADMAP.md §Phase 7.
+
+**Current focus:** Phase 7 descoped — next active work is Phase 8 (VS Code Remote Tunnels Connect). No phase currently executing.
 
 ## Current Position
 
-Phase: 06 (github-auth-codespaces-picker) — EXECUTING
-Plan: 1 of 7
+Phase: 7 (ssh-transport-codespaces-connect) — DESCOPED 2026-05-19; scaffolding shipped, codespace-specific reverted
+Next phase: 8 (VS Code Remote Tunnels Connect) — not started, spike-gated
 
 ## Phase Map
 
@@ -37,8 +39,8 @@ Plan: 1 of 7
 | 4 | Mux — Tabs & Splits | Implementation complete (Plans 04-01..06 all green; Plan 04-06 gap-closure landed: smoke matrix 9/9 PASS after AppWindow→per-pane Compositor migration; WIN-02 + WIN-03 Complete); awaiting phase verifier |
 | 5 | Polish (Local Daily-Driver) | Implementation complete (10/10 plans shipped including 05-10 gap-closure; POLISH-01..08 all Complete; 10/10 manual smoke matrix user-approved 2026-05-12); awaiting phase verifier |
 | 6 | GitHub Auth + Codespaces Picker | Not started |
-| 7 | SSH Transport + Codespaces Connect | Not started |
-| 8 | Dev Tunnels Integration | Not started (spike-gated) |
+| 7 | Remote SSH Transport Scaffolding (DESCOPED 2026-05-19) | Scaffolding shipped; codespace-specific code reverted after pivot to VS Code Tunnels |
+| 8 | VS Code Remote Tunnels Connect | Not started (spike-gated) |
 | 9 | Persistence + Reconnect + tmux Auto-Attach | Not started |
 | 10 | Hardening & Release | Not started |
 
@@ -93,6 +95,10 @@ Plan: 1 of 7
 | Phase 06 P03 | 8min | 2 tasks | 6 files |
 | Phase 06-github-auth-codespaces-picker P05 | 40min | 2 tasks | 9 files |
 | Phase 06 P06 | 9min | 2 tasks | 7 files |
+| Phase 07-ssh-transport-codespaces-connect P01 | 9min | 2 tasks | 15 files |
+| Phase 07 P03 | 7min | 2 tasks | 9 files |
+| Phase 07-ssh-transport-codespaces-connect P02 | 15min | 2 tasks | 9 files |
+| Phase 07-ssh-transport-codespaces-connect P04 | 24min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -143,6 +149,8 @@ Plan: 1 of 7
 - **Phase 4 Plan 05 (Wave 4) partial-complete (2026-05-12):** Task 1 (autonomous polish) fully landed in commit `22a8272`: per-TabWindow first-paint gate generalizing D-51 per Pitfall H (new panes opened later via Cmd-D split do NOT re-engage the gate); async split-request channel for Cmd-D / Cmd-Shift-D (background task spawns real LocalDomain pane + transports back via EventLoopProxy::send_event, main installs into Mux + Compositor map — preserves WIN-05 main-thread ownership); focus side-effects wired for Cmd-Opt-Arrow + Cmd-Shift-Arrow nudge-ratio (mutates active_pane_id + ancestor split-tree walk); `TabWindow::flush_pending_resize_if_quiescent(now, mux, router)` helper centralizes the 50ms debounce flush per Pitfall D; keystroke routing follows focus (writes go to active pane's write_tx). Workspace test gate clean: 231/0/3 default; 234/0/0 with --include-ignored; clippy + fmt clean; arch-lint count 16; D-38 invariant byte-identical. Task 2 (9-item smoke matrix `checkpoint:human-verify`) returned **6 PASS / 3 FAIL / 0 SKIPPED**: PASS = #1 (Cmd-T native tab group via NSWindowTabbingMode), #2 (Cmd-W cascade pane→tab→window→app per CloseResult enum), #5 (cwd inheritance via libproc::pidcwd), #6 (4-pane idle CPU ~0.3% averaged), #7 (zsh→vim→zsh tab-title flip within ~1.5s via tcgetpgrp+libproc poll), #9 (DPR change with N panes re-rasterizes sharp on atlas-clear); FAIL = #3 (visible side-by-side multi-pane render — Mux split tree mutates correctly but only the active pane's Compositor paints because RedrawRequested iterates only one compositor), #4 (`tput cols` returns identical full-window width in both panes after Cmd-D — `flush_pending_resize_if_quiescent` consumes the layout vec but `router.send_resize(pane_id, rows, cols)` walks it with wrong indices), #8 (visible D-66 active-pane border — shader + uniform setter exist, `set_border_color` is called from FocusDir handler, but the per-pane render loop never paints with the right LoadOp to expose the border). All three FAILs share one architectural gap (per-pane Compositor render loop not iterating in `RedrawRequested`) and route to **Plan 04-06 (gap-closure)** as the documented scope boundary acknowledged in Task 1's executor return. **WIN-02 lands** (Cmd-T + Cmd-W cascade both PASS). **WIN-03 stays Pending** — data-layer unit tests green via Plan 04-02 but visible side-by-side panes + tput-cols round-trip remain unmet; WIN-03 closes when 04-06 wires Gap 1 (per-pane render loop) + Gap 2 (per-pane viewport-vec indexing in flush_pending_resize_if_quiescent) + Gap 3 (D-66 border reaches pixels, falls out of Gap 1). **WIN-04 already landed by Plan 04-02** (grep arch-lint live + green). User verdict 2026-05-12: "approved with FAIL on items #3, #4, #8 (expected)". Phase 4 verifier next will rightly return gaps_found — intentional, route to `/gsd:plan-phase 4 --gaps`. Task 1 commit: `22a8272`. No deviations on Task 1 — audit invariants (per-TabWindow first_paint_ready, focus-change side-effects, per-window resize debounce, final clippy/fmt/arch-lint sweep) all hit on the first pass.
 - **Phase 3 Plan 01 complete (2026-05-11):** wgpu 29 Metal `Surface<'static>` bootstrapped via `Arc<Window>`; `vector-render::RenderContext` (`new`/`resize`/`render_clear`) configured with `PresentMode::Fifo` (D-45) on `Backends::METAL`. `vector-app::App` now holds `Arc<parking_lot::Mutex<Term>>` shared with `pty_actor` (I/O-thread `LocalDomain::spawn` → `EventLoopProxy<UserEvent::PtyOutput>`); Phase-1 NSTextField overlay drops exactly once on first PtyOutput (D-51); `RedrawRequested` paints clear-color via `RenderHost::render_clear_default` (xterm-256 dark; theme uniform deferred to Plan 03-05). `Term::damage()` + `reset_damage()` exposed as `&mut self`; `TermDamage`, `TermDamageIterator`, `LineDamageBounds` re-exported via `vector_term::*` (Plan 03-03 compositor seam). 7 workspace deps locked at exact pins: `wgpu 29.0.3`, `crossfont 0.9.0`, `bytemuck 1.25`, `parking_lot 0.12.5`, `pollster 0.4.0`, `etagere 0.2`, `unicode-width 0.2.2`. 20 `#[ignore = "Wave-0 stub"]` test files seeded across vector-render (11) + vector-fonts (4) + vector-input (2) + vector-app (3) — full mapping in 03-01-SUMMARY.md "Wave-0 Stub Map". 5 deviations: 4 Rule-1/3 auto-fixes (wgpu 29 API drift from plan snippets: `InstanceDescriptor::new_without_display_handle`, `ExperimentalFeatures` field on `DeviceDescriptor`, `multiview_mask` on `RenderPassDescriptor`, `depth_slice` on `RenderPassColorAttachment`, `CurrentSurfaceTexture` enum replacing `Result<_, SurfaceError>`; `clippy::needless_pass_by_value` forced `&Arc<Window>`; `clippy::ignore_without_reason` required `#[ignore = "…"]` reason strings on all 20 stubs; vector-render arch-lint `BLOCK_ON_ALLOWLIST` extended with `pipeline.rs` for `pollster::block_on` of wgpu init on macOS main thread — D-09 PTY-on-tokio invariant intact) + 1 doc drift (plan body said "17 stubs" but `<files>` list enumerated 20; shipped 20). `cargo run -p vector-app --release` alive 5s with clean SIGTERM exit; `cargo test --workspace --tests` 55 passed / 0 failed / 18 ignored (baseline 53 + 2 un-ignored: `pipeline_init` + `win_style_mask`). Arch-lint 15==15 holds. Two task commits: `cd0159d` + `eea4540`.
 
+- **Phase 7 Plan 01 (Wave 0 — vector-ssh skeleton + workspace deps + OAuth scope widening) complete (2026-05-19):** Workspace `[workspace.dependencies]` adds `russh = "0.60"` and `ssh-key = { version = "0.6", default-features = false, features = ["ed25519", "alloc", "rand_core"] }`. `vector-ssh` crate filled in from a 9-line stub to a 6-module skeleton: `lib.rs` (re-exports), `error.rs` (SshError enum), `stdio_stream.rs` (ChildStdioStream — fully implemented per RESEARCH §Pattern 1, no stub), `handler.rs` (VectorHandler with the real Pitfall-3-compliant SHA-256 host-key check — also fully implemented), `client.rs` (SshClient + `connect_over` stubbed `unimplemented!("Plan 07-03")`), `transport.rs` (SshChannelTransport + PtyTransport impl with `kind()` concrete + other methods stubbed). `vector-codespaces/src/auth/device_flow.rs` now requests three scopes: `codespace`, `read:user`, `write:public_key` (existing Phase 6 installs will see a one-time re-auth). Four #[ignore]'d Wave-0 test stub files exist at `crates/vector-ssh/tests/{connect_stdio_stream,gh_subprocess_argv,resize_enqueue,window_change_dispatch}.rs`. Three deviations: (1) **russh 0.60 vendors a forked ssh-key** (`internal-russh-forked-ssh-key 0.6.18+upstream-0.6.7`) — the Handler trait references `russh::keys::PublicKey`, not the workspace `ssh-key` crate. Workspace `ssh-key 0.6` retained for the Plan 07-02 keygen path; (2) `SshChannelTransport` fields needed `#[allow(dead_code)]` because they're consumed only by Plan 07-03's channel task; (3) wiremock `scope` fixtures in `tests/device_flow.rs` and `tests/auth_refresh.rs` updated to echo the full granted scope set. **Localhost-sshd spike documented unavailable** (macOS Remote Login disabled, no passwordless sudo); russh 0.60.3 API surface verified by direct source inspection at `~/.cargo/registry/src/.../russh-0.60.3/src/`. Two refinements recorded for Plan 07-03: `Handler` is an AFIT trait (plain `async fn`, not `#[async_trait]`); `Handle::authenticate_publickey` takes `PrivateKeyWithHashAlg`, not `Arc<PrivateKey>`. Two task commits: `0a88141` + `69104a5`. `cargo build --workspace` clean; `cargo test -p vector-ssh --tests` 1 passed + 4 ignored (Plan 07-03 stubs); `cargo test -p vector-codespaces --tests` 17 passed.
+
 ### Open Questions / Risk Register
 
 - **Phase 8 Dev Tunnels** — highest known v1 risk. Spike outcome unknown until phase start.
@@ -180,9 +188,9 @@ Plan: 1 of 7
 
 ## Session Continuity
 
-**Last session:** 2026-05-14T20:03:25.127Z
+**Last session:** 2026-05-21T18:56:53.985Z
 
-**Stopped at:** Completed 06-06-PLAN.md
+**Stopped at:** Phase 8 UI-SPEC approved
 
 **Next action:**
 

@@ -33,9 +33,9 @@ vector-input = { path = "../vector-input", version = "2026.5.10" }
 vector-mux = { path = "../vector-mux", version = "2026.5.10" }
 vector-render = { path = "../vector-render", version = "2026.5.10" }
 vector-term = { path = "../vector-term", version = "2026.5.10" }
-# Phase 6 / AUTH-01 — auth_actor needs octocrab to fetch @login post-tokens,
-# and zeroize to handle the access token without leaking.
-octocrab.workspace = true
+# Phase 6 / AUTH-01 — zeroize handles the access token without leaking.
+# (auth_actor previously used octocrab but switched to direct reqwest after
+# octocrab's tower::buffer service panicked in the field on @login fetch.)
 zeroize.workspace = true
 # Phase 6 / Plan 06-06 — codespaces_actor + picker modal use
 # tokio-util CancellationToken for cooperative poll cancellation

@@ -1,13 +1,14 @@
 # Roadmap: Vector
 
 **Created:** 2026-05-10
+**Pivoted:** 2026-05-19 — see Phase 7 note
 **Granularity:** fine (10 phases)
-**Total v1 requirements:** 51
-**Coverage:** 51 / 51 mapped
+**Total v1 requirements:** 47
+**Coverage:** 47 / 47 mapped
 
 ## Core Value
 
-Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing. Local-terminal niceties (tabs, splits, GPU rendering) are table-stakes; the differentiator is that a Codespaces / Dev-Tunnels session feels native, not bolted on.
+Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), get a fast remote shell — no VS Code, no browser. Local-terminal niceties (tabs, splits, GPU rendering) are table-stakes; the differentiator is that a Dev-Tunnels session feels native, not bolted on.
 
 ## Phases
 
@@ -17,8 +18,8 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 - [ ] **Phase 4: Mux — Tabs & Splits** — Window/Tab/Pane tree with `Domain`/`PtyTransport` abstractions; iTerm-class local terminal.
 - [ ] **Phase 5: Polish (Local Daily-Driver)** — TOML config + hot-reload, themes/fonts/ligatures, OSC 7/8/52/133/10/11/12, scrollback search, tmux pass-through.
 - [ ] **Phase 6: GitHub Auth + Codespaces Picker** — OAuth device flow, Keychain token storage, codespace picker UI; clicking "Connect" still shows a placeholder.
-- [ ] **Phase 7: SSH Transport + Codespaces Connect** — `gh codespace ssh --stdio` subprocess transport, `CodespaceDomain`, end-to-end remote shell with tab tint and resize.
-- [ ] **Phase 8: Dev Tunnels Integration** — Day-1 spike resolves the subprocess/vendor/defer decision tree; `DevTunnelDomain` if green.
+- [~] **Phase 7: Remote SSH Transport Scaffolding (DESCOPED 2026-05-19)** — pivoted away from Codespaces. Reusable scaffolding shipped: `vector-ssh` crate (russh client, SshChannelTransport, ChildStdioStream, host-key fingerprint handler), `Mux::create_tab_async_with_transport`, `format_tab_title` with `TransportKind`, `[remote]` badge. Codespace-specific code reverted.
+- [ ] **Phase 8: VS Code Remote Tunnels Connect** — Owns DT-01..04. User runs `code tunnel` on their own machine (EC2, home server); Vector attaches over the Microsoft Dev Tunnels relay. Day-1 spike resolves the subprocess/vendor/defer decision tree.
 - [ ] **Phase 9: Persistence + Reconnect + tmux Auto-Attach** — `Domain::reconnect()` hot-swap, "Reconnecting…" overlay, `tmux new -A -s vector-{profile-id}` on connect.
 - [ ] **Phase 10: Hardening & Release** — Renderer snapshot + VT conformance suites in CI, perf gates, tagged unsigned Universal DMG on GitHub Releases.
 
@@ -175,46 +176,53 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
   - Picker UI ships before SSH transport — deliberate de-risking split. CS-04..07 belong to Phase 7.
   - Re-check Out-of-Scope: no codespace lifecycle (create/delete/rebuild), no PORTS panel.
 
-### Phase 7: SSH Transport + Codespaces Connect
-**Goal**: Clicking a Codespace from the picker drops the user into a remote shell in a Vector pane, with resize, tab tint, and a "remote" badge.
-**Depends on**: Phase 6 (auth + picker), Phase 4 (Domain/PtyTransport seam).
-**Requirements**: CS-04, CS-05, CS-06, CS-07
-**Success Criteria** (what must be TRUE):
-  1. Clicking "Connect" on an Available codespace from the picker opens a working remote shell in a new Vector pane via subprocess `gh codespace ssh --stdio` — end-to-end, with `pwd` returning the codespace's working directory.
-  2. Vector generates and registers an ed25519 SSH keypair per machine via the GitHub API on first connect; subsequent connects reuse it without prompting the user for `ssh-add`.
-  3. A connected codespace pane is visually distinct: tab is tinted (e.g. GitHub-purple) and a "remote" badge appears in the tab title; the user always knows the pane is remote.
-  4. Resizing the window or pane sends an SSH `window-change` request through the transport; remote `vim` and `tmux` reflow correctly within one second.
-**Plans**: TBD
-**Strategy / phasing note**: **v1 transport is subprocess `gh codespace ssh --stdio`.** The native russh + tonic + port-16634 gRPC reimplementation is **v1.x**, not part of v1. The phase plan must reflect the subprocess path explicitly. (See requirement CS-V2-01 in the v2 backlog.)
-**Stack additions**: `russh 0.60` (loaded but used only for the SSH-channel layer riding atop the subprocess pipe), `vector-ssh`, `CodespaceDomain`.
-**Risks & notes**:
-  - **Codespaces SSH is not plain TCP SSH.** It rides a tunneled relay with an OAuth-derived ephemeral cert behind a stateful API. The subprocess path eliminates the gnarliest protocol work from the v1 critical path (Pitfall 9).
-  - SSH host-key trust uses the API-provided fingerprint, not TOFU bypass (Pitfall 15).
-  - `pty-req` must send initial cols/rows and `window-change` on resize (Pitfall 7).
-  - Re-check Out-of-Scope: no native russh + gRPC path (v1.x), no port-forwarding panel.
+### Phase 7: Remote SSH Transport Scaffolding (DESCOPED 2026-05-19)
+**Status**: Pivoted. Original Codespaces-Connect scope was the wrong product. The transport-layer scaffolding from plans 01..03 was kept (russh client, SSH channel transport, host-key fingerprint pinning, mux transport helper, `[remote]` tab badge). The codespace-specific glue from plan 04 (codespace_actor, CodespaceDomain, `register_ssh_key`, `get_codespace_with_connection`, `gh codespace ssh --stdio` subprocess build) and plan 05 (smoke matrix) was reverted.
+**What survived** (reusable groundwork for Phase 8):
+  - `crates/vector-ssh/` — russh 0.60 client, `SshChannelTransport` with biased select for resize/write/read, `ChildStdioStream` (AsyncRead+AsyncWrite over subprocess), `VectorHandler` with SHA-256 host-key fingerprint check (Pitfall 3)
+  - `Mux::create_tab_async_with_transport` — install `Box<dyn PtyTransport>` directly; vector-mux stays russh-free per WIN-04
+  - `format_tab_title` extended for `TransportKind`; `[remote]` badge for any non-local pane
+  - Workspace deps: `russh 0.60`, `ssh-key 0.6`
+**What was reverted**:
+  - `CodespaceDomain::spawn` and `codespace_actor::spawn_connect`
+  - `register_ssh_key` (POST /user/keys with 422 dedup), `get_codespace_with_connection`, `CodespaceWithConnection` model
+  - `KeyManager` (ed25519 keygen at `~/.ssh/vector_codespace_ed25519`)
+  - `build_gh_stdio_command` (gh subprocess wiring)
+  - `apply_codespace_tint_if_active`, `UserEvent::CodespacePaneReady`
+  - `write:public_key` OAuth scope addition (back to `codespace + read:user`)
+  - SMOKE.md (codespace smoke matrix)
+**Why pivoted**: The user clarified they want VS Code Remote Tunnels (own machine + `code tunnel`), not GitHub Codespaces. Codespaces lifecycle ceremony (create / start / pick) was the wrong UX for the actual use case. CS-04..07 dropped from REQUIREMENTS.md; DT-01..04 moved into Phase 8 (was already there).
+**Plans**: 5 plans
+  - [x] 07-01-PLAN.md — vector-ssh scaffold + workspace deps (kept)
+  - [x] 07-02-PLAN.md — KeyManager + register_ssh_key + fingerprint fetch (REVERTED — codespace-specific)
+  - [x] 07-03-PLAN.md — SshClient + SshChannelTransport real impl (kept)
+  - [x] 07-04-PLAN.md — CodespaceDomain + codespace_actor + app.rs wire-up + tint (REVERTED — codespace-specific)
+  - [ ] 07-05-PLAN.md — smoke matrix (DELETED — required live codespace)
 
-### Phase 8: Dev Tunnels Integration
-**Goal**: A user can pick a Dev Tunnel from the same picker as Codespaces and get a remote shell — using whichever transport the day-1 spike picked.
-**Depends on**: Phase 7 (Domain/PtyTransport seam exercised under remote load).
+### Phase 8: VS Code Remote Tunnels Connect
+**Goal**: A signed-in user can attach Vector to one of their own machines running `code tunnel`, getting a remote shell in a Vector pane that's visually distinct from local panes.
+**Depends on**: Phase 6 (auth), Phase 7 (russh + transport scaffolding), Phase 4 (Domain/PtyTransport seam).
 **Requirements**: DT-01, DT-02, DT-03, DT-04
 **Success Criteria** (what must be TRUE):
-  1. The phase begins with a 1–2 day spike that commits a written decision document to `.planning/research/spikes/dev-tunnels-decision.md` choosing among (a) subprocess `code tunnel client`, (b) vendor `microsoft/dev-tunnels/rs/` at a pinned SHA, or (c) defer to v2. No integration code is written before the decision lands.
-  2. If the spike chose (a) or (b): a signed-in user sees active Dev Tunnels listed alongside Codespaces in the picker, with tunnel name, host machine, and last-seen.
-  3. If the spike chose (a) or (b): clicking a Dev Tunnel opens a remote shell in a new pane via the chosen transport; the pane is visually distinct from Codespaces (different tab tint color so the user knows "this is my own box" vs "this is GitHub-managed").
-  4. If the spike chose (c): the decision document is committed, REQUIREMENTS.md is updated to move DT-02..04 to v2 with reason, and Phase 8 closes as "spike + decision document" — the implementation moves to v2.
+  1. The phase begins with a 1–2 day spike that commits a written decision to `.planning/research/spikes/dev-tunnels-decision.md` choosing among (a) subprocess `code tunnel client`, (b) vendor `microsoft/dev-tunnels/rs/` at a pinned SHA, (c) defer to v2. No integration code is written before the decision lands.
+  2. If the spike chose (a) or (b): a signed-in user sees their active VS Code Remote Tunnels listed in a picker, with tunnel name, host machine, and last-seen.
+  3. If the spike chose (a) or (b): clicking a tunnel opens a remote shell in a new pane via the chosen transport.
+  4. The connected pane is visually distinct from local (tinted tab + `[remote]` badge) so the user always knows what they're typing into.
+  5. If the spike chose (c): the decision document is committed, REQUIREMENTS.md moves DT-02..04 to v2 with reason, and Phase 8 closes as "spike + decision document".
 **Plans**: TBD
-**Research-spike-required flag**: **YES.** Day 1 of this phase is a mandatory 1–2 day spike. Do not estimate the rest of the phase until the spike resolves the decision tree.
-**Stack additions** (conditional on spike outcome): `microsoft/dev-tunnels` at pinned SHA OR subprocess `code tunnel client` OR none (deferred).
+**Research-spike-required flag**: **YES.** Day 1 is a mandatory 1–2 day spike. Do not estimate the rest of the phase until the spike resolves the decision tree.
+**Stack additions** (conditional on spike outcome): `microsoft/dev-tunnels` at pinned SHA OR subprocess `code tunnel client` OR none (deferred). Existing `russh 0.60` + `vector-ssh` from Phase 7 carry over.
 **Risks & notes**:
   - **Highest known risk in v1.** The Rust SDK exists in `microsoft/dev-tunnels/rs/` but is not on crates.io, has gaps (no auto-reconnect, no token refresh, internally pinned to russh 0.37 vs. our 0.60), and may lag protocol changes.
   - russh 0.37 vs. 0.60 conflict: fork + bump or accept ~3MB binary duplication.
   - Defer-to-v2 is an acceptable spike outcome; the phase reduces to "spike + decision document" without blocking v1 release.
-  - Nightly smoke test against the live service on subsequent days (Pitfall 13).
-  - Re-check Out-of-Scope: no clean-room reverse-engineering of the relay protocol.
+  - SSH host-key trust uses the tunnel's API-provided fingerprint, not TOFU bypass.
+  - `pty-req` must send initial cols/rows and `window-change` on resize.
+  - Re-check Out-of-Scope: no port-forwarding panel, no clean-room reverse-engineering of the relay protocol.
 
 ### Phase 9: Persistence + Reconnect + tmux Auto-Attach
 **Goal**: The user closes their laptop lid for a meeting, reopens it, and a Codespaces pane reconnects automatically with full session state preserved via tmux.
-**Depends on**: Phase 7 (Codespaces transport) and Phase 8 (or its deferral decision).
+**Depends on**: Phase 8 (Dev Tunnels transport) — or, if Phase 8 deferred to v2, this phase scales back to local-only persistence.
 **Requirements**: PERSIST-01, PERSIST-02, PERSIST-03, PERSIST-04
 **Success Criteria** (what must be TRUE):
   1. On TCP/SSH disconnect, the affected pane enters a `Reconnecting` state, the local grid + scrollback stay in memory (no blank screen), and a "Reconnecting…" overlay appears.
@@ -274,8 +282,8 @@ Open the app, pick a Codespace, get a fast remote shell — no VS Code, no brows
 | Polish | POLISH-01..08 | Phase 5 |
 | GitHub Auth | AUTH-01..03 | Phase 6 |
 | Codespaces Picker | CS-01..03 | Phase 6 |
-| Codespaces SSH Connect | CS-04..07 | Phase 7 |
-| Dev Tunnels | DT-01..04 | Phase 8 |
+| Remote SSH Transport Scaffolding | — (descoped 2026-05-19) | Phase 7 |
+| VS Code Remote Tunnels Connect | DT-01..04 | Phase 8 |
 | Persistence & Reconnect | PERSIST-01..04 | Phase 9 |
 | Hardening & Release | HARDEN-01..04 | Phase 10 |
 
@@ -288,8 +296,8 @@ Phase 1 (Foundation/CI/DMG, threading)
                └── Phase 4 (Mux: tabs/splits, Domain/PtyTransport seam)
                      └── Phase 5 (Polish: config, themes, OSC, scrollback)
                            └── Phase 6 (GitHub auth + Codespaces picker)
-                                 └── Phase 7 (SSH transport + Codespaces connect)
-                                       └── Phase 8 (Dev Tunnels — spike-gated)
+                                 └── Phase 7 (SSH transport scaffolding — descoped)
+                                       └── Phase 8 (VS Code Remote Tunnels — spike-gated)
                                              └── Phase 9 (Persistence + reconnect + tmux)
                                                    └── Phase 10 (Hardening + release)
 ```

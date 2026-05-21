@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-19T21:40:59.129Z",
+  "phase": "7",
+  "phase_name": "SSH Transport + Codespaces Connect",
+  "phase_dir": ".planning/phases/07-ssh-transport-codespaces-connect",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": "debug-1", "name": "black-screen-render: double surface present fix", "status": "done", "commit": "uncommitted (in working tree)"},
+    {"id": "debug-2", "name": "terminal-partial-window: hardcoded 80x24 initial dims fix", "status": "done", "commit": "uncommitted (in working tree)"},
+    {"id": "debug-3", "name": "oauth-device-flow-broken: Accept:application/json + modal persistence", "status": "done", "commit": "uncommitted (in working tree)"},
+    {"id": "debug-4", "name": "codespace-tunnel-connect-fails: post-auth picker auto-open", "status": "done", "commit": "uncommitted (in working tree)"},
+    {"id": "debug-5", "name": "auth-completion-not-detected: GitHub HTTP-200 polling fix + reqwest user fetch + octocrab tower panic + codespace listing direct reqwest", "status": "done", "commit": "uncommitted (in working tree)"},
+    {"id": "test-1", "name": "8 regression tests for auth + codespaces listing", "status": "done", "commit": "uncommitted (in working tree)"},
+    {"id": "plan-7", "name": "Phase 7 plans: 5 plans across 4 waves", "status": "done", "commit": "53bb825"}
+  ],
+  "remaining_tasks": [
+    {"id": "commit-fixes", "name": "Commit all debug session fixes from the working tree", "status": "not_started"},
+    {"id": "execute-7", "name": "Execute Phase 7 — SSH transport + Codespaces connect", "status": "not_started"},
+    {"id": "create-codespace", "name": "Create a GitHub Codespace at github.com/codespaces to test against", "status": "not_started", "type": "human_action"}
+  ],
+  "blockers": [
+    {
+      "description": "User has no codespaces yet — picker shows empty (correct behavior). Need at least one codespace to test Phase 7.",
+      "type": "human_action",
+      "workaround": "Create a codespace at github.com/codespaces on any repo"
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Create a GitHub Codespace at github.com/codespaces",
+      "context": "Needed to test Phase 7 SSH transport end-to-end. The API returns total_count=0 meaning zero codespaces exist.",
+      "blocking": true
+    }
+  ],
+  "decisions": [
+    {"decision": "Phase 7 v1 transport = gh codespace ssh --stdio subprocess", "rationale": "Sidesteps native russh+gRPC tunnel plumbing (v1.x). gh handles all tunnel protocol.", "phase": "7"},
+    {"decision": "CodespaceDomain lives in vector-ssh, not vector-mux", "rationale": "Keeps WIN-04 seam clean — mux takes Box<dyn PtyTransport> directly, not russh types.", "phase": "7"},
+    {"decision": "KeyManager title = 'vector-{hostname}' (no UUID)", "rationale": "Stable title prevents unbounded SSH key growth on github.com/settings/keys.", "phase": "7"},
+    {"decision": "All debug session fixes uncommitted", "rationale": "Multiple files modified across sessions, need to commit before executing phase 7.", "phase": "6"}
+  ],
+  "uncommitted_files": [
+    "Makefile",
+    "crates/vector-app/src/app.rs",
+    "crates/vector-app/src/auth_actor.rs",
+    "crates/vector-codespaces/src/auth/device_flow.rs",
+    "crates/vector-codespaces/src/auth/error.rs",
+    "crates/vector-codespaces/tests/device_flow.rs",
+    "crates/vector-app/src/codespaces_actor.rs"
+  ],
+  "next_action": "Run 'git add -p' to stage and commit all debug session fixes, then /clear and /gsd:execute-phase 7",
+  "context_notes": "Long debug session fixed: black screen, partial window, OAuth device flow (GitHub HTTP-200 non-RFC polling), auth completion detection (tower panic from octocrab on winit main thread), codespaces empty list (user simply has zero codespaces). All auth + codespaces infrastructure now works. Phase 7 fully planned and verified. Need to commit the working tree fixes before executing."
+}

@@ -15,7 +15,7 @@ use tokio::runtime::Handle;
 use winit::event_loop::EventLoopProxy;
 use zeroize::Zeroizing;
 
-use vector_codespaces::{build_octocrab, AuthError, GitHubAuth, TokenStore};
+use vector_codespaces::{AuthError, GitHubAuth, TokenStore};
 
 use crate::UserEvent;
 
@@ -64,13 +64,40 @@ impl std::fmt::Debug for AuthCancellation {
 pub fn spawn_device_flow(handle: &Handle, proxy: EventLoopProxy<UserEvent>) -> AuthCancellation {
     let cancel = AuthCancellation::new();
     let cancel_clone = cancel.clone();
+    let proxy_for_supervisor = proxy.clone();
     handle.spawn(async move {
-        run_flow(proxy, cancel_clone).await;
+        // Supervisor: run the flow in a child task so panics surface as
+        // JoinError instead of silently aborting the tokio worker. On panic,
+        // emit AuthFailed with the panic payload so the UI can show it.
+        let inner = tokio::spawn(async move { run_flow(proxy, cancel_clone).await });
+        if let Err(err) = inner.await {
+            if err.is_panic() {
+                let payload = err.into_panic();
+                let msg = panic_payload_to_string(&payload);
+                tracing::error!(panic_msg = %msg, "auth_actor panicked");
+                let _ = proxy_for_supervisor.send_event(UserEvent::AuthFailed {
+                    reason: format!("internal error: {msg}"),
+                });
+            } else {
+                tracing::error!(?err, "auth_actor join error");
+            }
+        }
     });
     cancel
 }
 
+fn panic_payload_to_string(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&'static str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
+}
+
 async fn run_flow(proxy: EventLoopProxy<UserEvent>, cancel: AuthCancellation) {
+    tracing::info!("auth_actor: stage=new");
     let auth = match GitHubAuth::new() {
         Ok(a) => a,
         Err(e) => {
@@ -81,6 +108,7 @@ async fn run_flow(proxy: EventLoopProxy<UserEvent>, cancel: AuthCancellation) {
         }
     };
 
+    tracing::info!("auth_actor: stage=request_device_code");
     let (display, details) = match auth.request_device_code().await {
         Ok(v) => v,
         Err(e) => {
@@ -105,6 +133,7 @@ async fn run_flow(proxy: EventLoopProxy<UserEvent>, cancel: AuthCancellation) {
         interval_secs: display.interval_secs,
     });
 
+    tracing::info!("auth_actor: stage=poll_for_token (display code emitted)");
     // Race the oauth poll against the cancellation flag. The flag is polled
     // every 200 ms — well below the device-flow interval (5 s typical) so the
     // user perceives Cancel as instant.
@@ -145,6 +174,7 @@ async fn run_flow(proxy: EventLoopProxy<UserEvent>, cancel: AuthCancellation) {
         }
     };
 
+    tracing::info!("auth_actor: stage=save_tokens (poll returned ok)");
     // Persist tokens BEFORE emitting AuthCompleted so the menu rebuild path
     // sees a populated Keychain.
     let store = TokenStore::new();
@@ -160,16 +190,22 @@ async fn run_flow(proxy: EventLoopProxy<UserEvent>, cancel: AuthCancellation) {
         let _ = store.save_refresh(refresh);
     }
 
-    // Fetch @login (best-effort). On failure, fall back to "unknown" rather
-    // than aborting the whole flow — the user is authenticated either way.
-    let login = fetch_login(&tokens.access)
+    tracing::info!("auth_actor: stage=fetch_login");
+    // Fetch @login via plain reqwest (auth.fetch_user_login) instead of
+    // octocrab — octocrab's tower::buffer service has panicked in the field
+    // on this single call site, and we don't need octocrab's surface here.
+    let login = fetch_login(&auth, &tokens.access)
         .await
-        .unwrap_or_else(|_| "unknown".to_string());
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "fetch_login failed; falling back to 'unknown'");
+            "unknown".to_string()
+        });
+    tracing::info!(login = %login, "auth_actor: stage=emit_completed");
     let _ = proxy.send_event(UserEvent::AuthCompleted { user_login: login });
 }
 
-async fn fetch_login(token: &Zeroizing<String>) -> Result<String, String> {
-    let octo = build_octocrab(token, None).map_err(|e| e.to_string())?;
-    let user: octocrab::models::Author = octo.current().user().await.map_err(|e| e.to_string())?;
-    Ok(user.login)
+async fn fetch_login(auth: &GitHubAuth, token: &Zeroizing<String>) -> Result<String, String> {
+    auth.fetch_user_login(token)
+        .await
+        .map_err(|e| e.to_string())
 }

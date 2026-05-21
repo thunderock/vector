@@ -7,5 +7,19 @@ license.workspace = true
 description = "Async SSH client — PTY channel, port-forward, agent — Phase 7 (russh)."
 
 [dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+russh.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "process", "io-util"] }
+tracing.workspace = true
+vector-mux = { path = "../vector-mux", version = "2026.5.10" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "test-util"] }
+# rand 0.10 → rand_core 0.10 (matches russh 0.60's vendored ssh-key fork; the
+# workspace `rand 0.8` is on rand_core 0.6 and isn't a CryptoRng to russh).
+rand = { version = "0.10", features = ["thread_rng"] }
+
 [lints]
 workspace = true

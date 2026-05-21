@@ -2,11 +2,13 @@
 
 ## What This Is
 
-Vector is a native macOS terminal — written in Rust, GPU-accelerated — with first-class GitHub Codespaces and Dev Tunnels support baked in. It is meant to replace iTerm/ghostty as a daily-driver local terminal *and* let me (and a few Adobe teammates) sign in with GitHub, pick a Codespace, and drop into a remote dev shell without ever opening VS Code or a browser.
+Vector is a native macOS terminal — written in Rust, GPU-accelerated — with first-class VS Code Remote Tunnels support baked in. It is meant to replace iTerm/ghostty as a daily-driver local terminal *and* let me (and a few Adobe teammates) sign in with GitHub, attach to one of our own remote machines running `code tunnel`, and drop into a remote dev shell without ever opening VS Code or a browser.
+
+**Pivoted 2026-05-19:** Original spec called for GitHub Codespaces support. Mid-Phase 7, user clarified the actual use case is connecting to *their own* machines via VS Code Remote Tunnels, not GitHub-managed codespace containers. Phase 7 codespace-specific code was reverted; transport scaffolding (russh client, SSH channel transport, tab tint + `[remote]` badge) kept for Phase 8.
 
 ## Core Value
 
-**Open the app, pick a Codespace, get a fast remote shell — no VS Code, no browser, no clunky `gh codespace ssh` plumbing.** Local-terminal niceties (tabs, splits, GPU rendering) are table-stakes; the differentiator is that a Codespaces/Dev-Tunnels session feels native, not bolted on.
+**Open the app, pick a remote machine running `code tunnel`, get a fast remote shell — no VS Code, no browser.** Local-terminal niceties (tabs, splits, GPU rendering) are table-stakes; the differentiator is that a Dev-Tunnels session feels native, not bolted on.
 
 ## Requirements
 
@@ -21,9 +23,9 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 
 - [x] Polish local terminal to daily-driver quality — config hot-reload, theme engine, search bar, profile picker, OSC 52 clipboard, IME, Secure Keyboard Entry, hyperlinks, OSC 7 cwd, Cmd-N window spawning — Phase 5 operationally validated 2026-05-14: all 8 POLISH requirements verified; 16/16 plans complete; 332 tests passing; 10-item smoke matrix 10/10 approved.
 - [x] GitHub OAuth sign-in flow (device-code) with token caching in macOS Keychain — Phase 6 code-complete 2026-05-14: AUTH-01/02/03 fully wired (device-flow + Keychain via vector-secrets + 401 silent-refresh chain); AppKit `AuthDeviceFlowModal` NSPanel + `Sign in with GitHub` menu item + Cmd-Shift-G; 363 workspace tests pass; Pitfall-14 arch-lint enforces zero-Debug-on-token discipline; token-leak grep 0 hits. Human smoke matrix (11 items) tracked in `06-HUMAN-UAT.md` — drive via `/gsd:verify-work 6`.
-- [x] List / pick GitHub Codespaces from the UI (no `gh` CLI required) — Phase 6 code-complete 2026-05-14: CS-01/02/03 fully wired (`CodespacesPickerModal` NSPanel + `CodespacesClient` REST + start/409-swallow/poll + Save-as-profile via `vector-config::writer::append_codespace_profile`). `Connect` placeholder toast points at Phase 7. Connect/transport stays in Phase 7 (Dev Tunnels + gRPC + russh).
+- [~] List / pick GitHub Codespaces from the UI (no `gh` CLI required) — Phase 6 code-complete 2026-05-14 but functionally dormant after 2026-05-19 pivot. CS-01/02/03 wiring (`CodespacesPickerModal` NSPanel + `CodespacesClient` REST + start/poll + Save-as-profile) survives in-tree; `Connect` is a placeholder toast. Will be repurposed or removed once the tunnel-picker UX is designed.
 - [ ] Native macOS app distributed as an unsigned `.dmg` (right-click → Open), Universal binary
-- [ ] Session persistence + transparent reconnect — wifi drop should not lose Codespace state
+- [ ] Session persistence + transparent reconnect — wifi drop should not lose remote-session state
 - [ ] tmux pass-through that "just works" — no double-multiplex visual glitches when remote tmux is running
 - [ ] Connect to a remote machine running `code tunnel` (Microsoft Dev Tunnels) using GitHub auth
 - [ ] Saved profiles (`my-cs-frontend`, `my-corp-box`, etc.) for one-click reconnect
@@ -34,10 +36,10 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 
 - **Apple Developer signing & notarization** — deferred. v1 ships unsigned with right-click-Open instructions; revisit only if right-click flow is too painful for teammates.
 - **Linux and Windows builds** — Mac-only for v1. The user runs Mac and so do the teammates. Cross-platform doubles the surface area for no payoff today.
-- **Codespaces lifecycle management (create/delete/rebuild)** — v1 is connect-only; lifecycle stays in `gh` CLI. Adding it later is straightforward; locking down connect first is more valuable.
+- **GitHub Codespaces support entirely** — descoped 2026-05-19. The actual use case is VS Code Remote Tunnels (own machines), not GitHub-managed containers. Phase 6 picker code stays in-tree but dormant; Phase 7 codespace-specific code was reverted.
 - **Port-forwarding UI ("PORTS" panel)** — deferred to v2. Useful but not on the critical path; remote dev works without it for most flows.
 - **File transfer (drag-drop / scp UI)** — deferred. `scp`/`rsync` in the shell suffice while we focus on terminal core.
-- **Arbitrary SSH targets as first-class profiles** — deferred. v1 is Codespaces + Dev Tunnels. Plain SSH still works because the terminal launches whatever command you give it; there's just no special UI.
+- **Arbitrary SSH targets as first-class profiles** — deferred. v1 is VS Code Remote Tunnels only. Plain SSH still works because the terminal launches whatever command you give it; there's just no special UI.
 - **Browser-based / web companion (vscode.dev style)** — explicitly anti-goal. Native-only is a feature.
 - **AI features beyond the optional Claude integration** — no command sharing, no analytics, no account system. Bloat is part of why we are not using Warp/Wave.
 - **Fork of ghostty or VS Code** — we read them as reference but build fresh in Rust. Submodule references in this repo will be removed.
@@ -51,15 +53,14 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 - **Alacritty** (Rust) — minimal GPU terminal. Reference for renderer architecture, escape-sequence parser, the `alacritty_terminal` crate (split out as a library).
 - **WezTerm** (Rust) — closest existing Rust terminal to what we want; has SSH, multiplexing, tabs/splits, lua config. Reference for tab/split UX and SSH transport.
 - **VS Code Remote Tunnels** — defines the Dev Tunnels client behavior we need to replicate. Microsoft Dev Tunnels has no public Rust SDK, so this is the riskiest piece.
-- **`gh codespace ssh`** (Go, GitHub CLI) — defines the Codespaces SSH flow (auth → port allocation → SSH config). We will reimplement the relevant parts in Rust.
 
 **Differentiators vs Warp / Wave / Tabby (which I tried):**
-- They treat Codespaces as a second-class SSH target; we treat it as a headline UX (sign-in, picker, profile).
+- They treat remote tunnels as a second-class SSH target; we treat them as headline UX (sign-in, picker, profile).
 - They bundle cloud accounts, AI products, command sharing, analytics — we ship a terminal and a tunnel client, full stop.
 
 **Why Rust:** I asked about Rust explicitly. We're not forking ghostty (Zig) or VS Code (TypeScript/Electron) — we're building fresh. Rust gives the right balance of performance, ecosystem (alacritty_terminal, vte, wgpu, tokio, octocrab/reqwest), and cross-platform potential when we eventually go beyond Mac.
 
-**No GitHub approval needed:** GitHub Codespaces SSH and Dev Tunnels are public, documented, OAuth-authenticated APIs. Any GitHub user can call them. No special partner approval is required to ship a third-party client.
+**No special approval needed:** Microsoft Dev Tunnels is a public, documented, OAuth-authenticated API (GitHub OAuth works as the identity provider). No partner approval is required to ship a third-party client.
 
 ## Constraints
 
@@ -75,7 +76,7 @@ Vector is a native macOS terminal — written in Rust, GPU-accelerated — with 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Build in Rust from scratch (not fork ghostty/VS Code) | User explicitly asked about Rust; ghostty is Zig and VS Code is Electron, neither matches the desired stack. Rust ecosystem (alacritty_terminal, wgpu, tokio) is mature enough. | — Pending |
-| Connect to BOTH Codespaces SSH and Dev Tunnels | User confirmed both flows matter. Codespaces covers the "use a managed dev VM" case; Dev Tunnels covers "sign into my own remote box and connect". | — Pending |
+| VS Code Remote Tunnels only (Codespaces dropped) | 2026-05-19 mid-Phase-7 pivot. User clarified they want "sign into my own remote box and connect" UX — Codespaces lifecycle ceremony (create/start/pick) was the wrong fit. CS-04..07 dropped from REQUIREMENTS.md; Phase 8 (DT-01..04) now owns the remote flow. | Confirmed 2026-05-19 |
 | Replace iTerm/ghostty as default local terminal (not remote-only launcher) | Halving the surface area to remote-only would shrink scope, but the user explicitly wants a daily-driver. Local terminal is "free" once we have the rendering core. | — Pending |
 | Defer signing/notarization to v2 | Apple Developer cert costs $99/yr and adds CI complexity. Right-click-Open is acceptable for an internal tool. Revisit if Gatekeeper friction becomes painful for teammates. | — Pending |
 | Defer port-forwarding UI and file-transfer to v2 | They're VS-Code-terminal niceties but not on the critical path; remote dev works without them. Keeps v1 scope finite. | — Pending |

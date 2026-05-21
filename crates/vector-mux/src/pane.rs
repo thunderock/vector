@@ -12,7 +12,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use crate::ids::PaneId;
-use crate::transport::PtyTransport;
+use crate::transport::{PtyTransport, TransportKind};
 
 /// Cell-count storage for split proportions (D-60 / D-67).
 /// `first + second + 1 (divider) == axis_size_in_cells` is the invariant.
@@ -85,6 +85,10 @@ pub struct Pane {
     /// Transport ownership bridge for Plan 04-03 (pty_actor router takes it).
     /// `Mutex<Option<...>>` so it can be moved out without &mut Pane.
     pub transport: Mutex<Option<Box<dyn PtyTransport>>>,
+    /// Plan 07-04 / CS-06 — cached `TransportKind` captured at Pane construction
+    /// time, so `format_tab_title` and tint helpers can read it after
+    /// `take_transport()` has handed the live transport to the pty_actor router.
+    pub transport_kind: TransportKind,
     pub pid: Option<i32>,
     pub master_fd: Option<RawFd>,
     /// Updated by Plan 04-03 proc_tracker (D-57).
@@ -107,16 +111,25 @@ impl Pane {
         pid: Option<i32>,
         master_fd: Option<RawFd>,
     ) -> Self {
+        let transport_kind = transport.kind();
         Self {
             id,
             term,
             transport: Mutex::new(Some(transport)),
+            transport_kind,
             pid,
             master_fd,
             last_proc_name: Mutex::new(String::new()),
             cwd: Mutex::new(None),
             exited: AtomicBool::new(false),
         }
+    }
+
+    /// Plan 07-04 / CS-06 — cached transport kind (still readable after
+    /// `take_transport()` moved the transport into the pty_actor router).
+    #[must_use]
+    pub fn transport_kind(&self) -> TransportKind {
+        self.transport_kind
     }
 
     /// One-shot transport handoff. Plan 04-03 pty_actor router calls this.
@@ -186,12 +199,21 @@ pub fn spawn_cwd_for_with_proc(
 }
 
 /// D-79 B2 fix: tab title with cwd-stem suffix when OSC 7 is present.
+/// Plan 07-04 (CS-06): appends ` [remote]` for non-Local transports.
 /// Returns `"zsh: vector"` when cwd=`/Users/me/vector`; `"zsh"` when cwd=None.
 #[must_use]
-pub fn format_tab_title(process_name: &str, cwd: Option<&Path>) -> String {
-    match cwd.and_then(Path::file_name).and_then(|s| s.to_str()) {
+pub fn format_tab_title(
+    process_name: &str,
+    cwd: Option<&Path>,
+    kind: crate::transport::TransportKind,
+) -> String {
+    let base = match cwd.and_then(Path::file_name).and_then(|s| s.to_str()) {
         Some(stem) if !stem.is_empty() => format!("{process_name}: {stem}"),
         _ => process_name.to_owned(),
+    };
+    match kind {
+        crate::transport::TransportKind::Local => base,
+        crate::transport::TransportKind::DevTunnel => format!("{base} [remote]"),
     }
 }
 
@@ -206,5 +228,31 @@ impl std::fmt::Debug for Pane {
                 &self.exited.load(std::sync::atomic::Ordering::Relaxed),
             )
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transport::TransportKind;
+    use std::path::PathBuf;
+
+    #[test]
+    fn format_tab_title_remote_appends_suffix() {
+        let s = format_tab_title("zsh", None, TransportKind::DevTunnel);
+        assert!(s.ends_with(" [remote]"), "got: {s}");
+    }
+
+    #[test]
+    fn format_tab_title_local_no_suffix() {
+        let s = format_tab_title("zsh", None, TransportKind::Local);
+        assert!(!s.contains("[remote]"), "got: {s}");
+    }
+
+    #[test]
+    fn format_tab_title_remote_with_cwd() {
+        let cwd = PathBuf::from("/Users/me/vector");
+        let s = format_tab_title("zsh", Some(&cwd), TransportKind::DevTunnel);
+        assert_eq!(s, "zsh: vector [remote]");
     }
 }
