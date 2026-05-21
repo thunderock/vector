@@ -1,0 +1,122 @@
+name: agent-release
+
+on:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]
+
+concurrency:
+  group: agent-release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # release upload
+
+env:
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "1"
+  RUST_BACKTRACE: short
+
+jobs:
+  build-deb:
+    name: Build .deb (${{ matrix.deb-arch }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            deb-arch: amd64
+          - target: aarch64-unknown-linux-gnu
+            deb-arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: agent-${{ matrix.deb-arch }}
+
+      - name: Install cross-compile toolchain (aarch64 only)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml << 'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+
+      - name: Install cargo-deb
+        run: cargo install --locked cargo-deb
+
+      - name: Build release binary
+        run: cargo build --release -p vector-tunnel-agent --target ${{ matrix.target }}
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ github.event.release.tag_name || github.ref_name }}"
+          # Strip leading 'v' from tag for the .deb version field (cargo-deb expects unprefixed).
+          VER="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Build .deb
+        run: |
+          cargo deb -p vector-tunnel-agent \
+            --no-build \
+            --target ${{ matrix.target }} \
+            --output target/${{ matrix.target }}/debian/vector-tunnel-agent_${{ steps.tag.outputs.ver }}_${{ matrix.deb-arch }}.deb
+
+      - name: Sanity-check .deb
+        run: |
+          set -e
+          DEB=$(ls target/${{ matrix.target }}/debian/vector-tunnel-agent_*.deb | head -1)
+          echo "Inspecting $DEB"
+          dpkg-deb --info "$DEB"
+          dpkg-deb --contents "$DEB" | tee /tmp/contents.txt
+          grep -q 'usr/bin/vector-tunnel-agent' /tmp/contents.txt
+
+      - name: Upload artifact (CI staging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-deb-${{ matrix.deb-arch }}
+          path: target/${{ matrix.target }}/debian/*.deb
+          retention-days: 90
+
+  attach-to-release:
+    name: Attach .deb to GitHub Release
+    needs: build-deb
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload .deb to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          for deb in dist/agent-deb-*/vector-tunnel-agent_*.deb; do
+            echo "Uploading $deb to release ${{ steps.tag.outputs.name }}"
+            gh release upload "${{ steps.tag.outputs.name }}" "$deb" --clobber --repo "${{ github.repository }}"
+          done
