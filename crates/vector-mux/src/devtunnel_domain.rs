@@ -38,7 +38,13 @@ impl Domain for DevTunnelDomain {
     fn is_alive(&self) -> bool {
         false
     }
-    async fn reconnect(&self) -> Result<()> {
-        unimplemented!("Phase 9: Persistence + reconnect")
+    async fn reconnect_one_shot(
+        &self,
+        _rows: u16,
+        _cols: u16,
+    ) -> Result<Option<Box<dyn PtyTransport>>> {
+        unimplemented!(
+            "Phase 9 Plan 02: ReconnectableDevTunnelDomain in crates/vector-tunnels/src/domain.rs"
+        )
     }
 }

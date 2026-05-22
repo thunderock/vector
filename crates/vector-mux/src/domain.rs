@@ -39,7 +39,12 @@ pub trait Domain: Send + Sync {
     /// remote domains track session liveness.
     fn is_alive(&self) -> bool;
 
-    /// Re-establish the underlying transport. LocalDomain is a no-op
-    /// (a fresh `spawn` is sufficient); remote domains implement this in Phase 9.
-    async fn reconnect(&self) -> Result<()>;
+    /// LocalDomain returns Ok(None) — local PTY death is permanent.
+    /// DevTunnelDomain re-runs connect_tunnel via ReconnectableDevTunnelDomain (Plan 09-02).
+    /// `rows` / `cols` are the latest known terminal dims (D-08 discretion in 09-CONTEXT.md).
+    async fn reconnect_one_shot(
+        &self,
+        rows: u16,
+        cols: u16,
+    ) -> Result<Option<Box<dyn PtyTransport>>>;
 }

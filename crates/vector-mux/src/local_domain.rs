@@ -104,8 +104,12 @@ impl Domain for LocalDomain {
     fn is_alive(&self) -> bool {
         true
     }
-    async fn reconnect(&self) -> Result<()> {
-        Ok(())
+    async fn reconnect_one_shot(
+        &self,
+        _rows: u16,
+        _cols: u16,
+    ) -> Result<Option<Box<dyn PtyTransport>>> {
+        Ok(None)
     }
 }
 
