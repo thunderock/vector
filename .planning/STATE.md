@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Ready to execute
+status: Ready to plan
 stopped_at: "Paused at Plan 08-07 Task 2 (checkpoint:human-verify) — 9-item UAT awaiting user walk-through"
-last_updated: "2026-05-21T22:00:27.632Z"
+last_updated: "2026-05-22T15:13:03.254Z"
 progress:
   total_phases: 11
   completed_phases: 6
@@ -26,8 +26,8 @@ progress:
 
 ## Current Position
 
-Phase: 08 (vs-code-remote-tunnels-connect) — EXECUTING
-Plan: 7 of 7 (Task 1 complete; Task 2 awaiting human UAT — see 08-SMOKE.md)
+Phase: 999.1
+Plan: Not started
 
 ## Phase Map
 

@@ -19,7 +19,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 - [ ] **Phase 5: Polish (Local Daily-Driver)** — TOML config + hot-reload, themes/fonts/ligatures, OSC 7/8/52/133/10/11/12, scrollback search, tmux pass-through.
 - [ ] **Phase 6: GitHub Auth + Codespaces Picker** — OAuth device flow, Keychain token storage, codespace picker UI; clicking "Connect" still shows a placeholder.
 - [~] **Phase 7: Remote SSH Transport Scaffolding (DESCOPED 2026-05-19)** — pivoted away from Codespaces. Reusable scaffolding shipped: `vector-ssh` crate (russh client, SshChannelTransport, ChildStdioStream, host-key fingerprint handler), `Mux::create_tab_async_with_transport`, `format_tab_title` with `TransportKind`, `[remote]` badge. Codespace-specific code reverted.
-- [ ] **Phase 8: VS Code Remote Tunnels Connect** — Owns DT-01..04. User runs `code tunnel` on their own machine (EC2, home server); Vector attaches over the Microsoft Dev Tunnels relay. Day-1 spike resolves the subprocess/vendor/defer decision tree.
+- [x] **Phase 8: VS Code Remote Tunnels Connect** — Owns DT-01..04. User runs `code tunnel` on their own machine (EC2, home server); Vector attaches over the Microsoft Dev Tunnels relay. Day-1 spike resolves the subprocess/vendor/defer decision tree. (completed 2026-05-22)
 - [ ] **Phase 9: Persistence + Reconnect + tmux Auto-Attach** — `Domain::reconnect()` hot-swap, "Reconnecting…" overlay, `tmux new -A -s vector-{profile-id}` on connect.
 - [ ] **Phase 10: Hardening & Release** — Renderer snapshot + VT conformance suites in CI, perf gates, tagged unsigned Universal DMG on GitHub Releases.
 
@@ -216,7 +216,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - [x] 08-04-mac-client-transport-PLAN.md — Wave 2: vector-tunnels REST + DevTunnelTransport (PtyTransport impl) + connect-tunnel helper
   - [x] 08-05-picker-ui-and-actor-PLAN.md — Wave 3: DevTunnelsPickerModal + MicrosoftAuthDeviceFlowModal + devtunnels_actor + Cmd-Shift-T + Microsoft-blue tint (D-11/D-17, UI-SPEC §S1+S2)
   - [x] 08-06-agent-distribution-PLAN.md — Wave 3: cargo-deb metadata + agent-release.yml CI cross-compile x86_64+aarch64 .deb (D-01)
-  - [ ] 08-07-uat-smoke-matrix-PLAN.md — Wave 4: DT-01 spike doc + 9-item manual smoke matrix sign-off (Task 1 template authored 2026-05-21 commit b5d006e; Task 2 checkpoint:human-verify — user must walk 08-SMOKE.md end-to-end on real hardware before Phase 8 closes)
+  - [x] 08-07-uat-smoke-matrix-PLAN.md — Wave 4: DT-01 spike doc + 9-item manual smoke matrix sign-off (Task 1 template authored 2026-05-21 commit b5d006e; Task 2 checkpoint:human-verify — user must walk 08-SMOKE.md end-to-end on real hardware before Phase 8 closes)
 **Research-spike-required flag**: **YES.** Day 1 is a mandatory 1–2 day spike. Do not estimate the rest of the phase until the spike resolves the decision tree.
 **Stack additions** (conditional on spike outcome): `microsoft/dev-tunnels` at pinned SHA OR subprocess `code tunnel client` OR none (deferred). Existing `russh 0.60` + `vector-ssh` from Phase 7 carry over.
 **Risks & notes**:
@@ -270,7 +270,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 | 5. Polish (Local Daily-Driver) | 15/16 | In Progress|  |
 | 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
-| 8. Dev Tunnels Integration | 6/7 | In Progress|  |
+| 8. Dev Tunnels Integration | 7/7 | Complete   | 2026-05-22 |
 | 9. Persistence + Reconnect + tmux Auto-Attach | 0/0 | Not started | - |
 | 10. Hardening & Release | 0/0 | Not started | - |
 
@@ -321,7 +321,7 @@ At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Ev
 
 **Requirements:** TBD (likely a new `AI-*` family in REQUIREMENTS.md when promoted)
 
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 **Trigger:** After milestone v1.0.0 ships (Phase 10 release). Per PROJECT.md key decision: "must not gate terminal-core work."
 
