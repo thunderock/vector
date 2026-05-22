@@ -14,6 +14,15 @@ use parking_lot::Mutex;
 use crate::ids::PaneId;
 use crate::transport::{PtyTransport, TransportKind};
 
+/// Plan 09-04 — pane UI state for `format_tab_title` badge selection.
+/// `Active` keeps the existing `[remote]` badge; `Reconnecting` swaps it to
+/// `[reconnecting]`. Local panes ignore this variant (no badge either way).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaneUiState {
+    Active,
+    Reconnecting,
+}
+
 /// Cell-count storage for split proportions (D-60 / D-67).
 /// `first + second + 1 (divider) == axis_size_in_cells` is the invariant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,14 +215,20 @@ pub fn format_tab_title(
     process_name: &str,
     cwd: Option<&Path>,
     kind: crate::transport::TransportKind,
+    ui_state: PaneUiState,
 ) -> String {
     let base = match cwd.and_then(Path::file_name).and_then(|s| s.to_str()) {
         Some(stem) if !stem.is_empty() => format!("{process_name}: {stem}"),
         _ => process_name.to_owned(),
     };
-    match kind {
-        crate::transport::TransportKind::Local => base,
-        crate::transport::TransportKind::DevTunnel => format!("{base} [remote]"),
+    match (kind, ui_state) {
+        (crate::transport::TransportKind::Local, _) => base,
+        (crate::transport::TransportKind::DevTunnel, PaneUiState::Active) => {
+            format!("{base} [remote]")
+        }
+        (crate::transport::TransportKind::DevTunnel, PaneUiState::Reconnecting) => {
+            format!("{base} [reconnecting]")
+        }
     }
 }
 
@@ -239,20 +254,54 @@ mod tests {
 
     #[test]
     fn format_tab_title_remote_appends_suffix() {
-        let s = format_tab_title("zsh", None, TransportKind::DevTunnel);
+        let s = format_tab_title("zsh", None, TransportKind::DevTunnel, PaneUiState::Active);
         assert!(s.ends_with(" [remote]"), "got: {s}");
     }
 
     #[test]
     fn format_tab_title_local_no_suffix() {
-        let s = format_tab_title("zsh", None, TransportKind::Local);
+        let s = format_tab_title("zsh", None, TransportKind::Local, PaneUiState::Active);
         assert!(!s.contains("[remote]"), "got: {s}");
     }
 
     #[test]
     fn format_tab_title_remote_with_cwd() {
         let cwd = PathBuf::from("/Users/me/vector");
-        let s = format_tab_title("zsh", Some(&cwd), TransportKind::DevTunnel);
+        let s = format_tab_title(
+            "zsh",
+            Some(&cwd),
+            TransportKind::DevTunnel,
+            PaneUiState::Active,
+        );
         assert_eq!(s, "zsh: vector [remote]");
+    }
+
+    #[test]
+    fn format_tab_title_reconnecting_appends_reconnecting() {
+        let s = format_tab_title(
+            "zsh",
+            None,
+            TransportKind::DevTunnel,
+            PaneUiState::Reconnecting,
+        );
+        assert!(s.ends_with(" [reconnecting]"), "got: {s}");
+    }
+
+    #[test]
+    fn format_tab_title_active_keeps_remote() {
+        let s = format_tab_title("zsh", None, TransportKind::DevTunnel, PaneUiState::Active);
+        assert!(s.ends_with(" [remote]"), "got: {s}");
+        assert!(!s.contains("[reconnecting]"), "got: {s}");
+    }
+
+    #[test]
+    fn format_tab_title_local_never_emits_reconnecting() {
+        let s_active = format_tab_title("zsh", None, TransportKind::Local, PaneUiState::Active);
+        let s_reconn =
+            format_tab_title("zsh", None, TransportKind::Local, PaneUiState::Reconnecting);
+        assert!(!s_active.contains("[reconnecting]"), "got: {s_active}");
+        assert!(!s_reconn.contains("[reconnecting]"), "got: {s_reconn}");
+        assert!(!s_active.contains("[remote]"), "got: {s_active}");
+        assert!(!s_reconn.contains("[remote]"), "got: {s_reconn}");
     }
 }

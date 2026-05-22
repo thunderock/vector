@@ -1717,7 +1717,12 @@ impl ApplicationHandler<UserEvent> for App {
                     .map_or((None, vector_mux::TransportKind::Local), |p| {
                         (p.cwd.lock().clone(), p.transport_kind())
                     });
-                let title = vector_mux::format_tab_title(&label, cwd.as_deref(), kind);
+                let title = vector_mux::format_tab_title(
+                    &label,
+                    cwd.as_deref(),
+                    kind,
+                    vector_mux::PaneUiState::Active,
+                );
                 tracing::info!(?pane_id, %title, "pane title changed");
                 if let Some(aw) = self.primary_window() {
                     aw.window.set_title(&format!("Vector — {title}"));

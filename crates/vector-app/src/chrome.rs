@@ -8,13 +8,14 @@
 //! `App::render_window` without triggering a wgpu double-mutable-borrow on
 //! RenderHost's surface/compositor.
 
-use vector_render::{PickerPass, SearchBarPass, TintStripePipeline, ToastPass};
+use vector_render::{PickerPass, ReconnectPass, SearchBarPass, TintStripePipeline, ToastPass};
 
 pub struct ChromePipelines {
     pub tint: TintStripePipeline,
     pub search_bar: SearchBarPass,
     pub toast: ToastPass,
     pub picker: PickerPass,
+    pub reconnect: ReconnectPass,
 }
 
 impl ChromePipelines {
@@ -24,6 +25,7 @@ impl ChromePipelines {
             search_bar: SearchBarPass::new(device, format),
             toast: ToastPass::new(device, format),
             picker: PickerPass::new(device, format),
+            reconnect: ReconnectPass::new(device, format),
         }
     }
 }

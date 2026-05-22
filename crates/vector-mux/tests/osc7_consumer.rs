@@ -2,20 +2,25 @@
 
 use std::path::PathBuf;
 
-use vector_mux::{format_tab_title, spawn_cwd_for_with_proc, PaneCwdView, TransportKind};
+use vector_mux::{
+    format_tab_title, spawn_cwd_for_with_proc, PaneCwdView, PaneUiState, TransportKind,
+};
 
 #[test]
 fn tab_title_with_osc7_cwd_stem() {
     let cwd = PathBuf::from("/Users/me/vector");
     assert_eq!(
-        format_tab_title("zsh", Some(&cwd), TransportKind::Local),
+        format_tab_title("zsh", Some(&cwd), TransportKind::Local, PaneUiState::Active),
         "zsh: vector"
     );
 }
 
 #[test]
 fn tab_title_without_osc7_falls_back() {
-    assert_eq!(format_tab_title("zsh", None, TransportKind::Local), "zsh");
+    assert_eq!(
+        format_tab_title("zsh", None, TransportKind::Local, PaneUiState::Active),
+        "zsh"
+    );
 }
 
 #[test]
@@ -23,7 +28,7 @@ fn tab_title_handles_root_path() {
     // Root has no file_name → bare process name.
     let cwd = PathBuf::from("/");
     assert_eq!(
-        format_tab_title("zsh", Some(&cwd), TransportKind::Local),
+        format_tab_title("zsh", Some(&cwd), TransportKind::Local, PaneUiState::Active),
         "zsh"
     );
 }
