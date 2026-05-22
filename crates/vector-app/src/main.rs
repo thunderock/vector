@@ -80,6 +80,10 @@ fn main() -> Result<()> {
                 let local_domain = Arc::new(
                     LocalDomain::new().expect("LocalDomain::new (shell resolution failed)"),
                 );
+                // Plan 09-03: keep a `Domain` trait-object handle for the actor's
+                // reconnect path. LocalDomain's `reconnect_one_shot` returns
+                // `Ok(None)` — i.e. preserves legacy "exit on EOF" behavior.
+                let local_domain_dyn: Arc<dyn vector_mux::Domain> = local_domain.clone();
                 let mux = Mux::new_with_clipboard(local_domain, clip_tx);
                 Mux::install(Arc::clone(&mux));
 
@@ -94,7 +98,13 @@ fn main() -> Result<()> {
 
                 if let Some(pane) = mux.pane(pane_id) {
                     if let Some(transport) = pane.take_transport() {
-                        router_io.lock().spawn_pane(pane_id, transport);
+                        router_io.lock().spawn_pane(
+                            pane_id,
+                            transport,
+                            Arc::clone(&local_domain_dyn),
+                            String::new(),
+                            tokio_util::sync::CancellationToken::new(),
+                        );
                     }
                 }
 
@@ -154,6 +164,7 @@ fn main() -> Result<()> {
 
                 let router_s = Arc::clone(&router);
                 let mux_s = Arc::clone(&mux);
+                let local_domain_split = Arc::clone(&local_domain_dyn);
                 let mut split_req_rx = split_req_rx;
                 drop(tokio::spawn(async move {
                     while let Some((parent, dir)) = split_req_rx.recv().await {
@@ -161,7 +172,13 @@ fn main() -> Result<()> {
                             Ok(new_pane_id) => {
                                 if let Some(pane) = mux_s.pane(new_pane_id) {
                                     if let Some(transport) = pane.take_transport() {
-                                        router_s.lock().spawn_pane(new_pane_id, transport);
+                                        router_s.lock().spawn_pane(
+                                            new_pane_id,
+                                            transport,
+                                            Arc::clone(&local_domain_split),
+                                            String::new(),
+                                            tokio_util::sync::CancellationToken::new(),
+                                        );
                                         tracing::info!(
                                             ?parent,
                                             new = ?new_pane_id,
