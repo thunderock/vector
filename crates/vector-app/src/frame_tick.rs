@@ -61,6 +61,14 @@ impl CoalesceBuffer {
     pub fn is_empty(&self) -> bool {
         self.buf.lock().is_empty()
     }
+
+    /// Plan 09-03: clone the current buffer for byte-integrity assertions.
+    /// Production code MUST NOT use this — it allocates and breaks the
+    /// frame-tick contract of "drain at most once per tick".
+    #[doc(hidden)]
+    pub fn peek_snapshot(&self) -> Vec<u8> {
+        self.buf.lock().to_vec()
+    }
 }
 
 /// Frame period in ms based on the LPM flag.
