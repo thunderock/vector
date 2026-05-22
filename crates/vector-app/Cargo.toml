@@ -51,6 +51,10 @@ cargo-husky = { version = "1", default-features = false, features = ["user-hooks
 # Re-enter our own crate with `test-hooks` so integration tests in `tests/` see
 # the cfg(test)-style mock for SKE Carbon FFI (POLISH-08 / D-80).
 vector-app = { path = ".", version = "2026.5.10", features = ["test-hooks"] }
+# Plan 09-03: tokio::time::pause/advance for backoff-schedule determinism in
+# tests/pty_actor_reconnect.rs. `test-util` is dev-only — no production
+# binary impact.
+tokio = { workspace = true, features = ["test-util", "macros", "rt", "rt-multi-thread", "sync", "time", "io-util"] }
 
 [features]
 default = []
