@@ -71,8 +71,8 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 
 - [ ] **PERSIST-01**: On TCP/SSH disconnect, the affected pane enters a `Reconnecting` state, the local grid + scrollback are kept in memory, and a reconnect overlay is shown
 - [ ] **PERSIST-02**: `Domain::reconnect()` re-establishes the transport with exponential backoff and hot-swaps the `PtyTransport` under the live `Pane` without dropping bytes already in flight
-- [ ] **PERSIST-03**: Remote sessions auto-attach to a Vector-managed tmux session (`tmux new -A -s vector-{profile-id}`) so the remote shell state survives full disconnects
-- [ ] **PERSIST-04**: tmux pass-through correctness is verified by an end-to-end smoke test (real tmux 3.4+ on a Codespace) — DCS-wrapped OSC 52, DECSCUSR, mouse modes, and `TERM` advertisement all round-trip cleanly
+- [ ] **PERSIST-03** *(revised 2026-05-22)*: Vector does NOT auto-attach to tmux on remote connect. Remote panes drop into the user's default shell; the user is responsible for starting and maintaining tmux on the remote if they want shell-state persistence across full disconnects. See `.planning/phases/09-persistence-reconnect-tmux-auto-attach/09-CONTEXT.md` D-04..D-06 for rationale.
+- [ ] **PERSIST-04** *(revised 2026-05-22)*: tmux pass-through correctness is verified by an end-to-end smoke test against a live Dev Tunnels agent on a remote box where THE USER has started tmux 3.4+ — Vector's terminal correctly forwards DCS-wrapped OSC 52, DECSCUSR cursor shapes, mouse modes 1000/1002/1003 with SGR 1006, and `TERM=xterm-256color` advertisement. (Pitfall 8 reverified at the seam; Vector still chunks outbound OSC 52 payloads at 58 bytes per Phase 5 D-71.)
 
 ### Hardening & Release
 

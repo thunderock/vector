@@ -20,7 +20,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 - [ ] **Phase 6: GitHub Auth + Codespaces Picker** — OAuth device flow, Keychain token storage, codespace picker UI; clicking "Connect" still shows a placeholder.
 - [~] **Phase 7: Remote SSH Transport Scaffolding (DESCOPED 2026-05-19)** — pivoted away from Codespaces. Reusable scaffolding shipped: `vector-ssh` crate (russh client, SshChannelTransport, ChildStdioStream, host-key fingerprint handler), `Mux::create_tab_async_with_transport`, `format_tab_title` with `TransportKind`, `[remote]` badge. Codespace-specific code reverted.
 - [x] **Phase 8: VS Code Remote Tunnels Connect** — Owns DT-01..04. User runs `code tunnel` on their own machine (EC2, home server); Vector attaches over the Microsoft Dev Tunnels relay. Day-1 spike resolves the subprocess/vendor/defer decision tree. (completed 2026-05-22)
-- [ ] **Phase 9: Persistence + Reconnect + tmux Auto-Attach** — `Domain::reconnect()` hot-swap, "Reconnecting…" overlay, `tmux new -A -s vector-{profile-id}` on connect.
+- [ ] **Phase 9: Persistence + Reconnect** — `Domain::reconnect()` hot-swap, inline "Reconnecting…" status bar on remote panes. **Scope revised 2026-05-22:** Vector no longer auto-attaches to tmux; user owns tmux lifecycle on the remote (see 09-CONTEXT.md D-04..D-06).
 - [ ] **Phase 10: Hardening & Release** — Renderer snapshot + VT conformance suites in CI, perf gates, tagged unsigned Universal DMG on GitHub Releases.
 
 ## Phase Details
@@ -227,22 +227,23 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - `pty-req` must send initial cols/rows and `window-change` on resize.
   - Re-check Out-of-Scope: no port-forwarding panel, no clean-room reverse-engineering of the relay protocol.
 
-### Phase 9: Persistence + Reconnect + tmux Auto-Attach
-**Goal**: The user closes their laptop lid for a meeting, reopens it, and a Codespaces pane reconnects automatically with full session state preserved via tmux.
-**Depends on**: Phase 8 (Dev Tunnels transport) — or, if Phase 8 deferred to v2, this phase scales back to local-only persistence.
-**Requirements**: PERSIST-01, PERSIST-02, PERSIST-03, PERSIST-04
+### Phase 9: Persistence + Reconnect
+**Goal**: The user closes their laptop lid for a meeting, reopens it, and a Dev Tunnels pane reconnects automatically — the local grid + scrollback never go blank, an inline status bar shows reconnect progress, and the transport hot-swaps under the live `Pane` without losing bytes already in flight. Shell-state-across-disconnect persistence is the user's responsibility (they run tmux themselves on the remote if they want it).
+**Depends on**: Phase 8 (Dev Tunnels transport).
+**Requirements**: PERSIST-01, PERSIST-02, PERSIST-03 (revised), PERSIST-04 (revised)
 **Success Criteria** (what must be TRUE):
-  1. On TCP/SSH disconnect, the affected pane enters a `Reconnecting` state, the local grid + scrollback stay in memory (no blank screen), and a "Reconnecting…" overlay appears.
-  2. `Domain::reconnect()` re-establishes the transport with exponential backoff and hot-swaps the `PtyTransport` under the live `Pane` without dropping bytes already in flight — verified by a test that disconnects and reconnects with `cat /dev/urandom` running and asserts no byte loss.
-  3. Codespace and Dev Tunnel sessions auto-attach to a Vector-managed tmux session on connect (`tmux new -A -s vector-{profile-id}`) so the remote shell state survives full disconnects.
-  4. An end-to-end smoke test against real tmux 3.4+ on a live Codespace verifies DCS-wrapped OSC 52, DECSCUSR cursor shapes, mouse modes 1000/1002/1003 with SGR 1006, and `TERM=xterm-256color` advertisement all round-trip cleanly.
+  1. On TCP/SSH disconnect, the affected pane enters a `Reconnecting` state, the local grid + scrollback stay in memory (no blank screen), input is locked (not queued), and an inline status bar at the top of the pane shows `Reconnecting to {profile}… (attempt N)`.
+  2. `Domain::reconnect()` re-establishes the transport with exponential backoff (1s / 2s / 4s / 8s / 16s / 30s cap, retries forever at the cap) and hot-swaps the `PtyTransport` under the live `Pane` without dropping bytes already in flight — verified by a test that disconnects and reconnects with `cat /dev/urandom` running and asserts no byte loss.
+  3. **(REVISED 2026-05-22)** Vector does NOT auto-attach to tmux. Remote panes connect to the user's default shell; the user runs tmux themselves on the remote if they want shell-state persistence across full disconnects. PERSIST-03 captures the same constraint at the requirement level.
+  4. **(REVISED 2026-05-22)** An end-to-end smoke test against a live Dev Tunnels agent on a remote box running tmux 3.4+ verifies that Vector's terminal correctly passes through DCS-wrapped OSC 52, DECSCUSR cursor shapes, mouse modes 1000/1002/1003 with SGR 1006, and `TERM=xterm-256color` advertisement when the user is running tmux themselves. The smoke test still verifies Pitfall 8 (DCS passthrough, ~60-char chunking) on the live path — it just doesn't depend on Vector having started tmux.
 **Plans**: TBD
-**Stack additions**: `Domain::reconnect()` state machine (Active → Reconnecting → Swapping → Active), reconnect overlay UI, profile-driven tmux wrapper command.
+**Stack additions**: `Domain::reconnect()` state machine (Active → Reconnecting → Swapping → Active), inline status-bar overlay UI on the renderer, transport hot-swap in the per-pane actor.
 **Risks & notes**:
-  - **DCS-wrapped OSC 52 through tmux is the known pitfall (Pitfall 8) revisited at the seam.** The Phase 5 smoke test verified the local-only path; this phase verifies the full Codespace → tmux → Vector round-trip on the live service.
+  - **DCS-wrapped OSC 52 through tmux is the known pitfall (Pitfall 8) revisited at the seam.** The Phase 5 smoke test verified the local-only path; this phase verifies the full Vector → Dev Tunnels relay → agent → user-started tmux → Vector round-trip.
   - Never hold the terminal lock across `await` (Architecture Anti-Pattern 5). Lock, mutate, drop, await.
-  - **No mosh-style state-sync protocol.** tmux on the remote is the answer (Pitfall 22).
-  - Re-check Out-of-Scope: no custom remote agent, no predictive echo.
+  - **No mosh-style state-sync protocol.** tmux on the remote is the answer for shell-state persistence — but Vector doesn't manage tmux itself (Pitfall 22 still locks the "no state-sync in Vector" stance; tmux ownership moved to the user).
+  - Re-check Out-of-Scope: no custom remote agent, no predictive echo, no Vector-managed tmux sessions, no app-restart pane restore.
+  - Canonical ref: `.planning/phases/09-persistence-reconnect-tmux-auto-attach/09-CONTEXT.md` — all decisions and the tmux scope change rationale.
 
 ### Phase 10: Hardening & Release
 **Goal**: Vector v1.0.0 is tagged on GitHub Releases with an unsigned Universal DMG; teammates can install with the documented `xattr` command.
