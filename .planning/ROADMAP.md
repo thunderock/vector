@@ -241,7 +241,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - [x] 09-02-PLAN.md — Wave 2: ReconnectableDevTunnelDomain in vector-tunnels + PERSIST-03 regression (shell: None) (PERSIST-02/03)
   - [x] 09-03-PLAN.md — Wave 2: per-pane actor state machine + backoff schedule + drain-and-swap + byte-integrity test (PERSIST-01/02)
   - [x] 09-04-PLAN.md — Wave 3: ReconnectPass wgpu pipeline + format_reconnect_text + PaneUiState + ChromePipelines wiring (PERSIST-01)
-  - [ ] 09-05-PLAN.md — Wave 4: App reconnecting_panes state + render hook + input gating + first-keystroke toast + manual UAT (PERSIST-01)
+  - [x] 09-05-PLAN.md — Wave 4: App reconnecting_panes state + render hook + input gating + first-keystroke toast + manual UAT (PERSIST-01)
   - [ ] 09-06-PLAN.md — Wave 5: live e2e smoke tests + persist-e2e CI job + 09-SMOKE.md user sign-off (PERSIST-04)
 **Stack additions**: `Domain::reconnect()` state machine (Active → Reconnecting → Swapping → Active), inline status-bar overlay UI on the renderer, transport hot-swap in the per-pane actor.
 **Risks & notes**:
@@ -278,7 +278,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 | 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
 | 8. Dev Tunnels Integration | 7/7 | Complete   | 2026-05-22 |
-| 9. Persistence + Reconnect + tmux Auto-Attach | 0/0 | Not started | - |
+| 9. Persistence + Reconnect | 5/6 | In Progress (09-01..05 landed; 09-05 Task 3 UAT deferred pending main.rs DevTunnelsActor wiring) | - |
 | 10. Hardening & Release | 0/0 | Not started | - |
 
 ## Coverage
