@@ -238,8 +238,8 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   4. **(REVISED 2026-05-22)** An end-to-end smoke test against a live Dev Tunnels agent on a remote box running tmux 3.4+ verifies that Vector's terminal correctly passes through DCS-wrapped OSC 52, DECSCUSR cursor shapes, mouse modes 1000/1002/1003 with SGR 1006, and `TERM=xterm-256color` advertisement when the user is running tmux themselves. The smoke test still verifies Pitfall 8 (DCS passthrough, ~60-char chunking) on the live path — it just doesn't depend on Vector having started tmux.
 **Plans**: 6 plans
   - [x] 09-01-PLAN.md — Wave 1: trait extension + UserEvent variants + LocalDomain Ok(None) + 7 Wave-0 test stubs (PERSIST-01/02)
-  - [ ] 09-02-PLAN.md — Wave 2: ReconnectableDevTunnelDomain in vector-tunnels + PERSIST-03 regression (shell: None) (PERSIST-02/03)
-  - [ ] 09-03-PLAN.md — Wave 2: per-pane actor state machine + backoff schedule + drain-and-swap + byte-integrity test (PERSIST-01/02)
+  - [x] 09-02-PLAN.md — Wave 2: ReconnectableDevTunnelDomain in vector-tunnels + PERSIST-03 regression (shell: None) (PERSIST-02/03)
+  - [x] 09-03-PLAN.md — Wave 2: per-pane actor state machine + backoff schedule + drain-and-swap + byte-integrity test (PERSIST-01/02)
   - [ ] 09-04-PLAN.md — Wave 3: ReconnectPass wgpu pipeline + format_reconnect_text + PaneUiState + ChromePipelines wiring (PERSIST-01)
   - [ ] 09-05-PLAN.md — Wave 4: App reconnecting_panes state + render hook + input gating + first-keystroke toast + manual UAT (PERSIST-01)
   - [ ] 09-06-PLAN.md — Wave 5: live e2e smoke tests + persist-e2e CI job + 09-SMOKE.md user sign-off (PERSIST-04)

@@ -165,7 +165,7 @@ impl PtyActorRouter {
 /// (Plan 09-03 / PERSIST-01/02). Exits cleanly only on cancellation,
 /// upstream channel close, or `Domain::reconnect_one_shot` returning
 /// `Ok(None)` (LocalDomain shell-death path).
-pub(crate) async fn pane_io_loop(
+pub async fn pane_io_loop(
     pane_id: PaneId,
     mut transport: Box<dyn PtyTransport>,
     domain: Arc<dyn Domain>,
