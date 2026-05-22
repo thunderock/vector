@@ -159,4 +159,19 @@ pub enum UserEvent {
     MicrosoftSignOutRequested,
     /// Menu "Dev Tunnels…" clicked (equivalent to Cmd-Shift-T keypress).
     OpenDevTunnelsPickerMenu,
+    // ───── Phase 9 (PERSIST-01/02) — appended; never reorder ─────
+    /// Per-pane I/O actor observed transport EOF; UI overlays inline status bar
+    /// and updates tab badge to `[reconnecting]`. Fires on initial entry to the
+    /// Reconnecting state AND on every subsequent attempt (UI uses `attempt`
+    /// for the `(attempt N)` substring per UI-SPEC §Copywriting).
+    PaneReconnecting {
+        pane_id: PaneId,
+        attempt: u32,
+        profile_label: String,
+    },
+    /// Per-pane I/O actor successfully hot-swapped a fresh transport. UI removes
+    /// the inline status bar (200 ms fade-out) and reverts tab badge to `[remote]`.
+    PaneReconnected {
+        pane_id: PaneId,
+    },
 }
