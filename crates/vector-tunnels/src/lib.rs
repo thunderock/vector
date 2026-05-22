@@ -7,6 +7,6 @@ pub mod model;
 pub mod transport;
 
 pub use api::{ApiError, DevTunnelsApi, TUNNELS_BASE_URL};
-pub use domain::connect_tunnel;
+pub use domain::{connect_tunnel, ReconnectableDevTunnelDomain};
 pub use model::{AuthProvider, TunnelEndpoint, TunnelRecord};
 pub use transport::{DevTunnelTransport, TransportError, AGENT_PORT};
