@@ -165,6 +165,7 @@ impl PtyActorRouter {
 /// (Plan 09-03 / PERSIST-01/02). Exits cleanly only on cancellation,
 /// upstream channel close, or `Domain::reconnect_one_shot` returning
 /// `Ok(None)` (LocalDomain shell-death path).
+#[allow(clippy::too_many_arguments)]
 pub async fn pane_io_loop(
     pane_id: PaneId,
     mut transport: Box<dyn PtyTransport>,
@@ -223,7 +224,6 @@ pub async fn pane_io_loop(
                             tracing::warn!(?pane_id, ?err, "post-reconnect resize failed");
                         }
                         sink.send_user_event(UserEvent::PaneReconnected { pane_id });
-                        continue 'outer;
                     }
                 }
             }
@@ -239,6 +239,7 @@ enum ActiveExit {
     TransportDead,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_active_segment(
     pane_id: PaneId,
     transport: &mut Box<dyn PtyTransport>,

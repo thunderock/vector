@@ -60,13 +60,60 @@ fn reconnect_overlay_impossibly_narrow_returns_none() {
 }
 
 #[test]
-#[ignore = "Wave 0 — implemented in Plan 09-05"]
 fn input_locked_in_reconnecting_state() {
-    unimplemented!()
+    // Plan 09-05: the App-level keystroke gate consults `reconnecting_panes`.
+    // Test the extracted helper directly so we don't have to stand up a winit
+    // event loop / Mux singleton just to assert this branch.
+    use std::collections::HashMap;
+    use vector_app::app::{pane_input_locked, ReconnectingState};
+    use vector_mux::PaneId;
+
+    let pane = PaneId(42);
+    let other = PaneId(99);
+    let mut map: HashMap<PaneId, ReconnectingState> = HashMap::new();
+    // Not reconnecting: input flows.
+    assert!(!pane_input_locked(&map, pane));
+    // Insert pane into reconnecting state: input must drop.
+    map.insert(
+        pane,
+        ReconnectingState {
+            profile_label: "corp-dev-box-42".to_string(),
+            attempt: 1,
+            started_at: std::time::Instant::now(),
+            fade_in_started_at: None,
+        },
+    );
+    assert!(pane_input_locked(&map, pane));
+    // Unrelated pane is unaffected (per-pane lock).
+    assert!(!pane_input_locked(&map, other));
+    // After PaneReconnected the entry is removed; lock releases.
+    map.remove(&pane);
+    assert!(!pane_input_locked(&map, pane));
 }
 
 #[test]
-#[ignore = "Wave 0 — implemented in Plan 09-05"]
 fn tab_badge_during_reconnect() {
-    unimplemented!()
+    // UI-SPEC §S4 — tab title transitions [remote] → [reconnecting] → [remote].
+    use vector_mux::{format_tab_title, PaneUiState, TransportKind};
+
+    // Active: badge is `[remote]`.
+    let active = format_tab_title("zsh", None, TransportKind::DevTunnel, PaneUiState::Active);
+    assert!(active.ends_with(" [remote]"), "got: {active}");
+    assert!(!active.contains("[reconnecting]"), "got: {active}");
+
+    // Reconnecting: badge flips to `[reconnecting]`.
+    let reconn = format_tab_title(
+        "zsh",
+        None,
+        TransportKind::DevTunnel,
+        PaneUiState::Reconnecting,
+    );
+    assert!(reconn.ends_with(" [reconnecting]"), "got: {reconn}");
+    assert!(!reconn.contains("[remote]"), "got: {reconn}");
+
+    // Local panes never flip — they cannot reconnect.
+    let local_reconn =
+        format_tab_title("zsh", None, TransportKind::Local, PaneUiState::Reconnecting);
+    assert!(!local_reconn.contains("[reconnecting]"), "got: {local_reconn}");
+    assert!(!local_reconn.contains("[remote]"), "got: {local_reconn}");
 }

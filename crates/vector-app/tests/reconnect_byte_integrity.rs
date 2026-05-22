@@ -4,6 +4,8 @@
 //! path. If a regression silently drops bytes when the old transport dies
 //! mid-stream, these tests fail.
 
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::type_complexity)]
+
 use std::sync::Arc;
 use std::time::Duration;
 

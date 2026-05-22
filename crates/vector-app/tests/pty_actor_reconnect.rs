@@ -4,6 +4,8 @@
 //! `Domain`, and `FakeTransport` (see tests/common/mod.rs). Uses
 //! `tokio::time::pause()` for deterministic schedule assertions.
 
+#![allow(clippy::type_complexity)]
+
 use std::sync::Arc;
 use std::time::Duration;
 

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -37,6 +37,26 @@ pub struct PaneRectPx {
     pub y_px: f32,
     pub w_px: f32,
     pub h_px: f32,
+}
+
+/// Plan 09-05 — per-pane reconnect bookkeeping for the inline status bar.
+#[derive(Debug, Clone)]
+pub struct ReconnectingState {
+    pub profile_label: String,
+    pub attempt: u32,
+    pub started_at: Instant,
+    pub fade_in_started_at: Option<Instant>,
+}
+
+/// Plan 09-05 — pure helper for the input-lock gate. Extracted so tests can
+/// assert the gate behavior without standing up a real `App` (the field
+/// `reconnecting_panes` is private; the gate is what the test cares about).
+#[must_use]
+pub fn pane_input_locked<S: std::hash::BuildHasher>(
+    reconnecting: &HashMap<PaneId, ReconnectingState, S>,
+    pane_id: PaneId,
+) -> bool {
+    reconnecting.contains_key(&pane_id)
 }
 
 /// D-66 active-pane border color (light blue accent).
@@ -146,6 +166,17 @@ pub struct App {
     microsoft_auth_modal: Option<crate::microsoft_auth_modal::MicrosoftAuthDeviceFlowModal>,
     /// Phase 8 / Plan 08-05 — live DevTunnelsPickerModal.
     devtunnels_modal: Option<crate::devtunnels_modal::DevTunnelsPickerModal>,
+    /// Plan 09-05 / PERSIST-01 — per-pane reconnect state. Drives the inline
+    /// status bar render hook, the keystroke gate, and the tab badge flip.
+    reconnecting_panes: HashMap<PaneId, ReconnectingState>,
+    /// Plan 09-05 / PERSIST-01 — per-pane cancellation tokens for tunnel
+    /// panes. Cmd-W fires `.cancel()` so the reconnect backoff loop exits
+    /// promptly instead of dragging the close UX behind the next backoff slot.
+    pane_cancel_tokens: HashMap<PaneId, tokio_util::sync::CancellationToken>,
+    /// Plan 09-05 / PERSIST-01 — pane ids that already saw the one-shot
+    /// "Input ignored — reconnecting" toast for the CURRENT Reconnecting
+    /// span. Cleared on `PaneReconnected` / pane close.
+    reconnect_first_keystroke_shown: HashSet<PaneId>,
 }
 
 impl App {
@@ -192,6 +223,10 @@ impl App {
             devtunnels_cmd_tx: None,
             microsoft_auth_modal: None,
             devtunnels_modal: None,
+            // Plan 09-05 / PERSIST-01 — per-pane reconnect bookkeeping.
+            reconnecting_panes: HashMap::new(),
+            pane_cancel_tokens: HashMap::new(),
+            reconnect_first_keystroke_shown: HashSet::new(),
         }
     }
 
@@ -1066,6 +1101,54 @@ impl App {
         #[allow(clippy::cast_precision_loss)]
         let surface_h = frame_height as f32;
         let active_tint_rgba = self.active_profile_tint_rgba();
+        // Plan 09-05 — per-reconnecting-pane snapshot: rect (px), alpha,
+        // background RGBA. Built BEFORE the chrome-pipeline borrow so the
+        // chrome pass can compose ReconnectPass quads at the top of each
+        // reconnecting pane. Composition order: AFTER per-pane Compositor,
+        // BEFORE TintStripe/SearchBar/Toast/Picker (UI-SPEC §Spacing).
+        let reconnect_draws: Vec<(u32, u32, u32, f32, [f32; 4])> = {
+            let now = Instant::now();
+            let mut out = Vec::new();
+            for pane_id in &leaves {
+                let pane_id = *pane_id;
+                let Some(rect) = layout.get(&pane_id) else {
+                    continue;
+                };
+                let Some(state) = self.reconnecting_panes.get_mut(&pane_id) else {
+                    continue;
+                };
+                let elapsed_ms = now
+                    .saturating_duration_since(state.started_at)
+                    .as_millis()
+                    .min(u128::from(u32::MAX)) as u32;
+                if elapsed_ms < vector_render::RECONNECT_DEBOUNCE_MS {
+                    continue; // UI-SPEC §Animation: 250 ms debounce.
+                }
+                if state.fade_in_started_at.is_none() {
+                    state.fade_in_started_at = Some(now);
+                }
+                let fade_started_at = state.fade_in_started_at.unwrap_or(now);
+                let fade_elapsed = now
+                    .saturating_duration_since(fade_started_at)
+                    .as_millis()
+                    .min(u128::from(u32::MAX)) as u32;
+                let alpha = (fade_elapsed.min(vector_render::RECONNECT_FADE_IN_MS) as f32)
+                    / (vector_render::RECONNECT_FADE_IN_MS as f32);
+                #[allow(clippy::cast_precision_loss)]
+                let x_px = (f32::from(rect.x) * cell_w as f32) as u32;
+                #[allow(clippy::cast_precision_loss)]
+                let y_px = (f32::from(rect.y) * cell_h as f32) as u32;
+                #[allow(clippy::cast_precision_loss)]
+                let w_px = (f32::from(rect.w) * cell_w as f32) as u32;
+                // UI-SPEC §Color row 1 — `chrome.surface` at α=0.9.
+                // Dark-mode default; light-mode swap is a backlog polish item
+                // (Phase 9 ships with the dark token only since `ChromePalette`
+                // is not yet plumbed through the App-level render path).
+                let bg_rgba = [0.110_f32, 0.110, 0.118, 0.90];
+                out.push((x_px, y_px, w_px, alpha, bg_rgba));
+            }
+            out
+        };
         // Search bar snapshot (open flag + rect + no_match)
         let search_bar_draw = if self.search_bar.open {
             self.active_pane_rect.map(|rect| {
@@ -1161,6 +1244,24 @@ impl App {
                     multiview_mask: None,
                 });
 
+                // 0. Plan 09-05 — per-pane reconnect status bar. Drawn FIRST
+                //    (before tint) so chrome surfaces overlay on top of it,
+                //    matching UI-SPEC §Spacing composition order (per-pane
+                //    Compositor → ReconnectPass → TintStripe → SearchBar →
+                //    Toast → Picker). One quad per reconnecting pane; loop
+                //    update+draw because ChromeQuadPipeline holds a single
+                //    quad uniform.
+                for (x_px, y_px, w_px, alpha, bg_rgba) in &reconnect_draws {
+                    chrome.reconnect.update(
+                        host.queue(),
+                        (*x_px, *y_px, *w_px, vector_render::RECONNECT_BAR_HEIGHT_PX),
+                        (frame_width, frame_height),
+                        *alpha,
+                        *bg_rgba,
+                    );
+                    chrome.reconnect.draw(&mut rpass);
+                }
+
                 // 1. Tint stripe (UI-SPEC §5.1, §9.3) — skip if no tint.
                 if active_tint_rgba.is_some() {
                     chrome.tint.set_color(host.queue(), active_tint_rgba);
@@ -1227,6 +1328,60 @@ impl App {
         } else {
             // No chrome pipelines available — still present the terminal frame.
             frame.present();
+        }
+    }
+
+    /// Plan 09-05 / PERSIST-01 — gate keystroke + paste bytes by the active
+    /// pane's reconnect state. Returns `true` if bytes were forwarded; `false`
+    /// if dropped because the pane is reconnecting. Drives the one-shot
+    /// `Input ignored — reconnecting` toast (Info, first dropped keystroke
+    /// per Reconnecting span only).
+    fn try_send_pty_bytes(&mut self, bytes: Vec<u8>) -> bool {
+        let active = Mux::try_get().and_then(|m| m.any_active_pane_id());
+        if let Some(pane_id) = active {
+            if self.reconnecting_panes.contains_key(&pane_id) {
+                // CONTEXT D-03: input locked during reconnect; drop silently.
+                if !self.reconnect_first_keystroke_shown.contains(&pane_id) {
+                    self.toasts
+                        .show(ToastBanner::info("Input ignored \u{2014} reconnecting"));
+                    self.reconnect_first_keystroke_shown.insert(pane_id);
+                }
+                return false;
+            }
+        }
+        self.input_bridge.send_bytes(bytes);
+        true
+    }
+
+    /// Plan 09-05 / PERSIST-01 — current UI state for a pane (Active vs
+    /// Reconnecting). Drives the tab badge swap in `format_tab_title`.
+    fn pane_ui_state(&self, pane_id: PaneId) -> vector_mux::PaneUiState {
+        if self.reconnecting_panes.contains_key(&pane_id) {
+            vector_mux::PaneUiState::Reconnecting
+        } else {
+            vector_mux::PaneUiState::Active
+        }
+    }
+
+    /// Plan 09-05 / PERSIST-01 — re-set the window title for `pane_id` using
+    /// the current cached process name + cwd + pane UI state. Fires on
+    /// `PaneReconnecting` / `PaneReconnected` so the tab badge flips between
+    /// `[remote]` and `[reconnecting]` without waiting for the next
+    /// `PaneTitleChanged` event.
+    fn update_tab_title_for_pane(&mut self, pane_id: PaneId) {
+        let Some(mux) = Mux::try_get() else {
+            return;
+        };
+        let Some(pane) = mux.pane(pane_id) else {
+            return;
+        };
+        let process_name = pane.last_proc_name.lock().clone();
+        let cwd = pane.cwd.lock().clone();
+        let kind = pane.transport_kind();
+        let ui_state = self.pane_ui_state(pane_id);
+        let title = vector_mux::format_tab_title(&process_name, cwd.as_deref(), kind, ui_state);
+        if let Some(aw) = self.primary_window() {
+            aw.window.set_title(&format!("Vector — {title}"));
         }
     }
 
@@ -1494,6 +1649,14 @@ impl App {
             MuxCommand::ClosePane => {
                 if let Some(mux) = Mux::try_get() {
                     if let Some(active) = mux.any_active_pane_id() {
+                        // Plan 09-05: fire the per-pane cancel token BEFORE
+                        // closing so the reconnect backoff loop exits within
+                        // ms instead of dragging the UX behind the next slot.
+                        if let Some(cancel) = self.pane_cancel_tokens.remove(&active) {
+                            cancel.cancel();
+                        }
+                        self.reconnecting_panes.remove(&active);
+                        self.reconnect_first_keystroke_shown.remove(&active);
                         let result = mux.close_pane(active);
                         tracing::info!(?result, "close_pane cascade");
                         if matches!(result, vector_mux::CloseResult::LastWindowClosed) {
@@ -1712,17 +1875,15 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::PaneTitleChanged { pane_id, label } => {
                 // D-79 B2: append `: {cwd_stem}` when OSC 7 ring is non-empty.
                 // Plan 07-04 / CS-06: append ` [remote]` for non-Local transports.
+                // Plan 09-05: append ` [reconnecting]` while pane is in
+                // Reconnecting state (overrides `[remote]`).
                 let (cwd, kind) = Mux::try_get()
                     .and_then(|m| m.pane(pane_id))
                     .map_or((None, vector_mux::TransportKind::Local), |p| {
                         (p.cwd.lock().clone(), p.transport_kind())
                     });
-                let title = vector_mux::format_tab_title(
-                    &label,
-                    cwd.as_deref(),
-                    kind,
-                    vector_mux::PaneUiState::Active,
-                );
+                let ui_state = self.pane_ui_state(pane_id);
+                let title = vector_mux::format_tab_title(&label, cwd.as_deref(), kind, ui_state);
                 tracing::info!(?pane_id, %title, "pane title changed");
                 if let Some(aw) = self.primary_window() {
                     aw.window.set_title(&format!("Vector — {title}"));
@@ -2055,10 +2216,36 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::OpenDevTunnelsPickerMenu => {
                 self.handle_open_devtunnels_picker();
             }
-            // Phase 9 PERSIST-01/02 — consumers land in Plan 09-05. No-op for now.
-            UserEvent::PaneReconnecting { .. }
-            | UserEvent::PaneReconnected { .. }
-            | UserEvent::DevTunnelPaneCancelToken { .. } => {}
+            // Plan 09-05 / PERSIST-01 — reconnect state machine drives the
+            // inline status bar render hook + tab badge flip + input gate.
+            UserEvent::PaneReconnecting {
+                pane_id,
+                attempt,
+                profile_label,
+            } => {
+                let entry = self
+                    .reconnecting_panes
+                    .entry(pane_id)
+                    .or_insert_with(|| ReconnectingState {
+                        profile_label: profile_label.clone(),
+                        attempt,
+                        started_at: Instant::now(),
+                        fade_in_started_at: None,
+                    });
+                entry.attempt = attempt;
+                entry.profile_label = profile_label;
+                self.update_tab_title_for_pane(pane_id);
+                self.request_redraw_all();
+            }
+            UserEvent::PaneReconnected { pane_id } => {
+                self.reconnecting_panes.remove(&pane_id);
+                self.reconnect_first_keystroke_shown.remove(&pane_id);
+                self.update_tab_title_for_pane(pane_id);
+                self.request_redraw_all();
+            }
+            UserEvent::DevTunnelPaneCancelToken { pane_id, cancel } => {
+                self.pane_cancel_tokens.insert(pane_id, cancel);
+            }
         }
     }
 
@@ -2140,7 +2327,8 @@ impl ApplicationHandler<UserEvent> for App {
                         if s.as_str() == "v" {
                             let pasted = read_clipboard().unwrap_or_default();
                             let bytes = wrap_bracketed_paste(&pasted);
-                            self.input_bridge.send_bytes(bytes);
+                            // Plan 09-05: gate on reconnecting state.
+                            self.try_send_pty_bytes(bytes);
                             return;
                         }
                         // Plan 05-10 / 05-11 Task 1 — Cmd-C native pasteboard write.
@@ -2167,7 +2355,9 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 match encode_key(&event, self.mods) {
                     Some(EncodedKey::Pty(bytes)) => {
-                        self.input_bridge.send_bytes(bytes);
+                        // Plan 09-05: gate on reconnecting state — one toast,
+                        // then silent drop, for the duration of the span.
+                        self.try_send_pty_bytes(bytes);
                         self.request_redraw(id);
                     }
                     Some(EncodedKey::Mux(cmd)) => {
