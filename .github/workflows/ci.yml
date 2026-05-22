@@ -112,6 +112,32 @@ jobs:
       - run: brew install tmux
       - run: cargo test -p vector-term --test osc52_tmux -- --ignored
 
+  # Phase 9 PERSIST-04 live e2e: real Dev Tunnels relay + user-managed tmux on a
+  # remote Linux box running `vector-tunnel-agent`. Not branch-protection required.
+  # continue-on-error: requires VECTOR_E2E_TUNNEL_ID + VECTOR_E2E_MICROSOFT_TOKEN
+  # repository secrets to be set; otherwise the tests #[ignore] themselves.
+  persist-e2e:
+    needs: [test]
+    runs-on: macos-14
+    continue-on-error: true
+    env:
+      VECTOR_E2E_TUNNEL_ID: ${{ secrets.VECTOR_E2E_TUNNEL_ID }}
+      VECTOR_E2E_MICROSOFT_TOKEN: ${{ secrets.VECTOR_E2E_MICROSOFT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-persist-e2e
+      - name: Skip when secrets absent
+        if: env.VECTOR_E2E_TUNNEL_ID == '' || env.VECTOR_E2E_MICROSOFT_TOKEN == ''
+        run: echo "VECTOR_E2E_* secrets unset; skipping live smoke test."
+      - name: Run live e2e
+        if: env.VECTOR_E2E_TUNNEL_ID != '' && env.VECTOR_E2E_MICROSOFT_TOKEN != ''
+        run: cargo test -p vector-tunnels --test live_devtunnel_smoke -- --ignored --test-threads=1
+
   build-arm64:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     needs: [lint, test, deny]
