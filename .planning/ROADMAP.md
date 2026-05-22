@@ -240,7 +240,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - [x] 09-01-PLAN.md — Wave 1: trait extension + UserEvent variants + LocalDomain Ok(None) + 7 Wave-0 test stubs (PERSIST-01/02)
   - [x] 09-02-PLAN.md — Wave 2: ReconnectableDevTunnelDomain in vector-tunnels + PERSIST-03 regression (shell: None) (PERSIST-02/03)
   - [x] 09-03-PLAN.md — Wave 2: per-pane actor state machine + backoff schedule + drain-and-swap + byte-integrity test (PERSIST-01/02)
-  - [ ] 09-04-PLAN.md — Wave 3: ReconnectPass wgpu pipeline + format_reconnect_text + PaneUiState + ChromePipelines wiring (PERSIST-01)
+  - [x] 09-04-PLAN.md — Wave 3: ReconnectPass wgpu pipeline + format_reconnect_text + PaneUiState + ChromePipelines wiring (PERSIST-01)
   - [ ] 09-05-PLAN.md — Wave 4: App reconnecting_panes state + render hook + input gating + first-keystroke toast + manual UAT (PERSIST-01)
   - [ ] 09-06-PLAN.md — Wave 5: live e2e smoke tests + persist-e2e CI job + 09-SMOKE.md user sign-off (PERSIST-04)
 **Stack additions**: `Domain::reconnect()` state machine (Active → Reconnecting → Swapping → Active), inline status-bar overlay UI on the renderer, transport hot-swap in the per-pane actor.
