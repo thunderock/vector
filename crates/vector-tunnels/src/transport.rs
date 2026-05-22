@@ -194,29 +194,54 @@ impl DevTunnelTransport {
     }
 
     /// Production constructor — wires the Microsoft Dev Tunnels relay SDK to
-    /// `new_with_stream`. **DEFERRED** until the SDK consumption decision lands
-    /// (russh-0.37 vs 0.60 dual-version cost; see Plan 08-04 §"Phase 7 vector-ssh
-    /// Status" risk). Plan 08-06 (picker actor) is the first caller; this
-    /// method's body lands then.
-    #[allow(clippy::unused_async, clippy::needless_pass_by_value)]
+    /// `new_with_stream`. Opens a relay channel to `AGENT_PORT` (32100) on the
+    /// agent's tunnel, then performs the JSON `OpenPty` handshake against it.
     pub async fn connect(
-        _tunnel: TunnelRecord,
-        _access_token: String,
-        _rows: u16,
-        _cols: u16,
+        tunnel: TunnelRecord,
+        access_token: String,
+        rows: u16,
+        cols: u16,
     ) -> Result<Self, TransportError> {
-        // VERIFY at SDK-consumption time: exact tunnels::connections::* paths.
-        // Sketch (from microsoft/dev-tunnels/rs/src/connections/relay_tunnel_client.rs):
-        //   let endpoint = tunnel.endpoints.first()
-        //       .ok_or_else(|| TransportError::Protocol("no endpoint".into()))?;
-        //   let client = tunnels::connections::RelayTunnelClient::connect(
-        //       endpoint, &access_token).await?;
-        //   let port_conn = client.connect_to_port(AGENT_PORT).await?;
-        //   let stream = port_conn.into_rw();
-        //   Self::new_with_stream(stream, rows, cols).await
-        Err(TransportError::Protocol(
-            "DevTunnelTransport::connect not yet wired — pending SDK consumption decision (Plan 08-06)".into()
-        ))
+        let our_ep = tunnel
+            .endpoints
+            .first()
+            .ok_or_else(|| TransportError::Protocol("tunnel has no endpoints".into()))?;
+        // Translate our slim TunnelEndpoint → SDK's TunnelEndpoint (only fields
+        // RelayTunnelClient::connect reads: client_relay_uri + host_public_keys).
+        let sdk_endpoint = tunnels::contracts::TunnelEndpoint {
+            id: None,
+            connection_mode: tunnels::contracts::TunnelConnectionMode::TunnelRelay,
+            host_id: our_ep.host_id.clone(),
+            host_public_keys: our_ep.host_public_keys.clone(),
+            port_uri_format: None,
+            tunnel_uri: None,
+            port_ssh_command_format: None,
+            tunnel_ssh_command: None,
+            ssh_gateway_public_key: None,
+            local_network_tunnel_endpoint: tunnels::contracts::LocalNetworkTunnelEndpoint::default(
+            ),
+            tunnel_relay_tunnel_endpoint: tunnels::contracts::TunnelRelayTunnelEndpoint {
+                host_relay_uri: None,
+                client_relay_uri: Some(our_ep.client_relay_uri.clone()),
+            },
+        };
+        let mgmt: tunnels::management::TunnelManagementClient =
+            tunnels::management::new_tunnel_management(concat!(
+                "Vector/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .into();
+        let client = tunnels::connections::RelayTunnelClient::new(mgmt);
+        let handle = client
+            .connect(&sdk_endpoint, &access_token)
+            .await
+            .map_err(|e| TransportError::Protocol(format!("relay connect: {e}")))?;
+        let port_conn = handle
+            .connect_to_port(AGENT_PORT)
+            .await
+            .map_err(|e| TransportError::Protocol(format!("connect_to_port({AGENT_PORT}): {e}")))?;
+        let stream = port_conn.into_rw();
+        Self::new_with_stream(stream, rows, cols).await
     }
 }
 

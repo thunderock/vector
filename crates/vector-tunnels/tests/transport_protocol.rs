@@ -205,3 +205,31 @@ async fn kind_is_devtunnel() {
     let (t, _r, _w) = spawn_with_handshake(24, 80).await;
     assert_eq!(t.kind(), TransportKind::DevTunnel);
 }
+
+/// Wave-3 follow-up: prove `connect()` is wired (no longer the explicit Err
+/// stub) and that endpoint validation runs before the SDK call. Empty
+/// `endpoints` must surface `Protocol("tunnel has no endpoints")`, not the
+/// old "not yet wired" message.
+#[tokio::test]
+async fn connect_rejects_tunnel_with_no_endpoints() {
+    use vector_tunnels::{DevTunnelTransport, TunnelRecord};
+    // Empty endpoints — connect() should short-circuit before touching the SDK.
+    let record: TunnelRecord = serde_json::from_str(
+        r#"{"tunnelId":"t1","name":"vector-x","labels":["vector-agent: true"]}"#,
+    )
+    .unwrap();
+    let res = DevTunnelTransport::connect(record, "tok".into(), 24, 80).await;
+    match res {
+        Err(TransportError::Protocol(msg)) => {
+            assert!(
+                msg.contains("no endpoints"),
+                "expected 'no endpoints' guard, got: {msg}"
+            );
+            assert!(
+                !msg.contains("not yet wired"),
+                "connect() still returns stub message: {msg}"
+            );
+        }
+        other => panic!("expected Protocol(no endpoints), got {other:?}"),
+    }
+}

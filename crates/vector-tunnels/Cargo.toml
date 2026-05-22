@@ -26,7 +26,7 @@ vector-secrets = { path = "../vector-secrets", version = "2026.5.10" }
 vector-tunnel-protocol = { workspace = true }
 chrono = { workspace = true }
 keyring-core = { workspace = true }
-# tunnels = { workspace = true }  # Wave 2 Plan 08-04 wires
+tunnels = { workspace = true }
 zeroize = { workspace = true }
 
 [dev-dependencies]
