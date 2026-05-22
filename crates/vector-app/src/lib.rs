@@ -174,4 +174,11 @@ pub enum UserEvent {
     PaneReconnected {
         pane_id: PaneId,
     },
+    /// Picker actor installs a per-pane cancel token after a successful Dev Tunnel
+    /// connect. App stores it; pane-close handler invokes `.cancel()` to exit
+    /// the reconnect loop promptly.
+    DevTunnelPaneCancelToken {
+        pane_id: PaneId,
+        cancel: tokio_util::sync::CancellationToken,
+    },
 }

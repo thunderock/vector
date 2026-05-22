@@ -2056,7 +2056,9 @@ impl ApplicationHandler<UserEvent> for App {
                 self.handle_open_devtunnels_picker();
             }
             // Phase 9 PERSIST-01/02 — consumers land in Plan 09-05. No-op for now.
-            UserEvent::PaneReconnecting { .. } | UserEvent::PaneReconnected { .. } => {}
+            UserEvent::PaneReconnecting { .. }
+            | UserEvent::PaneReconnected { .. }
+            | UserEvent::DevTunnelPaneCancelToken { .. } => {}
         }
     }
 

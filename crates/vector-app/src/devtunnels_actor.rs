@@ -8,17 +8,19 @@
 
 use std::sync::Arc;
 
+use parking_lot::Mutex;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use winit::event_loop::EventLoopProxy;
 
-use vector_mux::{Mux, PtyTransport, WindowId as MuxWindowId};
+use vector_mux::{Domain as MuxDomain, Mux, PtyTransport, WindowId as MuxWindowId};
 use vector_tunnels::{
     auth::{MicrosoftAuth, MicrosoftAuthError, MicrosoftTokenStore, MicrosoftTokens},
-    domain::connect_tunnel,
+    domain::{connect_tunnel, ReconnectableDevTunnelDomain},
     AuthProvider, DevTunnelsApi, TunnelRecord,
 };
 
+use crate::pty_actor::PtyActorRouter;
 use crate::UserEvent;
 
 /// UI-facing view of a `TunnelRecord` — no token-bearing fields.
@@ -71,11 +73,14 @@ pub enum Command {
 
 /// Actor state. Note: derived Debug forbidden (Pitfall 14).
 pub struct DevTunnelsActor {
-    api: DevTunnelsApi,
+    api: Arc<DevTunnelsApi>,
     microsoft_auth: MicrosoftAuth,
-    token_store: MicrosoftTokenStore,
+    token_store: Arc<MicrosoftTokenStore>,
     proxy: EventLoopProxy<UserEvent>,
     mux: Arc<Mux>,
+    /// Plan 09-05 — router handle so the actor can `spawn_pane` for tunnel
+    /// panes with the reconnectable domain + per-pane cancel token wired in.
+    router: Option<Arc<Mutex<PtyActorRouter>>>,
 }
 
 // Manual Debug — never reach into MicrosoftAuth or token_store contents.
@@ -96,12 +101,19 @@ impl DevTunnelsActor {
         proxy: EventLoopProxy<UserEvent>,
     ) -> Self {
         Self {
-            api,
+            api: Arc::new(api),
             microsoft_auth,
-            token_store,
+            token_store: Arc::new(token_store),
             proxy,
             mux,
+            router: None,
         }
+    }
+
+    /// Plan 09-05 — wire the per-pane PTY router so tunnel panes spawn with
+    /// the reconnectable domain + cancel token.
+    pub fn set_router(&mut self, router: Arc<Mutex<PtyActorRouter>>) {
+        self.router = Some(router);
     }
 
     /// Spawn the actor on `handle` and return the command sender.
@@ -214,7 +226,7 @@ impl DevTunnelsActor {
                 return;
             }
         };
-        let Some(tunnel) = records.iter().find(|r| r.tunnel_id == tunnel_id) else {
+        let Some(tunnel) = records.iter().find(|r| r.tunnel_id == tunnel_id).cloned() else {
             let _ = self.proxy.send_event(UserEvent::DevTunnelConnectFailed {
                 tunnel_id: tunnel_id.to_string(),
                 reason: "tunnel not found (renamed or deleted)".into(),
@@ -222,7 +234,7 @@ impl DevTunnelsActor {
             return;
         };
         let transport: Box<dyn PtyTransport> =
-            match connect_tunnel(&self.api, &auth, tunnel, rows, cols).await {
+            match connect_tunnel(&self.api, &auth, &tunnel, rows, cols).await {
                 Ok(t) => t,
                 Err(e) => {
                     let _ = self.proxy.send_event(UserEvent::DevTunnelConnectFailed {
@@ -232,12 +244,62 @@ impl DevTunnelsActor {
                     return;
                 }
             };
+        // Plan 09-05 — build the reconnectable domain + per-pane cancel token
+        // BEFORE installing the tab so the spawn_pane call below carries them.
+        let label = tunnel.display_name();
+        let token_store = Arc::clone(&self.token_store);
+        let auth_factory: Arc<dyn Fn() -> AuthProvider + Send + Sync> = Arc::new(move || {
+            // Fresh AuthProvider on every reconnect attempt so token rotation
+            // between attempts is observed. Falls back to an empty token if
+            // the Keychain entry is gone — the next REST call returns 401 and
+            // the actor surfaces a sign-in prompt via the normal path.
+            let tokens = token_store
+                .load()
+                .ok()
+                .flatten()
+                .map(|t| t.access_token)
+                .unwrap_or_default();
+            AuthProvider::Microsoft(tokens)
+        });
+        let domain: Arc<dyn MuxDomain> = Arc::new(ReconnectableDevTunnelDomain::new(
+            Arc::clone(&self.api),
+            auth_factory,
+            tunnel.clone(),
+            label.clone(),
+        ));
+        let cancel = CancellationToken::new();
         match self
             .mux
             .create_tab_async_with_transport(window_id, transport, rows, cols)
             .await
         {
             Ok((tab_id, pane_id)) => {
+                // Hand the live transport to the pty actor router with the
+                // reconnect-aware domain + cancel token.
+                if let Some(router) = self.router.as_ref() {
+                    if let Some(pane) = self.mux.pane(pane_id) {
+                        if let Some(transport) = pane.take_transport() {
+                            router.lock().spawn_pane(
+                                pane_id,
+                                transport,
+                                Arc::clone(&domain),
+                                label.clone(),
+                                cancel.clone(),
+                            );
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        ?pane_id,
+                        "devtunnels_actor: router not wired; tunnel pane will not drain"
+                    );
+                }
+                // Tell the App about the per-pane cancel token BEFORE the
+                // PaneReady event so the close handler always finds it.
+                let _ = self.proxy.send_event(UserEvent::DevTunnelPaneCancelToken {
+                    pane_id,
+                    cancel: cancel.clone(),
+                });
                 let _ = self.proxy.send_event(UserEvent::DevTunnelPaneReady {
                     window_id,
                     tab_id,
