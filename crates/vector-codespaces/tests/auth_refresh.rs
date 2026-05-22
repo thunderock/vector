@@ -1,11 +1,15 @@
 //! AUTH-03 401-refresh chain tests.
+mod support;
+
 use serde_json::json;
+use support::ensure_crypto_provider;
 use vector_codespaces::{ClientError, CodespacesClient};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 async fn auth_401_refresh_retry_succeeds() {
+    ensure_crypto_provider();
     let server = MockServer::start().await;
     // First /user/codespaces call: 401
     Mock::given(method("GET"))
@@ -50,6 +54,7 @@ async fn auth_401_refresh_retry_succeeds() {
 
 #[tokio::test]
 async fn auth_refresh_fails_emits_unauthenticated() {
+    ensure_crypto_provider();
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/user/codespaces"))

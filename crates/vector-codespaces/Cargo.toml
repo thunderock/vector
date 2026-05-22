@@ -24,6 +24,11 @@ zeroize.workspace = true
 vector-secrets = { path = "../vector-secrets", version = "2026.5.10" }
 
 [dev-dependencies]
+# Phase 8 brought in a second reqwest (0.13) via the `tunnels` git dep, which
+# activates rustls' `ring` provider alongside the existing `aws-lc-rs`. With
+# both features unified into rustls 0.23, the auto-detect panics. We install
+# `aws-lc-rs` explicitly at test start to match pre-Phase-8 behavior.
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "test-util"] }
 wiremock.workspace = true

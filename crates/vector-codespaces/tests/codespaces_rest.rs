@@ -1,14 +1,18 @@
 //! CS-01 / CS-02 REST tests against wiremock-scripted GitHub responses.
+mod support;
+
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
+use support::ensure_crypto_provider;
 use tokio_util::sync::CancellationToken;
 use vector_codespaces::{ClientError, CodespaceState, CodespacesClient};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn build_test_client(server: &MockServer) -> CodespacesClient {
+    ensure_crypto_provider();
     let octo = octocrab::Octocrab::builder()
         .personal_token("gho_test_token".to_string())
         .base_uri(server.uri())

@@ -53,7 +53,7 @@ fn devtunnel_domain_compiles_with_unimplemented_body() {
 }
 
 #[test]
-#[should_panic(expected = "Phase 8")]
+#[should_panic(expected = "create_tab_async_with_transport")]
 fn devtunnel_spawn_panics_with_phase_marker() {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
