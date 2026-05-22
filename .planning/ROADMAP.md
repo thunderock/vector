@@ -242,7 +242,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - [x] 09-03-PLAN.md — Wave 2: per-pane actor state machine + backoff schedule + drain-and-swap + byte-integrity test (PERSIST-01/02)
   - [x] 09-04-PLAN.md — Wave 3: ReconnectPass wgpu pipeline + format_reconnect_text + PaneUiState + ChromePipelines wiring (PERSIST-01)
   - [x] 09-05-PLAN.md — Wave 4: App reconnecting_panes state + render hook + input gating + first-keystroke toast + manual UAT (PERSIST-01)
-  - [ ] 09-06-PLAN.md — Wave 5: live e2e smoke tests + persist-e2e CI job + 09-SMOKE.md user sign-off (PERSIST-04)
+  - [x] 09-06-PLAN.md — Wave 5: live e2e smoke tests + persist-e2e CI job + 09-SMOKE.md skeleton landed (Tasks 1+2+3a); Task 3b USER smoke matrix sign-off DEFERRED — same DevTunnelsActor main.rs wiring blocker as 09-05 Task 3; PERSIST-04 pending sign-off (see 09-06-HUMAN-UAT.md joint debt with 09-05-HUMAN-UAT.md)
 **Stack additions**: `Domain::reconnect()` state machine (Active → Reconnecting → Swapping → Active), inline status-bar overlay UI on the renderer, transport hot-swap in the per-pane actor.
 **Risks & notes**:
   - **DCS-wrapped OSC 52 through tmux is the known pitfall (Pitfall 8) revisited at the seam.** The Phase 5 smoke test verified the local-only path; this phase verifies the full Vector → Dev Tunnels relay → agent → user-started tmux → Vector round-trip.
@@ -278,7 +278,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 | 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
 | 8. Dev Tunnels Integration | 7/7 | Complete   | 2026-05-22 |
-| 9. Persistence + Reconnect | 5/6 | In Progress (09-01..05 landed; 09-05 Task 3 UAT deferred pending main.rs DevTunnelsActor wiring) | - |
+| 9. Persistence + Reconnect | 6/6 | Implementation complete with UAT debt (09-01..06 landed; 09-05 Task 3 + 09-06 Task 3b UAT sign-offs deferred — joint debt blocked by DevTunnelsActor main.rs wiring; PERSIST-04 Pending) | - |
 | 10. Hardening & Release | 0/0 | Not started | - |
 
 ## Coverage

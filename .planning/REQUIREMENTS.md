@@ -72,7 +72,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 - [x] **PERSIST-01**: On TCP/SSH disconnect, the affected pane enters a `Reconnecting` state, the local grid + scrollback are kept in memory, and a reconnect overlay is shown
 - [x] **PERSIST-02**: `Domain::reconnect()` re-establishes the transport with exponential backoff and hot-swaps the `PtyTransport` under the live `Pane` without dropping bytes already in flight
 - [x] **PERSIST-03** *(revised 2026-05-22)*: Vector does NOT auto-attach to tmux on remote connect. Remote panes drop into the user's default shell; the user is responsible for starting and maintaining tmux on the remote if they want shell-state persistence across full disconnects. See `.planning/phases/09-persistence-reconnect-tmux-auto-attach/09-CONTEXT.md` D-04..D-06 for rationale.
-- [ ] **PERSIST-04** *(revised 2026-05-22)*: tmux pass-through correctness is verified by an end-to-end smoke test against a live Dev Tunnels agent on a remote box where THE USER has started tmux 3.4+ — Vector's terminal correctly forwards DCS-wrapped OSC 52, DECSCUSR cursor shapes, mouse modes 1000/1002/1003 with SGR 1006, and `TERM=xterm-256color` advertisement. (Pitfall 8 reverified at the seam; Vector still chunks outbound OSC 52 payloads at 58 bytes per Phase 5 D-71.)
+- [ ] **PERSIST-04** *(revised 2026-05-22)*: tmux pass-through correctness is verified by an end-to-end smoke test against a live Dev Tunnels agent on a remote box where THE USER has started tmux 3.4+ — Vector's terminal correctly forwards DCS-wrapped OSC 52, DECSCUSR cursor shapes, mouse modes 1000/1002/1003 with SGR 1006, and `TERM=xterm-256color` advertisement. (Pitfall 8 reverified at the seam; Vector still chunks outbound OSC 52 payloads at 58 bytes per Phase 5 D-71.) **Verification status (2026-05-22):** Plan 09-06 landed the verification surface — three `#[ignore]`d + env-gated live e2e tests in `crates/vector-tunnels/tests/live_devtunnel_smoke.rs`, the `persist-e2e` CI job, and the `09-SMOKE.md` skeleton with USER-RUN tmux setup section. Automated tests are `#[ignore]`d behind `VECTOR_E2E_TUNNEL_ID` + `VECTOR_E2E_MICROSOFT_TOKEN` env vars and do NOT count as live verification. Manual UAT sign-off is pending — see `09-06-HUMAN-UAT.md` (16 pending items, status: partial). **Verified once 09-06-HUMAN-UAT signs off** — gated by the joint blocker with 09-05-HUMAN-UAT.md: a follow-up plan must construct `DevTunnelsActor` in `crates/vector-app/src/main.rs` before Cmd-Shift-T → DT picker → live tunnel pane is reachable for either UAT walk.
 
 ### Hardening & Release
 
@@ -182,7 +182,7 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | PERSIST-01 | Phase 9 | Complete |
 | PERSIST-02 | Phase 9 | Complete |
 | PERSIST-03 | Phase 9 | Complete |
-| PERSIST-04 | Phase 9 | Pending |
+| PERSIST-04 | Phase 9 | Pending (verification surface landed in Plan 09-06; manual UAT sign-off deferred — see `09-06-HUMAN-UAT.md` + joint debt with `09-05-HUMAN-UAT.md`; verified once both UATs sign off) |
 | HARDEN-01 | Phase 10 | Pending |
 | HARDEN-02 | Phase 10 | Pending |
 | HARDEN-03 | Phase 10 | Pending |
@@ -199,3 +199,4 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 *Requirements defined: 2026-05-10*
 *Last updated: 2026-05-10 — Plan 01-06 closed: BUILD-04 (tagged-release half) and BUILD-05 (xattr in README) complete in commits 4dd0c4e + 75b77b1; BUILD-02 / BUILD-04 retain pending-real-CI-run / pending-real-tagged-release caveat per 01-05 + 01-06 Outstanding Verification Debt blocks*
 *Last updated: 2026-05-12 — Plan 04-06 closed: WIN-02 + WIN-03 complete after smoke matrix re-run (items #3, #4, #8 PASS).*
+*Last updated: 2026-05-22 — Plan 09-06 closed implementation-complete with deferred UAT: verification surface (3 live e2e tests + persist-e2e CI + 09-SMOKE.md skeleton) landed; PERSIST-04 NOT marked Complete — manual UAT sign-off deferred pending DevTunnelsActor main.rs wiring (joint debt with 09-05 UAT). Verified once 09-06-HUMAN-UAT.md signs off.*

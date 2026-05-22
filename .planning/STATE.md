@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 09-05-PLAN.md (Tasks 1+2; Task 3 UAT deferred to follow-up plan — see 09-05-HUMAN-UAT.md)
-last_updated: "2026-05-22T20:52:23.525Z"
+stopped_at: Completed 09-06-PLAN.md (Tasks 1+2+3a; Task 3b UAT deferred — joint debt with 09-05; see 09-06-HUMAN-UAT.md + 09-05-HUMAN-UAT.md)
+last_updated: "2026-05-22T21:05:00.000Z"
 progress:
   total_phases: 11
   completed_phases: 6
   total_plans: 63
-  completed_plans: 60
+  completed_plans: 61
 ---
 
 # Project State: Vector
@@ -22,12 +22,12 @@ progress:
 
 **Pivoted 2026-05-19:** Phase 7 descoped from GitHub Codespaces to "Remote SSH transport scaffolding (groundwork for Phase 8 tunnels)". Codespace-specific code reverted; transport scaffolding kept. See PROJECT.md + ROADMAP.md §Phase 7.
 
-**Current focus:** Phase 09 — persistence-reconnect-tmux-auto-attach
+**Current focus:** Phase 09 verification + follow-up wiring plan (09-05 + 09-06 UAT debt — `DevTunnelsActor` main.rs wiring blocks both signed-off UATs; PERSIST-04 pending)
 
 ## Current Position
 
-Phase: 09 (persistence-reconnect-tmux-auto-attach) — EXECUTING
-Plan: 6 of 6
+Phase: 09 (persistence-reconnect-tmux-auto-attach) — IMPLEMENTATION COMPLETE WITH DEFERRED UAT
+Plan: 6 of 6 (all six implementation tasks landed; 09-05 Task 3 + 09-06 Task 3b UAT sign-offs deferred to a follow-up plan that wires `DevTunnelsActor` in `crates/vector-app/src/main.rs`)
 
 ## Phase Map
 
@@ -111,6 +111,7 @@ Plan: 6 of 6
 | Phase 09-persistence-reconnect-tmux-auto-attach P03 | 7min | 3 tasks | 7 files |
 | Phase 09-persistence-reconnect-tmux-auto-attach P04 | 3min | 3 tasks | 7 files |
 | Phase 09-persistence-reconnect-tmux-auto-attach P05 | 25min (Tasks 1+2; Task 3 deferred) | 2 of 3 (Task 3 deferred — main.rs wiring blocker) tasks | 7 files |
+| Phase 09-persistence-reconnect-tmux-auto-attach P06 | ~18min (Tasks 1+2+3a; Task 3b deferred — joint debt with 09-05) | 3 of 4 (Task 3b deferred — same main.rs wiring blocker) tasks | 5 files |
 
 ## Accumulated Context
 
@@ -209,11 +210,13 @@ Plan: 6 of 6
 
 - Plan 09-05 Task 3 live UAT cannot run until DevTunnelsActor is constructed in crates/vector-app/src/main.rs. A separate follow-up plan must wire the actor (with the App event-loop proxy) before 09-05-HUMAN-UAT.md can be walked and before Plan 09-06 live e2e smoke tests are runnable.
 
+- Plan 09-06 Task 3b (USER smoke matrix sign-off in 09-SMOKE.md) is DEFERRED — same root cause as 09-05 Task 3. Both 09-05-HUMAN-UAT.md (11 pending items) and 09-06-HUMAN-UAT.md (16 pending items: 3 automated + 13 manual) block on the SAME DevTunnelsActor main.rs wiring gap. PERSIST-04 stays Pending in REQUIREMENTS.md until both UATs sign off. The follow-up wiring plan unblocks both UATs simultaneously.
+
 ## Session Continuity
 
-**Last session:** 2026-05-22T20:52:17.135Z
+**Last session:** 2026-05-22T21:05:00.000Z
 
-**Stopped at:** Completed 09-05-PLAN.md (Tasks 1+2; Task 3 UAT deferred to follow-up plan — see 09-05-HUMAN-UAT.md)
+**Stopped at:** Completed 09-06-PLAN.md (Tasks 1+2+3a; Task 3b UAT deferred — joint debt with 09-05; see 09-06-HUMAN-UAT.md + 09-05-HUMAN-UAT.md). Phase 9 implementation complete; PERSIST-04 pending UAT sign-off pending DevTunnelsActor main.rs wiring (joint follow-up plan).
 
 **Next action:**
 
