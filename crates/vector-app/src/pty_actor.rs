@@ -285,10 +285,7 @@ async fn run_active_segment(
     }
 }
 
-async fn drain_reader_to_end(
-    reader: &mut mpsc::Receiver<Vec<u8>>,
-    coalesce: &Arc<CoalesceBuffer>,
-) {
+async fn drain_reader_to_end(reader: &mut mpsc::Receiver<Vec<u8>>, coalesce: &Arc<CoalesceBuffer>) {
     while let Some(chunk) = reader.recv().await {
         coalesce.push(&chunk);
     }

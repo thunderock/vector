@@ -23,7 +23,12 @@ const TEST_PANE_ID: PaneId = PaneId(42);
 const TEST_PROFILE: &str = "test-profile";
 
 /// Build common actor inputs.
-fn actor_channels() -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>, mpsc::Sender<(u16, u16)>, mpsc::Receiver<(u16, u16)>) {
+fn actor_channels() -> (
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+    mpsc::Sender<(u16, u16)>,
+    mpsc::Receiver<(u16, u16)>,
+) {
     let (wtx, wrx) = mpsc::channel::<Vec<u8>>(8);
     let (rtx, rrx) = mpsc::channel::<(u16, u16)>(4);
     (wtx, wrx, rtx, rrx)
@@ -66,9 +71,12 @@ async fn pty_actor_enters_reconnecting_on_eof() {
     // First reconnect: hand back a fresh dead transport (so after PaneReconnected
     // the actor will loop back to Reconnecting; we'll stop checking after the first
     // PaneReconnected).
-    let steps = vec![ScriptStep::Swap(Box::new(|| {
-        Box::new(FakeTransport::dead()) as Box<dyn PtyTransport>
-    })), ScriptStep::PermanentNone];
+    let steps = vec![
+        ScriptStep::Swap(Box::new(|| {
+            Box::new(FakeTransport::dead()) as Box<dyn PtyTransport>
+        })),
+        ScriptStep::PermanentNone,
+    ];
     let domain: Arc<dyn Domain> = Arc::new(ScriptedDomain::new(steps));
 
     let (_wtx, wrx, _rtx, rrx) = actor_channels();
@@ -128,7 +136,9 @@ async fn pty_actor_exponential_backoff_schedule() {
         ScriptStep::Err("attempt 2".into()),
         ScriptStep::Err("attempt 3".into()),
         ScriptStep::Err("attempt 4".into()),
-        ScriptStep::Swap(Box::new(|| Box::new(FakeTransport::dead()) as Box<dyn PtyTransport>)),
+        ScriptStep::Swap(Box::new(|| {
+            Box::new(FakeTransport::dead()) as Box<dyn PtyTransport>
+        })),
         ScriptStep::PermanentNone, // after the new transport EOFs, exit clean
     ];
     let domain: Arc<dyn Domain> = Arc::new(ScriptedDomain::new(steps));
@@ -194,7 +204,10 @@ async fn pty_actor_exponential_backoff_schedule() {
         .iter()
         .filter(|e| matches!(e, UserEvent::PaneReconnected { .. }))
         .count();
-    assert_eq!(reconnected_count, 1, "PaneReconnected fired {reconnected_count} times: {events:?}");
+    assert_eq!(
+        reconnected_count, 1,
+        "PaneReconnected fired {reconnected_count} times: {events:?}"
+    );
 
     // Sanity: assert the schedule constant via inline reference (also pins it
     // into the test source so a future BACKOFF_SCHEDULE_SECS edit blows up here).
@@ -269,7 +282,9 @@ async fn reconnect_emits_pane_reconnecting_event() {
 
     let steps = vec![
         ScriptStep::Err("first".into()),
-        ScriptStep::Swap(Box::new(|| Box::new(FakeTransport::dead()) as Box<dyn PtyTransport>)),
+        ScriptStep::Swap(Box::new(|| {
+            Box::new(FakeTransport::dead()) as Box<dyn PtyTransport>
+        })),
         ScriptStep::PermanentNone,
     ];
     let domain: Arc<dyn Domain> = Arc::new(ScriptedDomain::new(steps));
@@ -302,15 +317,23 @@ async fn reconnect_emits_pane_reconnecting_event() {
     let reconnecting_events: Vec<_> = events
         .iter()
         .filter_map(|e| match e {
-            UserEvent::PaneReconnecting { attempt, profile_label, .. } => {
-                Some((*attempt, profile_label.clone()))
-            }
+            UserEvent::PaneReconnecting {
+                attempt,
+                profile_label,
+                ..
+            } => Some((*attempt, profile_label.clone())),
             _ => None,
         })
         .collect();
-    assert!(!reconnecting_events.is_empty(), "no PaneReconnecting events: {events:?}");
+    assert!(
+        !reconnecting_events.is_empty(),
+        "no PaneReconnecting events: {events:?}"
+    );
     for (_, lbl) in &reconnecting_events {
-        assert_eq!(lbl, label, "profile_label mismatch in {reconnecting_events:?}");
+        assert_eq!(
+            lbl, label,
+            "profile_label mismatch in {reconnecting_events:?}"
+        );
     }
 }
 

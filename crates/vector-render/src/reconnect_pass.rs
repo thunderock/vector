@@ -87,12 +87,7 @@ impl ReconnectPass {
         bg_rgba: [f32; 4],
     ) {
         let (x, y, w, _h) = pane_rect_px;
-        let rect = [
-            x as f32,
-            y as f32,
-            w as f32,
-            RECONNECT_BAR_HEIGHT_PX as f32,
-        ];
+        let rect = [x as f32, y as f32, w as f32, RECONNECT_BAR_HEIGHT_PX as f32];
         let rgba = [bg_rgba[0], bg_rgba[1], bg_rgba[2], bg_rgba[3] * alpha];
         let (sw, sh) = surface_size_px;
         self.chrome

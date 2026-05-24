@@ -8,7 +8,7 @@ use anyhow::Result;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tracing_subscriber::{fmt, EnvFilter};
-use vector_app::{app, lpm, pty_actor, ske, UserEvent, DEFAULT_CONFIG_TOML};
+use vector_app::{app, devtunnels_actor, lpm, pty_actor, ske, UserEvent, DEFAULT_CONFIG_TOML};
 use vector_mux::{LocalDomain, Mux};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 
@@ -66,6 +66,10 @@ fn main() -> Result<()> {
     // task on the same runtime that powers the PTY I/O.
     let (handle_tx, handle_rx) = std::sync::mpsc::sync_channel::<tokio::runtime::Handle>(1);
 
+    // Plan 09-07 — ship DevTunnelsActor cmd_tx from io-thread back to main thread.
+    let (dt_tx, dt_rx) =
+        std::sync::mpsc::sync_channel::<tokio::sync::mpsc::Sender<devtunnels_actor::Command>>(1);
+
     let _io_thread = thread::Builder::new()
         .name("tokio-io".into())
         .spawn(move || {
@@ -86,6 +90,23 @@ fn main() -> Result<()> {
                 let local_domain_dyn: Arc<dyn vector_mux::Domain> = local_domain.clone();
                 let mux = Mux::new_with_clipboard(local_domain, clip_tx);
                 Mux::install(Arc::clone(&mux));
+
+                // Plan 09-07 — construct DevTunnelsActor so Cmd-Shift-T can reach the picker.
+                let dt_api = vector_tunnels::DevTunnelsApi::new();
+                let dt_auth = vector_tunnels::auth::MicrosoftAuth::new(
+                    vector_tunnels::auth::device_flow_microsoft::DEFAULT_MICROSOFT_CLIENT_ID,
+                );
+                let dt_store = vector_tunnels::auth::MicrosoftTokenStore::for_vector();
+                let mut dt_actor = devtunnels_actor::DevTunnelsActor::new(
+                    dt_api,
+                    Arc::clone(&mux),
+                    dt_auth,
+                    dt_store,
+                    proxy_io.clone(),
+                );
+                dt_actor.set_router(Arc::clone(&router_io));
+                let dt_cmd_tx = dt_actor.spawn(&tokio::runtime::Handle::current());
+                let _ = dt_tx.send(dt_cmd_tx);
 
                 let window_id = mux.create_window();
                 let (_tab_id, pane_id) = match mux.create_tab_async(window_id, None, 24, 80).await {
@@ -210,6 +231,12 @@ fn main() -> Result<()> {
         application.set_tokio_handle(handle);
     } else {
         tracing::warn!("tokio handle not received from I/O thread; auth disabled");
+    }
+    // Plan 09-07 — hand the actor's cmd_tx to App so Cmd-Shift-T can drive it.
+    if let Ok(cmd_tx) = dt_rx.recv() {
+        application.set_devtunnels_cmd_tx(cmd_tx);
+    } else {
+        tracing::warn!("devtunnels cmd_tx not received from I/O thread; Cmd-Shift-T disabled");
     }
     event_loop.run_app(&mut application)?;
     Ok(())

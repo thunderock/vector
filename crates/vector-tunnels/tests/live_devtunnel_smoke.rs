@@ -35,7 +35,11 @@ fn env_or_skip(test: &str) -> Option<(String, String)> {
 }
 
 /// Find the user's vector-labelled tunnel by id.
-async fn find_tunnel(api: &DevTunnelsApi, auth: &AuthProvider, tunnel_id: &str) -> Result<TunnelRecord> {
+async fn find_tunnel(
+    api: &DevTunnelsApi,
+    auth: &AuthProvider,
+    tunnel_id: &str,
+) -> Result<TunnelRecord> {
     let tunnels = api.list_tunnels(auth).await?;
     tunnels
         .into_iter()
@@ -45,15 +49,17 @@ async fn find_tunnel(api: &DevTunnelsApi, auth: &AuthProvider, tunnel_id: &str) 
 
 /// Drain the reader until `marker` appears in the accumulated bytes. Times
 /// out per `READ_TIMEOUT` so a hung remote shell fails fast.
-async fn read_until(
-    rx: &mut mpsc::Receiver<Vec<u8>>,
-    marker: &[u8],
-) -> Result<Vec<u8>> {
+async fn read_until(rx: &mut mpsc::Receiver<Vec<u8>>, marker: &[u8]) -> Result<Vec<u8>> {
     let mut buf: Vec<u8> = Vec::new();
     loop {
         let chunk = timeout(READ_TIMEOUT, rx.recv())
             .await
-            .map_err(|_| anyhow!("read_until timed out waiting for {:?}", String::from_utf8_lossy(marker)))?
+            .map_err(|_| {
+                anyhow!(
+                    "read_until timed out waiting for {:?}",
+                    String::from_utf8_lossy(marker)
+                )
+            })?
             .ok_or_else(|| anyhow!("read_until: transport closed before marker"))?;
         buf.extend_from_slice(&chunk);
         if buf.windows(marker.len()).any(|w| w == marker) {
@@ -117,9 +123,12 @@ async fn osc52_round_trip() {
 
     // Send 200-byte payload via DCS-wrapped OSC 52 (Phase 5 D-71 chunking).
     // Pitfall 7: confirms multi-chunk reassembly through the relay + tmux.
-    let payload_cmd = b"printf '\\eP\\e]52;c;%s\\a\\e\\\\' \"$(printf '%200s' x | tr ' ' x | base64)\"\n";
+    let payload_cmd =
+        b"printf '\\eP\\e]52;c;%s\\a\\e\\\\' \"$(printf '%200s' x | tr ' ' x | base64)\"\n";
     transport.write(payload_cmd).await.expect("send OSC 52");
-    let _ = read_until(&mut rx, PROMPT).await.expect("await prompt after OSC 52");
+    let _ = read_until(&mut rx, PROMPT)
+        .await
+        .expect("await prompt after OSC 52");
 
     // Read the tmux clipboard buffer back as base64.
     transport
@@ -132,7 +141,8 @@ async fn osc52_round_trip() {
     let response_s = String::from_utf8_lossy(&buf_response);
 
     let expected_payload = "x".repeat(200);
-    let expected_b64 = base64::engine::general_purpose::STANDARD.encode(expected_payload.as_bytes());
+    let expected_b64 =
+        base64::engine::general_purpose::STANDARD.encode(expected_payload.as_bytes());
     assert!(
         response_s.contains(&expected_b64),
         "expected base64 of 200 'x' bytes in tmux show-buffer output; got: {response_s}"
@@ -161,28 +171,36 @@ async fn decscusr_and_mouse_modes() {
         .write(b"printf '\\e[3 q'\n")
         .await
         .expect("send DECSCUSR");
-    let _ = read_until(&mut rx, PROMPT).await.expect("prompt after DECSCUSR");
+    let _ = read_until(&mut rx, PROMPT)
+        .await
+        .expect("prompt after DECSCUSR");
 
     // Mouse 1000 + SGR 1006.
     transport
         .write(b"printf '\\e[?1000h\\e[?1006h'\n")
         .await
         .expect("send mouse 1000+1006");
-    let _ = read_until(&mut rx, PROMPT).await.expect("prompt after mouse 1000");
+    let _ = read_until(&mut rx, PROMPT)
+        .await
+        .expect("prompt after mouse 1000");
 
     // Mouse 1002 (button-event tracking).
     transport
         .write(b"printf '\\e[?1002h'\n")
         .await
         .expect("send mouse 1002");
-    let _ = read_until(&mut rx, PROMPT).await.expect("prompt after mouse 1002");
+    let _ = read_until(&mut rx, PROMPT)
+        .await
+        .expect("prompt after mouse 1002");
 
     // Mouse 1003 (any-event tracking).
     transport
         .write(b"printf '\\e[?1003h'\n")
         .await
         .expect("send mouse 1003");
-    let _ = read_until(&mut rx, PROMPT).await.expect("prompt after mouse 1003");
+    let _ = read_until(&mut rx, PROMPT)
+        .await
+        .expect("prompt after mouse 1003");
 
     // Window-size propagation check.
     transport

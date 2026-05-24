@@ -114,6 +114,9 @@ fn tab_badge_during_reconnect() {
     // Local panes never flip — they cannot reconnect.
     let local_reconn =
         format_tab_title("zsh", None, TransportKind::Local, PaneUiState::Reconnecting);
-    assert!(!local_reconn.contains("[reconnecting]"), "got: {local_reconn}");
+    assert!(
+        !local_reconn.contains("[reconnecting]"),
+        "got: {local_reconn}"
+    );
     assert!(!local_reconn.contains("[remote]"), "got: {local_reconn}");
 }

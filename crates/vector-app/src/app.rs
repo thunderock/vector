@@ -2223,15 +2223,15 @@ impl ApplicationHandler<UserEvent> for App {
                 attempt,
                 profile_label,
             } => {
-                let entry = self
-                    .reconnecting_panes
-                    .entry(pane_id)
-                    .or_insert_with(|| ReconnectingState {
-                        profile_label: profile_label.clone(),
-                        attempt,
-                        started_at: Instant::now(),
-                        fade_in_started_at: None,
-                    });
+                let entry =
+                    self.reconnecting_panes
+                        .entry(pane_id)
+                        .or_insert_with(|| ReconnectingState {
+                            profile_label: profile_label.clone(),
+                            attempt,
+                            started_at: Instant::now(),
+                            fade_in_started_at: None,
+                        });
                 entry.attempt = attempt;
                 entry.profile_label = profile_label;
                 self.update_tab_title_for_pane(pane_id);

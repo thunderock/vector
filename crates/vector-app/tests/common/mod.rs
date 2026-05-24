@@ -28,7 +28,10 @@ impl EventSink for TestEventSink {
     }
 }
 
-pub fn test_sink() -> (std::sync::Arc<dyn EventSink>, mpsc::UnboundedReceiver<UserEvent>) {
+pub fn test_sink() -> (
+    std::sync::Arc<dyn EventSink>,
+    mpsc::UnboundedReceiver<UserEvent>,
+) {
     let (tx, rx) = mpsc::unbounded_channel();
     let sink: std::sync::Arc<dyn EventSink> = std::sync::Arc::new(TestEventSink { tx });
     (sink, rx)

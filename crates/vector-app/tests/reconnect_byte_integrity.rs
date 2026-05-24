@@ -4,7 +4,11 @@
 //! path. If a regression silently drops bytes when the old transport dies
 //! mid-stream, these tests fail.
 
-#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::type_complexity)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::type_complexity
+)]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -73,8 +77,9 @@ async fn reconnect_drains_old_transport_before_swap() {
     let payload_a: Vec<u8> = (0..1024).map(|i| (i % 256) as u8).collect();
 
     // New transport: piped — test pushes its bytes after seeing PaneReconnected.
-    let new_transport_storage: Arc<std::sync::Mutex<Option<(FakeTransport, mpsc::Sender<Vec<u8>>)>>> =
-        Arc::new(std::sync::Mutex::new(Some(FakeTransport::piped())));
+    let new_transport_storage: Arc<
+        std::sync::Mutex<Option<(FakeTransport, mpsc::Sender<Vec<u8>>)>>,
+    > = Arc::new(std::sync::Mutex::new(Some(FakeTransport::piped())));
     let storage_for_builder = Arc::clone(&new_transport_storage);
     let new_tx_handle: Arc<std::sync::Mutex<Option<mpsc::Sender<Vec<u8>>>>> =
         Arc::new(std::sync::Mutex::new(None));
@@ -138,7 +143,10 @@ async fn reconnect_drains_old_transport_before_swap() {
         "expected exactly 1024 bytes drained before swap, got {}",
         snapshot_a.len()
     );
-    assert_eq!(snapshot_a, payload_a, "old-transport bytes corrupted across swap");
+    assert_eq!(
+        snapshot_a, payload_a,
+        "old-transport bytes corrupted across swap"
+    );
 
     // Push 256 bytes through the NEW transport.
     let payload_b: Vec<u8> = (0..256).map(|i| ((i + 50) % 256) as u8).collect();
@@ -152,12 +160,7 @@ async fn reconnect_drains_old_transport_before_swap() {
     }
 
     // Wait for the coalesce buffer to reach the 1024 + 256 final length.
-    wait_until(
-        &coalesce,
-        |snap| snap.len() == 1280,
-        Duration::from_secs(2),
-    )
-    .await;
+    wait_until(&coalesce, |snap| snap.len() == 1280, Duration::from_secs(2)).await;
 
     let final_snapshot = coalesce.peek_snapshot();
     assert_eq!(
@@ -180,7 +183,9 @@ fn lcg_bytes(seed: u64, n: usize) -> Vec<u8> {
     let mut state = seed;
     let mut out = Vec::with_capacity(n);
     for _ in 0..n {
-        state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         out.push((state >> 33) as u8);
     }
     out
@@ -257,12 +262,7 @@ async fn reconnect_zero_byte_loss_under_urandom() {
     }
 
     // Wait for full 8192-byte snapshot.
-    wait_until(
-        &coalesce,
-        |snap| snap.len() == 8192,
-        Duration::from_secs(3),
-    )
-    .await;
+    wait_until(&coalesce, |snap| snap.len() == 8192, Duration::from_secs(3)).await;
 
     let snapshot = coalesce.peek_snapshot();
     assert_eq!(snapshot.len(), 8 * 1024, "snapshot length wrong");

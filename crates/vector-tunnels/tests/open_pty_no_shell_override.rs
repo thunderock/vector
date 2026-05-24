@@ -21,9 +21,10 @@ async fn open_pty_sends_no_shell_override() {
     let mut wire_r = BufReader::new(wire_r);
 
     // Spawn the transport-side constructor; in parallel drive the wire side.
-    let task = tokio::spawn(async move {
-        DevTunnelTransport::new_with_stream(client_side, 30, 100).await
-    });
+    let task =
+        tokio::spawn(
+            async move { DevTunnelTransport::new_with_stream(client_side, 30, 100).await },
+        );
 
     // Capture the first frame the client wrote.
     let mut line = String::new();
@@ -50,7 +51,7 @@ async fn open_pty_sends_no_shell_override() {
                 "PERSIST-03: client must never send shell override; got shell = {shell:?}"
             );
             // Belt-and-suspenders explicit comparison for the acceptance grep.
-            assert!(matches!(shell, None));
+            assert!(shell.is_none());
         }
         other => panic!("expected OpenPty as first frame, got {other:?}"),
     }
