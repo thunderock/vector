@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 09-06-PLAN.md (Tasks 1+2+3a; Task 3b UAT deferred — joint debt with 09-05; see 09-06-HUMAN-UAT.md + 09-05-HUMAN-UAT.md)
-last_updated: "2026-05-22T21:05:00.000Z"
+status: Phase 09 implementation complete — awaiting user UAT sign-off (09-05-HUMAN-UAT + 09-06-HUMAN-UAT + 09-SMOKE.md)
+stopped_at: Completed 09-07-PLAN.md — Phase 9 implementation 7/7 plans done. Awaiting user UAT walk-through for PERSIST-04 sign-off.
+last_updated: "2026-05-24T23:18:05.817Z"
 progress:
   total_phases: 11
-  completed_phases: 6
-  total_plans: 63
-  completed_plans: 61
+  completed_phases: 7
+  total_plans: 64
+  completed_plans: 62
 ---
 
 # Project State: Vector
@@ -22,12 +22,12 @@ progress:
 
 **Pivoted 2026-05-19:** Phase 7 descoped from GitHub Codespaces to "Remote SSH transport scaffolding (groundwork for Phase 8 tunnels)". Codespace-specific code reverted; transport scaffolding kept. See PROJECT.md + ROADMAP.md §Phase 7.
 
-**Current focus:** Phase 09 verification + follow-up wiring plan (09-05 + 09-06 UAT debt — `DevTunnelsActor` main.rs wiring blocks both signed-off UATs; PERSIST-04 pending)
+**Current focus:** Phase 09 — persistence-reconnect-tmux-auto-attach
 
 ## Current Position
 
-Phase: 09 (persistence-reconnect-tmux-auto-attach) — IMPLEMENTATION COMPLETE WITH DEFERRED UAT
-Plan: 6 of 6 (all six implementation tasks landed; 09-05 Task 3 + 09-06 Task 3b UAT sign-offs deferred to a follow-up plan that wires `DevTunnelsActor` in `crates/vector-app/src/main.rs`)
+Phase: 09 (persistence-reconnect-tmux-auto-attach) — IMPLEMENTATION COMPLETE (awaiting UAT)
+Plan: 7 of 7 (last plan complete)
 
 ## Phase Map
 
@@ -112,6 +112,7 @@ Plan: 6 of 6 (all six implementation tasks landed; 09-05 Task 3 + 09-06 Task 3b 
 | Phase 09-persistence-reconnect-tmux-auto-attach P04 | 3min | 3 tasks | 7 files |
 | Phase 09-persistence-reconnect-tmux-auto-attach P05 | 25min (Tasks 1+2; Task 3 deferred) | 2 of 3 (Task 3 deferred — main.rs wiring blocker) tasks | 7 files |
 | Phase 09-persistence-reconnect-tmux-auto-attach P06 | ~18min (Tasks 1+2+3a; Task 3b deferred — joint debt with 09-05) | 3 of 4 (Task 3b deferred — same main.rs wiring blocker) tasks | 5 files |
+| Phase 09-persistence-reconnect-tmux-auto-attach P07 | 12min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -214,9 +215,9 @@ Plan: 6 of 6 (all six implementation tasks landed; 09-05 Task 3 + 09-06 Task 3b 
 
 ## Session Continuity
 
-**Last session:** 2026-05-22T21:05:00.000Z
+**Last session:** 2026-05-24T23:18:05.812Z
 
-**Stopped at:** Completed 09-06-PLAN.md (Tasks 1+2+3a; Task 3b UAT deferred — joint debt with 09-05; see 09-06-HUMAN-UAT.md + 09-05-HUMAN-UAT.md). Phase 9 implementation complete; PERSIST-04 pending UAT sign-off pending DevTunnelsActor main.rs wiring (joint follow-up plan).
+**Stopped at:** Completed 09-07-PLAN.md — Phase 9 implementation 7/7 plans done. Awaiting user UAT walk-through for PERSIST-04 sign-off.
 
 **Next action:**
 
