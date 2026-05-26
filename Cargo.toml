@@ -4,6 +4,7 @@ members = [
     "crates/vector-app",
     "crates/vector-ui",
     "crates/vector-render",
+    "crates/vector-render-snapshots",
     "crates/vector-mux",
     "crates/vector-term",
     "crates/vector-pty",
