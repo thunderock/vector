@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Phase 09 implementation complete — awaiting user UAT sign-off (09-05-HUMAN-UAT + 09-06-HUMAN-UAT + 09-SMOKE.md)
-stopped_at: Completed 09-07-PLAN.md — Phase 9 implementation 7/7 plans done. Awaiting user UAT walk-through for PERSIST-04 sign-off.
-last_updated: "2026-05-24T23:18:05.817Z"
+status: Ready to execute
+stopped_at: Completed 10-01-PLAN.md (HARDEN-01 snapshot suite)
+last_updated: "2026-05-26T18:49:18.655Z"
 progress:
   total_phases: 11
   completed_phases: 7
-  total_plans: 64
-  completed_plans: 62
+  total_plans: 68
+  completed_plans: 63
 ---
 
 # Project State: Vector
@@ -22,12 +22,12 @@ progress:
 
 **Pivoted 2026-05-19:** Phase 7 descoped from GitHub Codespaces to "Remote SSH transport scaffolding (groundwork for Phase 8 tunnels)". Codespace-specific code reverted; transport scaffolding kept. See PROJECT.md + ROADMAP.md §Phase 7.
 
-**Current focus:** Phase 09 — persistence-reconnect-tmux-auto-attach
+**Current focus:** Phase 10 — hardening-release
 
 ## Current Position
 
-Phase: 09 (persistence-reconnect-tmux-auto-attach) — IMPLEMENTATION COMPLETE (awaiting UAT)
-Plan: 7 of 7 (last plan complete)
+Phase: 10 (hardening-release) — EXECUTING
+Plan: 2 of 4
 
 ## Phase Map
 
@@ -113,6 +113,7 @@ Plan: 7 of 7 (last plan complete)
 | Phase 09-persistence-reconnect-tmux-auto-attach P05 | 25min (Tasks 1+2; Task 3 deferred) | 2 of 3 (Task 3 deferred — main.rs wiring blocker) tasks | 7 files |
 | Phase 09-persistence-reconnect-tmux-auto-attach P06 | ~18min (Tasks 1+2+3a; Task 3b deferred — joint debt with 09-05) | 3 of 4 (Task 3b deferred — same main.rs wiring blocker) tasks | 5 files |
 | Phase 09-persistence-reconnect-tmux-auto-attach P07 | 12min | 2 tasks | 1 files |
+| Phase 10-hardening-release P01 | 6min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -215,9 +216,9 @@ Plan: 7 of 7 (last plan complete)
 
 ## Session Continuity
 
-**Last session:** 2026-05-24T23:18:05.812Z
+**Last session:** 2026-05-26T18:49:18.650Z
 
-**Stopped at:** Completed 09-07-PLAN.md — Phase 9 implementation 7/7 plans done. Awaiting user UAT walk-through for PERSIST-04 sign-off.
+**Stopped at:** Completed 10-01-PLAN.md (HARDEN-01 snapshot suite)
 
 **Next action:**
 

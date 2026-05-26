@@ -260,8 +260,12 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   2. The VT conformance corpus (alt-screen, scroll regions, tab stops, ED/EL, mouse 1006, OSC 52 round-trip, bracketed paste, DECSCUSR) runs in CI on every push and a perf gate enforces idle CPU <1% and `cat large.log` at the vsync cap.
   3. A `cargo deny` policy blocks unaudited unsafe in release-profile dependencies; a `grep` of `tracing` output from a session with auth shows zero token-shaped strings (`gho_`, `ghp_`, `eyJ`).
   4. Tagging `v1.0.0` publishes the unsigned Universal `Vector.dmg` to GitHub Releases with the README's install instructions (including `xattr -dr com.apple.quarantine /Applications/Vector.app`) front-and-center.
-**Plans**: TBD
-**Stack additions**: `insta`-style snapshot testing, `cargo deny` policy file, perf benchmark harness.
+**Plans**: 4 plans
+  - [x] 10-01-PLAN.md — HARDEN-01: renderer snapshot suite (insta + image-compare SSIM, 4 scenes, macos-14 merge gate)
+  - [ ] 10-02-PLAN.md — HARDEN-02: VT conformance corpus (8 scenarios) + perf gate (custom probe; arm64 hard / intel advisory)
+  - [ ] 10-03-PLAN.md — HARDEN-03: cargo-geiger unsafe-dep allowlist (D-22 supersedes D-12) + runtime token-leak grep tests
+  - [ ] 10-04-PLAN.md — HARDEN-04: tagged v1.0.0 release (README restructure + workspace bump 2026.5.10→1.0.0 + .sha256 sidecar + hand-written notes; PERSIST-04 hard pre-flight)
+**Stack additions**: `insta 1.47.2`, `image-compare 0.5.0`, `cargo-geiger 0.13.0` + JSON allowlist, custom perf-probe example binary, hand-written RELEASE-NOTES-1.0.0.md.
 **Risks & notes**:
   - The "looks done but isn't" checklist from PITFALLS.md is the gate here. Every item gets a specific test before tag.
   - Re-check Out-of-Scope one final time: no signing, no notarization, no Sparkle, no auto-update — these are v2 (DIST-V2-01, DIST-V2-02).
@@ -279,7 +283,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
 | 8. Dev Tunnels Integration | 7/7 | Complete   | 2026-05-22 |
 | 9. Persistence + Reconnect | 6/6 | Implementation complete with UAT debt (09-01..06 landed; 09-05 Task 3 + 09-06 Task 3b UAT sign-offs deferred — joint debt blocked by DevTunnelsActor main.rs wiring; PERSIST-04 Pending) | - |
-| 10. Hardening & Release | 0/0 | Not started | - |
+| 10. Hardening & Release | 1/4 | In Progress|  |
 
 ## Coverage
 
@@ -328,7 +332,7 @@ At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Ev
 
 **Requirements:** TBD (likely a new `AI-*` family in REQUIREMENTS.md when promoted)
 
-**Plans:** 7/7 plans complete
+**Plans:** 1/4 plans executed
 
 **Trigger:** After milestone v1.0.0 ships (Phase 10 release). Per PROJECT.md key decision: "must not gate terminal-core work."
 
