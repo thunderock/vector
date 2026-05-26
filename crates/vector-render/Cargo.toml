@@ -23,6 +23,13 @@ winit.workspace = true
 [dev-dependencies]
 alacritty_terminal.workspace = true
 bytes.workspace = true
+libc.workspace = true
+
+# HARDEN-02 perf-gate probe (D-10 + D-23). Example binary, not a benchmark — wall-clocks
+# idle CPU and offscreen paste FPS, emits one-line JSON for CI threshold gates.
+[[example]]
+name = "perf_probe"
+path = "examples/perf_probe.rs"
 
 [lints]
 workspace = true
