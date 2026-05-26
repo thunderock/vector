@@ -50,6 +50,78 @@ jobs:
           path: crates/vector-render-snapshots/tests/goldens/*.diff.png
           if-no-files-found: ignore
 
+  vt-conformance:
+    # HARDEN-02 corpus — 8 scenarios driven against alacritty_terminal::Term.
+    # Hard merge gate on macos-14 (arm64). No matrix; the parser is host-independent.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-vt-conformance
+      - name: Run VT conformance corpus
+        # --test vt_conformance (singular) selects the integration-test binary
+        # so the corpus's 17 tests actually run. --tests + name filter would
+        # filter to test fns named "vt_conformance" — there are none.
+        run: cargo test -p vector-term --test vt_conformance --release
+
+  perf-gate:
+    # HARDEN-02 perf — idle CPU <1%, paste render at vsync cap.
+    # D-23: macos-14 (arm64) is a HARD merge gate; macos-15-intel is ADVISORY
+    # (continue-on-error) per Pitfall A — Intel runners flap due to fp16 vs fp32.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            cache-key: ci-perf-arm64
+            advisory: false
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            cache-key: ci-perf-intel
+            advisory: true
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.advisory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.cache-key }}
+      - name: Run perf probe
+        run: |
+          set -euo pipefail
+          mkdir -p target
+          cargo run --release -p vector-render --example perf_probe > target/perf.json
+          cat target/perf.json
+      - name: Enforce thresholds (arm64 only — D-23)
+        if: matrix.advisory == false
+        run: |
+          set -euo pipefail
+          IDLE=$(python3 -c "import json; print(json.load(open('target/perf.json'))['idle_cpu_pct'])")
+          FPS=$(python3 -c "import json; print(json.load(open('target/perf.json'))['paste_render_fps'])")
+          echo "idle_cpu_pct=$IDLE paste_render_fps=$FPS"
+          python3 -c "import sys; idle=$IDLE; fps=$FPS; sys.exit(0 if (idle < 1.0 and fps >= 55.0) else 1)" || {
+            echo "::error::Perf gate FAIL: idle=${IDLE}%% (<1.0 required) fps=${FPS} (>=55.0 required)"
+            exit 1
+          }
+      - name: Record advisory result (intel — D-23)
+        if: matrix.advisory == true
+        run: |
+          cat target/perf.json
+          echo "::notice::macos-15-intel perf probe (advisory only — does not gate)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perf-probe-${{ matrix.runner }}
+          path: target/perf.json
+          if-no-files-found: warn
+
   commitlint:
     runs-on: macos-14
     steps:
