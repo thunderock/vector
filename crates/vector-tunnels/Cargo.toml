@@ -30,5 +30,7 @@ tunnels = { workspace = true }
 zeroize = { workspace = true }
 
 [dev-dependencies]
+regex = { workspace = true }
 wiremock = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "test-util"] }
+tracing-subscriber = { workspace = true }
