@@ -77,7 +77,7 @@ Requirements for initial release. Each maps to roadmap phases. Categories are de
 ### Hardening & Release
 
 - [x] **HARDEN-01**: Renderer snapshot test suite runs headless against a pinned font and a perceptual-tolerance comparator; CI gate on regression
-- [ ] **HARDEN-02**: VT conformance corpus (alt-screen, scroll regions, tab stops, ED/EL, mouse 1006, OSC 52 round-trip) runs in CI
+- [x] **HARDEN-02**: VT conformance corpus (alt-screen, scroll regions, tab stops, ED/EL, mouse 1006, OSC 52 round-trip) runs in CI
 - [ ] **HARDEN-03**: Tokens are redacted in logs by manual `Debug` impls on every token-bearing struct; `cargo deny` blocks a tree of crates that allow unaudited unsafe in the release profile
 - [ ] **HARDEN-04**: Tagged release ships an unsigned Universal `.dmg` to GitHub Releases with install instructions front-and-center
 
@@ -184,7 +184,7 @@ Every v1 requirement maps to exactly one phase. No orphans, no duplicates.
 | PERSIST-03 | Phase 9 | Complete |
 | PERSIST-04 | Phase 9 | Pending (verification surface landed in Plan 09-06; manual UAT sign-off deferred — see `09-06-HUMAN-UAT.md` + joint debt with `09-05-HUMAN-UAT.md`; verified once both UATs sign off) |
 | HARDEN-01 | Phase 10 | Complete |
-| HARDEN-02 | Phase 10 | Pending |
+| HARDEN-02 | Phase 10 | Complete |
 | HARDEN-03 | Phase 10 | Pending |
 | HARDEN-04 | Phase 10 | Pending |
 
