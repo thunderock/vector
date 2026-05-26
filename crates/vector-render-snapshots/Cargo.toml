@@ -12,6 +12,24 @@ workspace = true
 [lib]
 path = "src/lib.rs"
 
+# Cargo only auto-discovers `tests/*.rs` (top-level). The four scene tests live
+# under `tests/scenes/` per HARDEN-01 D-02 file layout — declare them explicitly.
+[[test]]
+name = "plain_text_unicode_emoji"
+path = "tests/scenes/plain_text_unicode_emoji.rs"
+
+[[test]]
+name = "alt_screen_colors_selection"
+path = "tests/scenes/alt_screen_colors_selection.rs"
+
+[[test]]
+name = "reconnect_bar_tab_badge"
+path = "tests/scenes/reconnect_bar_tab_badge.rs"
+
+[[test]]
+name = "split_panes_scrollback"
+path = "tests/scenes/split_panes_scrollback.rs"
+
 # HARDEN-01 D-26 — `insta` + `image-compare` scoped to this crate ONLY.
 # Do NOT promote to [workspace.dependencies]; production crates must stay free
 # of image/diff/snapshot deps.
