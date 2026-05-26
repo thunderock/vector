@@ -122,6 +122,81 @@ jobs:
           path: target/perf.json
           if-no-files-found: warn
 
+  cargo-geiger:
+    # HARDEN-03 D-22 — unsafe-dep audit. cargo-deny has no [bans] unsafe knob;
+    # cargo-geiger 0.13 --output-format Json + a JSON allowlist is the working
+    # substitute. ubuntu-latest for the cold cache install of cargo-geiger.
+    # Geiger requires running from a concrete package directory (the workspace
+    # root is a virtual manifest); vector-app is the binary that pulls in the
+    # whole dep tree so it's the canonical root for the audit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-cargo-geiger
+      - name: Install cargo-geiger
+        run: cargo install cargo-geiger@0.13.0 --locked
+      - name: Run cargo-geiger and compare against allowlist
+        run: |
+          set -euo pipefail
+          mkdir -p target
+          ( cd crates/vector-app && cargo geiger --output-format Json ) > target/geiger.json
+          python3 .github/scripts/check-geiger.py cargo-geiger.json target/geiger.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geiger-report
+          path: target/geiger.json
+          if-no-files-found: warn
+
+  token-redaction-grep:
+    # HARDEN-03 D-11 runtime gate. Complements the static gate at
+    # vector-arch-tests/no_token_in_debug_or_log.rs (D-29). Runs both:
+    # (1) the static gate (re-confirm green), and
+    # (2) the runtime gate (wiremock-free in-memory tracing capture).
+    # Then `grep -E` on the tee'd output as a belt-and-suspenders catch
+    # in case the runtime assert is silently bypassed.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-token-redaction
+      - name: Static gate — no_token_in_debug_or_log
+        run: cargo test -p vector-arch-tests --test no_token_in_debug_or_log
+      - name: Runtime grep gate — vector-codespaces
+        run: |
+          set -euo pipefail
+          mkdir -p target
+          cargo test -p vector-codespaces --test token_redaction_runtime -- --nocapture 2>&1 | tee target/auth-trace-codespaces.log
+          # The fake-token literal `gho_FAKE_TOKEN_FOR_TESTING_*` is the
+          # self-verifying fixture — strip it before grepping so any REAL-shaped
+          # token still trips the gate. JWT prefix (eyJ...) is not used here.
+          if grep -E '(gho_|ghp_|gha_|ghs_|eyJ[A-Za-z0-9_-]{10,})' target/auth-trace-codespaces.log | grep -v 'FAKE_TOKEN' | grep -v 'FAKE_REFRESH'; then
+            echo "::error::Token-shaped string leaked in vector-codespaces tracing output"
+            exit 1
+          fi
+      - name: Runtime grep gate — vector-tunnels
+        run: |
+          set -euo pipefail
+          mkdir -p target
+          cargo test -p vector-tunnels --test token_redaction_runtime -- --nocapture 2>&1 | tee target/auth-trace-tunnels.log
+          if grep -E '(gho_|ghp_|gha_|ghs_|eyJ[A-Za-z0-9_-]{10,})' target/auth-trace-tunnels.log | grep -v 'FAKE_TOKEN'; then
+            echo "::error::Token-shaped string leaked in vector-tunnels tracing output"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: auth-traces
+          path: target/auth-trace-*.log
+          if-no-files-found: ignore
+
   commitlint:
     runs-on: macos-14
     steps:
