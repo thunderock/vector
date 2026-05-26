@@ -1,4 +1,5 @@
 //! CORE-01: DECSET 1049 alt-screen enter/exit + cursor save/restore (vim pattern).
+//! NOTE: HARDEN-02 corpus mirrors this scenario at crates/vector-term/tests/vt_conformance/alt_screen_1049.rs.
 
 use alacritty_terminal::index::{Column, Line, Point};
 use vector_term::Term;

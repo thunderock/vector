@@ -1,4 +1,7 @@
 //! CORE-01: DECSTBM scroll regions + tab stops (HTS, CHT, TBC).
+//! NOTE: HARDEN-02 corpus mirrors these scenarios at
+//! crates/vector-term/tests/vt_conformance/scroll_regions.rs and
+//! crates/vector-term/tests/vt_conformance/tab_stops.rs.
 
 use alacritty_terminal::index::{Column, Line, Point};
 use vector_term::Term;

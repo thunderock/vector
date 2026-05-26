@@ -1,4 +1,5 @@
 //! POLISH-05 D-70/D-71 — OSC 52 inbound: raw + DCS-wrapped Store, query Denied.
+//! NOTE: HARDEN-02 corpus mirrors round-trip scenarios at crates/vector-term/tests/vt_conformance/osc52_round_trip.rs.
 //!
 //! Consumes the ForwardingListener pipeline created by Plan 05-05.
 //! - `raw_clipboard_store`: alacritty native OSC 52 path fires ClipboardStore

@@ -1,5 +1,7 @@
 //! CORE-01: DCS pass-through state machine + termination.
 //! Also hosts CORE-06 mode-state assertions (bracketed paste, mouse, DECSCUSR).
+//! NOTE: HARDEN-02 corpus mirrors mouse/bracketed-paste/DECSCUSR scenarios at
+//! crates/vector-term/tests/vt_conformance/{mouse_1006,bracketed_paste,decscusr}.rs.
 
 use alacritty_terminal::index::{Column, Line, Point};
 use alacritty_terminal::term::TermMode;
