@@ -264,11 +264,11 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   4. The Dev Tunnels picker shows a clickable sign-in affordance when in the `NotSignedIn` state (a button, or it auto-presents the Microsoft device-flow modal). The user can sign in from inside the picker without hunting through the menu.
   5. The bundled `Vector.app` shows the Vector icon in the macOS dock, Finder, and Cmd-Tab switcher (CFBundleIconFile populated; `.icns` packaged by `cargo-bundle` + `xtask dmg`).
 **Plans**: 5 plans (to be created via `/gsd:plan-phase 9.1`)
-  - [ ] 09.1-01-PLAN.md — Local pane exit handler (Phase 4-05 gap closure: close pane on PaneExited, or render an exited sentinel)
+  - [x] 09.1-01-PLAN.md — Local pane exit handler (Phase 4-05 gap closure: close pane on PaneExited, or render an exited sentinel)
   - [ ] 09.1-02-PLAN.md — Remove Codespaces UI surface (Phase 7 pivot cleanup: menu, crate, actor, modal, UserEvent variants)
   - [ ] 09.1-03-PLAN.md — Wire `install_microsoft_menu_items` at app startup (Phase 8-05 wiring)
   - [ ] 09.1-04-PLAN.md — Sign-in affordance inside `DevTunnelsPickerModal` (Phase 8-05 UX gap)
-  - [ ] 09.1-05-PLAN.md — Bundle Vector `.icns` + `CFBundleIconFile` (Phase 1 / 10 distribution polish)
+  - [x] 09.1-05-PLAN.md — Bundle Vector `.icns` + `CFBundleIconFile` (Phase 1 / 10 distribution polish)
 **Stack additions**: none — all closures use existing crates and patterns.
 **Risks & notes**:
   - **Phase 9 UAT cannot be walked until at least 09.1-03 + 09.1-04 land.** Plans 09.1-01, 09.1-02, 09.1-05 are independent and can run in parallel with the picker/menu work.
