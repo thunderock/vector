@@ -29,6 +29,8 @@ enum Cmd {
     Release,
     /// Build the vector-tunnel-agent .deb for the host arch (Linux only).
     AgentDist,
+    /// Regenerate crates/vector-app/resources/icon.icns from icon.svg.
+    Icon,
 }
 
 fn main() -> Result<()> {
@@ -46,6 +48,7 @@ fn main() -> Result<()> {
         } => dmg::dmg_local(&sh),
         Cmd::Release => release::release(&sh),
         Cmd::AgentDist => agent_dist::run(),
+        Cmd::Icon => icon::generate_icns(&sh),
     }
 }
 
