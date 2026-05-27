@@ -31,7 +31,7 @@ fn panel_frame_lock_640x480() {
 const LOADING: &str = "Loading Dev Tunnels\u{2026}"; // … = U+2026
 const EMPTY_SIGNED_IN: &str =
     "No Vector-agent tunnels yet. Install vector-tunnel-agent on a remote machine and run it.";
-const NOT_SIGNED_IN: &str = "Sign in with GitHub or Microsoft to list Dev Tunnels.";
+const NOT_SIGNED_IN: &str = "Sign in with Microsoft to list Dev Tunnels.";
 
 #[test]
 fn footer_copy_loading_matches_ui_spec_verbatim() {

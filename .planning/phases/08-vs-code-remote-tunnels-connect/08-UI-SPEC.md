@@ -174,7 +174,7 @@ All copy is fixed, terse, and verb-first. No emoji. No marketing voice. Mirrors 
 |-------|-------------|
 | Loading | `Loading Dev Tunnels…` |
 | Empty (signed in, no Vector-agent tunnels) | `No Vector-agent tunnels yet. Install vector-tunnel-agent on a remote machine and run it.` |
-| Not signed in (neither provider) | `Sign in with GitHub or Microsoft to list Dev Tunnels.` |
+| Not signed in | `Sign in with Microsoft to list Dev Tunnels.` |
 | Signed in, but to provider that owns no tunnels | `No tunnels under your {provider} account. Switch providers or register one.` |
 | API error | `Could not load tunnels: {reason}. Press R to retry.` |
 | Loaded (N rows visible / M total after filter) | `{N} of {M} tunnels.` |

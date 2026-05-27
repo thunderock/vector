@@ -52,7 +52,7 @@ pub fn footer_copy(state: &FooterState) -> String {
             "No Vector-agent tunnels yet. Install vector-tunnel-agent on a remote machine and run it.".to_string()
         }
         FooterState::NotSignedIn => {
-            "Sign in with GitHub or Microsoft to list Dev Tunnels.".to_string()
+            "Sign in with Microsoft to list Dev Tunnels.".to_string()
         }
         FooterState::SignedInOtherProvider { provider } => format!(
             "No tunnels under your {provider} account. Switch providers or register one."
@@ -353,7 +353,7 @@ mod tests {
         );
         assert_eq!(
             footer_copy(&FooterState::NotSignedIn),
-            "Sign in with GitHub or Microsoft to list Dev Tunnels."
+            "Sign in with Microsoft to list Dev Tunnels."
         );
         assert_eq!(
             footer_copy(&FooterState::SignedInOtherProvider {

@@ -1764,7 +1764,7 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                 }
                 self.toasts.show(ToastBanner::info(
-                    "Sign in with GitHub or Microsoft to list Dev Tunnels.",
+                    "Sign in with Microsoft to list Dev Tunnels.",
                 ));
                 self.request_redraw_all();
             }
