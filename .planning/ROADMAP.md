@@ -21,7 +21,8 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 - [~] **Phase 7: Remote SSH Transport Scaffolding (DESCOPED 2026-05-19)** — pivoted away from Codespaces. Reusable scaffolding shipped: `vector-ssh` crate (russh client, SshChannelTransport, ChildStdioStream, host-key fingerprint handler), `Mux::create_tab_async_with_transport`, `format_tab_title` with `TransportKind`, `[remote]` badge. Codespace-specific code reverted.
 - [x] **Phase 8: VS Code Remote Tunnels Connect** — Owns DT-01..04. User runs `code tunnel` on their own machine (EC2, home server); Vector attaches over the Microsoft Dev Tunnels relay. Day-1 spike resolves the subprocess/vendor/defer decision tree. (completed 2026-05-22)
 - [ ] **Phase 9: Persistence + Reconnect** — `Domain::reconnect()` hot-swap, inline "Reconnecting…" status bar on remote panes. **Scope revised 2026-05-22:** Vector no longer auto-attaches to tmux; user owns tmux lifecycle on the remote (see 09-CONTEXT.md D-04..D-06).
-- [ ] **Phase 10: Hardening & Release** — Renderer snapshot + VT conformance suites in CI, perf gates, tagged unsigned Universal DMG on GitHub Releases.
+- [ ] **Phase 9.1: Prior-Phase Gap Closure (INSERTED 2026-05-26)** — Five user-visible incompletions surfaced during Phase 9 UAT walk: local pane exit not freeing the pane (Phase 4-05 stub), Codespaces UI leftovers after the Phase 7 pivot, missing `install_microsoft_menu_items` call (Phase 8-05), no in-modal sign-in affordance in the Dev Tunnels picker, missing bundled app icon. These block Phase 9 UAT sign-off and Phase 10-04 release tag.
+- [ ] **Phase 10: Hardening & Release** — Renderer snapshot + VT conformance suites in CI, perf gates, tagged unsigned Universal DMG on GitHub Releases. **10-04 (release tag) held pending 9.1 closure + Phase 9 UAT pass.**
 
 ## Phase Details
 
@@ -251,6 +252,31 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - Re-check Out-of-Scope: no custom remote agent, no predictive echo, no Vector-managed tmux sessions, no app-restart pane restore.
   - Canonical ref: `.planning/phases/09-persistence-reconnect-tmux-auto-attach/09-CONTEXT.md` — all decisions and the tmux scope change rationale.
 
+### Phase 9.1: Prior-Phase Gap Closure
+**Goal**: Close five user-visible incompletions discovered during Phase 9 UAT so that Phase 9's reconnect/persist features are actually reachable end-to-end and v1.0.0 can ship with a polished surface.
+**Depends on**: Phase 9 (UAT findings that defined the scope).
+**Inserted**: 2026-05-26 after `/gsd:verify-work 9` surfaced prior-phase gaps that block UAT progress.
+**Requirements**: none new — closes execution debt against existing requirements (WIN-02 pane lifecycle from Phase 4; pivot cleanup from Phase 7; DT-03 sign-in path from Phase 8; build polish from Phase 1).
+**Success Criteria** (what must be TRUE):
+  1. Typing `exit` in a local pane closes the pane (or renders a clearly-marked `[exited]` sentinel the user can dismiss with Cmd-W). The `PaneExited` handler in `crates/vector-app/src/app.rs` is no longer a log-only stub.
+  2. The `Codespaces…` menu item is gone. The `vector-codespaces` crate, `codespaces_actor`, `codespaces_modal`, `OpenCodespacesPicker` / `CodespacesLoaded` / `CodespacesLoadFailed` / `CodespaceStateChanged` UserEvent variants, and the `install_phase6_items` codespaces section are removed. No regression in the GitHub auth path that Phase 8 still depends on (if any).
+  3. `install_microsoft_menu_items` is called at startup. `Sign in with Microsoft` / `Sign out of Microsoft` / `Dev Tunnels…` items appear in the Vector menu and route through `MicrosoftMenuTarget` to the device-flow modal.
+  4. The Dev Tunnels picker shows a clickable sign-in affordance when in the `NotSignedIn` state (a button, or it auto-presents the Microsoft device-flow modal). The user can sign in from inside the picker without hunting through the menu.
+  5. The bundled `Vector.app` shows the Vector icon in the macOS dock, Finder, and Cmd-Tab switcher (CFBundleIconFile populated; `.icns` packaged by `cargo-bundle` + `xtask dmg`).
+**Plans**: 5 plans (to be created via `/gsd:plan-phase 9.1`)
+  - [ ] 09.1-01-PLAN.md — Local pane exit handler (Phase 4-05 gap closure: close pane on PaneExited, or render an exited sentinel)
+  - [ ] 09.1-02-PLAN.md — Remove Codespaces UI surface (Phase 7 pivot cleanup: menu, crate, actor, modal, UserEvent variants)
+  - [ ] 09.1-03-PLAN.md — Wire `install_microsoft_menu_items` at app startup (Phase 8-05 wiring)
+  - [ ] 09.1-04-PLAN.md — Sign-in affordance inside `DevTunnelsPickerModal` (Phase 8-05 UX gap)
+  - [ ] 09.1-05-PLAN.md — Bundle Vector `.icns` + `CFBundleIconFile` (Phase 1 / 10 distribution polish)
+**Stack additions**: none — all closures use existing crates and patterns.
+**Risks & notes**:
+  - **Phase 9 UAT cannot be walked until at least 09.1-03 + 09.1-04 land.** Plans 09.1-01, 09.1-02, 09.1-05 are independent and can run in parallel with the picker/menu work.
+  - The Codespaces decommission (09.1-02) is the only change that touches a large surface area — make sure the GitHub OAuth token store (`vector-codespaces::TokenStore`) usage by `auth_actor` / picker / arch-tests is migrated cleanly or fully removed. The `vector-codespaces` crate may need to be split (token-store kept under a new name; codespaces-specific bits deleted) rather than deleted wholesale.
+  - The Microsoft menu wiring (09.1-03) is a small change but touches main.rs threading — confirm `MainThreadMarker` lifetimes and that the install runs after the main menu exists.
+  - Pre-release hold: Phase 10-04 (v1.0.0 release tag) is gated on 9.1 closure + Phase 9 UAT pass + 09-SMOKE.md sign-off.
+  - Canonical ref: `.planning/phases/09.1-prior-phase-gap-closure/09.1-CONTEXT.md` — UAT origin, gap-by-gap evidence, scope discipline.
+
 ### Phase 10: Hardening & Release
 **Goal**: Vector v1.0.0 is tagged on GitHub Releases with an unsigned Universal DMG; teammates can install with the documented `xattr` command.
 **Depends on**: Phase 9 (all v1 features in place).
@@ -282,8 +308,9 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 | 6. GitHub Auth + Codespaces Picker | 0/7 | Plans created | - |
 | 7. SSH Transport + Codespaces Connect | 0/0 | Not started | - |
 | 8. Dev Tunnels Integration | 7/7 | Complete   | 2026-05-22 |
-| 9. Persistence + Reconnect | 6/6 | Implementation complete with UAT debt (09-01..06 landed; 09-05 Task 3 + 09-06 Task 3b UAT sign-offs deferred — joint debt blocked by DevTunnelsActor main.rs wiring; PERSIST-04 Pending) | - |
-| 10. Hardening & Release | 3/4 | In Progress|  |
+| 9. Persistence + Reconnect | 7/7 | Implementation complete with UAT debt; `/gsd:verify-work 9` walked 2026-05-26 surfaced prior-phase blockers — see 09-UAT.md + Phase 9.1 | - |
+| 9.1. Prior-Phase Gap Closure | 0/5 | Inserted 2026-05-26 — 5 plans pending creation via /gsd:plan-phase 9.1 | - |
+| 10. Hardening & Release | 3/4 | In Progress — **10-04 release tag held pending 9.1 closure + Phase 9 UAT pass** |  |
 
 ## Coverage
 
@@ -317,7 +344,8 @@ Phase 1 (Foundation/CI/DMG, threading)
                                  └── Phase 7 (SSH transport scaffolding — descoped)
                                        └── Phase 8 (VS Code Remote Tunnels — spike-gated)
                                              └── Phase 9 (Persistence + reconnect + tmux)
-                                                   └── Phase 10 (Hardening + release)
+                                                   └── Phase 9.1 (Prior-phase gap closure — inserted 2026-05-26)
+                                                         └── Phase 10 (Hardening + release; 10-04 tag held until 9.1 closes)
 ```
 
 ## Phase Boundary Discipline

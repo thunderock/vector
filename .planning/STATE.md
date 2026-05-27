@@ -2,47 +2,53 @@
 gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 10-03-PLAN.md (HARDEN-03 cargo-geiger + token-redaction)
-last_updated: "2026-05-26T20:28:47.566Z"
+status: Phase 9.1 inserted — Phase 9 UAT walk surfaced prior-phase blockers; release tag (10-04) held until 9.1 closes and 9-UAT passes
+stopped_at: "/gsd:verify-work 9 paused 2026-05-26 (1 pass / 3 issues / 6 blocked); Phase 9.1 created"
+last_updated: "2026-05-26T20:35:00Z"
 progress:
-  total_phases: 11
+  total_phases: 12
   completed_phases: 7
-  total_plans: 68
+  total_plans: 73
   completed_plans: 65
 ---
 
 # Project State: Vector
 
-**Last updated:** 2026-05-11 (Phase 1 operationally validated end-to-end on GitHub: ci.yml DAG green; release.yml published `v2026.5.10` with Universal DMG; user-confirmed DMG launches on macOS Sequoia. Five divergences from original plans captured in ADRs 0004/0005/0006 and per-plan SUMMARY addenda. Phase 2 next.)
+**Last updated:** 2026-05-26 (Phase 9 UAT walk surfaced 5 prior-phase incompletions: Phase 4-05 PaneExited stub, Phase 7 Codespaces UI leftovers, Phase 8-05 install_microsoft_menu_items never called, Phase 8-05 picker has no in-modal sign-in affordance, Phase 1/10 bundled app icon missing. Phase 9.1 (Prior-Phase Gap Closure) inserted between 9 and 10 with 5 plans pending creation. Phase 10-04 release tag held.)
 
 ## Project Reference
 
 **Core value:** Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), get a fast remote shell — no VS Code, no browser. Local-terminal niceties are table-stakes; the differentiator is that a Dev-Tunnels session feels native, not bolted on.
 
-**Pivoted 2026-05-19:** Phase 7 descoped from GitHub Codespaces to "Remote SSH transport scaffolding (groundwork for Phase 8 tunnels)". Codespace-specific code reverted; transport scaffolding kept. See PROJECT.md + ROADMAP.md §Phase 7.
+**Pivoted 2026-05-19:** Phase 7 descoped from GitHub Codespaces to "Remote SSH transport scaffolding (groundwork for Phase 8 tunnels)". Codespace-specific code reverted; transport scaffolding kept. See PROJECT.md + ROADMAP.md §Phase 7. **Cleanup unfinished** — Codespaces UI surface (menu item, modal, actor, crate) still wired; tracked as Phase 9.1 Gap B.
 
-**Current focus:** Phase 10 — hardening-release
+**Inserted 2026-05-26:** Phase 9.1 (Prior-Phase Gap Closure) between 9 and 10. Origin: `/gsd:verify-work 9`. Holds 10-04 release tag until closed.
+
+**Current focus:** Phase 9.1 — prior-phase-gap-closure (planning pending: `/gsd:discuss-phase 9.1` or `/gsd:plan-phase 9.1`)
 
 ## Current Position
 
-Phase: 10 (hardening-release) — EXECUTING
-Plan: 4 of 4
+Phase: 9.1 (prior-phase-gap-closure) — PLANNING
+Plan: 0 of 5 (plans pending creation)
+
+Holds:
+- Phase 10-04 (v1.0.0 release tag) — gated on 9.1 closure + 09-UAT.md `status: complete` + 09-SMOKE.md USER-RUN sign-off
 
 ## Phase Map
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | Foundation & CI/DMG Pipeline | Complete + operationally validated (2026-05-11) |
-| 2 | Headless Terminal Core | Implementation complete; awaiting phase verifier (Plans 02-01..05 all green: Wave 0 scaffolds + Wave 1 vector-term + Wave 2 vector-pty + Wave 3 vector-mux + Wave 4 vector-headless pass-through proxy; user-approved smoke matrix 2026-05-11) |
-| 3 | GPU Renderer & First Paint | Not started |
-| 4 | Mux — Tabs & Splits | Implementation complete (Plans 04-01..06 all green; Plan 04-06 gap-closure landed: smoke matrix 9/9 PASS after AppWindow→per-pane Compositor migration; WIN-02 + WIN-03 Complete); awaiting phase verifier |
-| 5 | Polish (Local Daily-Driver) | Implementation complete (10/10 plans shipped including 05-10 gap-closure; POLISH-01..08 all Complete; 10/10 manual smoke matrix user-approved 2026-05-12); awaiting phase verifier |
-| 6 | GitHub Auth + Codespaces Picker | Not started |
-| 7 | Remote SSH Transport Scaffolding (DESCOPED 2026-05-19) | Scaffolding shipped; codespace-specific code reverted after pivot to VS Code Tunnels |
-| 8 | VS Code Remote Tunnels Connect | Not started (spike-gated) |
-| 9 | Persistence + Reconnect + tmux Auto-Attach | Not started |
-| 10 | Hardening & Release | Not started |
+| 1 | Foundation & CI/DMG Pipeline | Complete + operationally validated (2026-05-11). **Open gap:** bundled `Vector.app` icon missing — Phase 9.1 Gap E |
+| 2 | Headless Terminal Core | Implementation complete; verifier debt |
+| 3 | GPU Renderer & First Paint | Complete (per ROADMAP progress; STATE.md previously stale) |
+| 4 | Mux — Tabs & Splits | Implementation complete. **Open gap:** local pane `exit` does not close pane (`PaneExited` handler is logging-only stub at `app.rs:1872-1874`) — Phase 9.1 Gap A |
+| 5 | Polish (Local Daily-Driver) | Implementation complete; verifier debt |
+| 6 | GitHub Auth + Codespaces Picker | Complete (per ROADMAP progress) |
+| 7 | Remote SSH Transport Scaffolding (DESCOPED 2026-05-19) | Scaffolding shipped; **Codespaces UI cleanup unfinished** — menu, crate, modal, actor still wired — Phase 9.1 Gap B |
+| 8 | VS Code Remote Tunnels Connect | Complete 2026-05-22. **Open gaps:** `install_microsoft_menu_items` never called (Phase 9.1 Gap C); picker has no in-modal sign-in affordance (Phase 9.1 Gap D) |
+| 9 | Persistence + Reconnect + tmux Auto-Attach | Implementation complete (Plans 09-01..07). UAT debt: `/gsd:verify-work 9` walked 2026-05-26 — see `09-UAT.md` (partial: 1 pass / 3 issues / 6 blocked). All 6 blocked items depend on Phase 9.1 closure |
+| 9.1 | Prior-Phase Gap Closure | **NEW (inserted 2026-05-26).** 5 plans pending creation. Holds 10-04 |
+| 10 | Hardening & Release | 3/4 plans complete (HARDEN-01/02/03). **10-04 (release tag) held pending 9.1 + 09-UAT pass** |
 
 ## Performance Metrics
 
