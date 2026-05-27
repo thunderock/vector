@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 /// Source subtrees scanned by Pitfall-14. Order: alphabetical by crate name
 /// for readable diffs when new crates are added.
 const SCAN_PATHS: &[&str] = &[
-    "vector-codespaces/src",
     "vector-tunnel-agent/src",
     "vector-tunnel-protocol/src",
     "vector-tunnels/src",
@@ -127,6 +126,4 @@ fn scan_paths_include_new_phase_8_crates() {
             "Pitfall 14 SCAN_PATHS missing Phase-8 crate: {needle}"
         );
     }
-    // Phase 6 crate must still be scanned.
-    assert!(SCAN_PATHS.iter().any(|p| p == &"vector-codespaces/src"));
 }

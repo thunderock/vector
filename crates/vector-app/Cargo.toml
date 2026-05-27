@@ -26,7 +26,6 @@ objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 objc2-quartz-core.workspace = true
 raw-window-handle.workspace = true
-vector-codespaces = { path = "../vector-codespaces", version = "2026.5.10" }
 vector-config = { path = "../vector-config", version = "2026.5.10" }
 vector-fonts = { path = "../vector-fonts", version = "2026.5.10" }
 vector-input = { path = "../vector-input", version = "2026.5.10" }
@@ -35,14 +34,10 @@ vector-render = { path = "../vector-render", version = "2026.5.10" }
 vector-term = { path = "../vector-term", version = "2026.5.10" }
 # Phase 8 / Plan 08-05 — DevTunnels picker + Microsoft auth + actor.
 vector-tunnels = { path = "../vector-tunnels", version = "2026.5.10" }
-# Phase 6 / AUTH-01 — zeroize handles the access token without leaking.
-# (auth_actor previously used octocrab but switched to direct reqwest after
-# octocrab's tower::buffer service panicked in the field on @login fetch.)
-zeroize.workspace = true
-# Phase 6 / Plan 06-06 — codespaces_actor + picker modal use
-# tokio-util CancellationToken for cooperative poll cancellation
-# and chrono for last_used_at elapsed math.
+# Phase 8 / Plan 08-05 — tokio-util CancellationToken for Microsoft device-flow
+# cancel + DevTunnels picker poll cancellation.
 tokio-util.workspace = true
+# Used by devtunnels_actor for timestamp math.
 chrono.workspace = true
 
 [dev-dependencies]

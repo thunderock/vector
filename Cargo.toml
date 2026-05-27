@@ -9,7 +9,6 @@ members = [
     "crates/vector-term",
     "crates/vector-pty",
     "crates/vector-ssh",
-    "crates/vector-codespaces",
     "crates/vector-tunnels",
     "crates/vector-tunnel-agent",
     "crates/vector-tunnel-protocol",

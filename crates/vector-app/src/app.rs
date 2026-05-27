@@ -15,7 +15,7 @@ use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::hyperlink_dispatch;
@@ -140,26 +140,12 @@ pub struct App {
     /// Plan 05-16 (MEDIUM-2): snapshot of the active pane's rect; updated each frame
     /// during the per-pane compositor loop in render_window. None if no active pane.
     active_pane_rect: Option<PaneRectPx>,
-    /// Plan 06-05 / AUTH-01 — EventLoopProxy for spawning UserEvents from
-    /// menu items, the auth_actor tokio task, and the modal Cancel button.
+    /// EventLoopProxy for spawning UserEvents from menu items and actors.
     /// Wired by main.rs via `set_proxy`.
     proxy: Option<winit::event_loop::EventLoopProxy<UserEvent>>,
-    /// Plan 06-05 / AUTH-01 — Handle to the I/O-thread tokio runtime so we
-    /// can spawn the auth_actor task without standing up a second runtime.
-    /// Wired by main.rs via `set_tokio_handle`.
+    /// Handle to the I/O-thread tokio runtime so actors can `handle.spawn(...)`
+    /// without standing up a second runtime. Wired by main.rs via `set_tokio_handle`.
     tokio_handle: Option<tokio::runtime::Handle>,
-    /// Plan 06-05 / AUTH-01 — live AuthDeviceFlowModal NSPanel (Some while
-    /// the modal is on screen). The 1 Hz frame tick calls `tick()` on it.
-    auth_modal: Option<crate::auth_modal::AuthDeviceFlowModal>,
-    /// Plan 06-05 / AUTH-01 — set on AuthSignInRequested when we spawn the
-    /// device-flow task; cleared on AuthCompleted/AuthFailed. Lets the modal
-    /// share the same cancel flag as the tokio task.
-    pending_auth_cancellation: Option<crate::auth_actor::AuthCancellation>,
-    /// Plan 06-06 / CS-01..03 — live CodespacesPickerModal NSPanel.
-    codespaces_modal: Option<crate::codespaces_modal::CodespacesPickerModal>,
-    /// Plan 06-06 — Octocrab-backed client built lazily on first picker open
-    /// from the Keychain access token. Reused across fetch / start / poll.
-    codespaces_client: Option<std::sync::Arc<vector_codespaces::CodespacesClient>>,
     /// Phase 8 / Plan 08-05 — DevTunnelsActor command sender; wired by main.rs.
     devtunnels_cmd_tx: Option<mpsc::Sender<crate::devtunnels_actor::Command>>,
     /// Phase 8 / Plan 08-05 — live MicrosoftAuthDeviceFlowModal.
@@ -213,13 +199,9 @@ impl App {
             profile_picker: crate::profile_picker::ProfilePicker::new(Vec::new()),
             // Plan 05-16: populated per frame by the compositor loop.
             active_pane_rect: None,
-            // Plan 06-05 / AUTH-01: wired by main.rs.
+            // Wired by main.rs.
             proxy: None,
             tokio_handle: None,
-            auth_modal: None,
-            pending_auth_cancellation: None,
-            codespaces_modal: None,
-            codespaces_client: None,
             devtunnels_cmd_tx: None,
             microsoft_auth_modal: None,
             devtunnels_modal: None,
@@ -355,284 +337,7 @@ impl App {
         self.request_redraw_all();
     }
 
-    // ---- Phase 6 / AUTH-01 — device-flow handlers ------------------------
 
-    /// Spawn the auth_actor tokio task. Idempotent-ish: if a flow is already
-    /// in progress (pending_auth_cancellation set), the new request replaces
-    /// the old one (the previous flag is dropped — its task will see the
-    /// stale flag value, but since we abandon the modal it doesn't matter).
-    fn handle_auth_sign_in_requested(&mut self) {
-        let (Some(proxy), Some(handle)) = (self.proxy.clone(), self.tokio_handle.clone()) else {
-            tracing::warn!("AuthSignInRequested: proxy or tokio_handle missing");
-            return;
-        };
-        let cancel = crate::auth_actor::spawn_device_flow(&handle, proxy);
-        self.pending_auth_cancellation = Some(cancel);
-        tracing::info!("auth_actor spawned (device flow in progress)");
-    }
-
-    /// Construct + show the AuthDeviceFlowModal. The cancellation flag from
-    /// the spawn path is shared with the modal so the Cancel button can
-    /// signal the actor task.
-    fn handle_auth_display_code(
-        &mut self,
-        user_code: String,
-        verification_uri: String,
-        expires_at: std::time::SystemTime,
-    ) {
-        let Some(mtm) = objc2::MainThreadMarker::new() else {
-            tracing::warn!("AuthDisplayCode: not on main thread");
-            return;
-        };
-        let Some(proxy) = self.proxy.clone() else {
-            tracing::warn!("AuthDisplayCode: proxy missing");
-            return;
-        };
-        let cancellation = self.pending_auth_cancellation.clone().unwrap_or_default();
-        if self.auth_modal.is_some() {
-            tracing::debug!("AuthDisplayCode: replacing existing modal");
-            if let Some(prev) = self.auth_modal.take() {
-                prev.dismiss(mtm);
-            }
-        }
-        let modal = crate::auth_modal::AuthDeviceFlowModal::show(
-            mtm,
-            user_code,
-            verification_uri,
-            expires_at,
-            cancellation,
-            proxy,
-        );
-        self.auth_modal = Some(modal);
-    }
-
-    fn handle_auth_completed(&mut self, user_login: &str) {
-        if let Some(mtm) = objc2::MainThreadMarker::new() {
-            if let Some(modal) = self.auth_modal.take() {
-                modal.dismiss(mtm);
-            }
-            unsafe { menu::rebuild_auth_menu_section(mtm, true, Some(user_login)) };
-        }
-        self.pending_auth_cancellation = None;
-        self.toasts.show(ToastBanner::info(format!(
-            "signed in as @{user_login} — pick a Codespace"
-        )));
-        // Auto-advance to the Codespaces picker so the user isn't stranded at
-        // the local shell with no signal the next step is Cmd-Shift-G.
-        if let Some(proxy) = &self.proxy {
-            let _ = proxy.send_event(UserEvent::OpenCodespacesPicker);
-        }
-        self.request_redraw_all();
-        tracing::info!(user_login, "auth_completed");
-    }
-
-    fn handle_auth_failed(&mut self, reason: &str) {
-        // Only dismiss the modal on terminal user-driven outcomes. Transient
-        // oauth/network errors (e.g. parse failure, init failure) must NOT
-        // tear down the modal — the user still needs to see the device code
-        // and decide whether to retry or cancel manually.
-        let user_terminal = matches!(reason, "cancelled" | "expired");
-        if user_terminal {
-            if let Some(mtm) = objc2::MainThreadMarker::new() {
-                if let Some(modal) = self.auth_modal.take() {
-                    modal.dismiss(mtm);
-                }
-            }
-            self.pending_auth_cancellation = None;
-        }
-        // UI-SPEC §6.1 toast copy mapping.
-        let toast_text = match reason {
-            "cancelled" => "sign-in cancelled".to_string(),
-            "expired" => "sign-in code expired — try again".to_string(),
-            other => format!("sign-in failed: {other}"),
-        };
-        self.toasts.show(ToastBanner::info(toast_text));
-        self.request_redraw_all();
-        tracing::info!(reason, "auth_failed");
-    }
-
-    // ---- Phase 6 / CS-01..03 — picker handlers --------------------------
-
-    fn handle_open_codespaces_picker(&mut self) {
-        // Short-circuit to AuthRequired if no token in Keychain. Avoids
-        // showing an empty picker to a user who hasn't signed in yet.
-        if !crate::codespaces_actor::has_keychain_token() {
-            tracing::info!("OpenCodespacesPicker: no token — routing to AuthRequired");
-            if let Some(proxy) = &self.proxy {
-                let _ = proxy.send_event(UserEvent::AuthRequired);
-            }
-            return;
-        }
-        let Some(mtm) = objc2::MainThreadMarker::new() else {
-            tracing::warn!("OpenCodespacesPicker: not on main thread");
-            return;
-        };
-        let Some(proxy) = self.proxy.clone() else {
-            return;
-        };
-        let Some(handle) = self.tokio_handle.clone() else {
-            return;
-        };
-        // Lazily build the CodespacesClient for downstream start/poll calls.
-        // Listing itself uses a direct reqwest path, but `start` / `poll` still
-        // go through octocrab. Building here (once per session) under the
-        // entered tokio runtime context avoids the tower::buffer panic.
-        if self.codespaces_client.is_none() {
-            if let Some(c) = crate::codespaces_actor::build_client_from_keychain(&handle) {
-                self.codespaces_client = Some(c);
-            } else {
-                tracing::warn!("OpenCodespacesPicker: client build failed despite token present");
-            }
-        }
-        // Dismiss prior modal (if any) before showing a fresh one.
-        if let Some(prev) = self.codespaces_modal.take() {
-            prev.dismiss();
-        }
-        let modal = crate::codespaces_modal::CodespacesPickerModal::show(mtm);
-        self.codespaces_modal = Some(modal);
-        // Use direct reqwest fetch — bypasses octocrab/tower entirely, so the
-        // list call has zero buffer surface. If the token is rejected (401),
-        // the actor emits AuthRequired and the picker is dismissed by the
-        // AuthRequired arm.
-        crate::codespaces_actor::spawn_fetch_codespaces_direct(&handle, proxy);
-    }
-
-    fn handle_codespaces_loaded(
-        &mut self,
-        list: &std::sync::Arc<Vec<vector_codespaces::Codespace>>,
-    ) {
-        let Some(mtm) = objc2::MainThreadMarker::new() else {
-            return;
-        };
-        let Some(modal) = self.codespaces_modal.as_mut() else {
-            return;
-        };
-        // Spawn poll tasks for any row in the Starting family so live state
-        // ticks render in the picker.
-        let cancel_token = modal.poll_cancel.clone();
-        modal.handle_loaded(mtm, list.clone());
-        if let (Some(handle), Some(client), Some(proxy)) = (
-            self.tokio_handle.clone(),
-            self.codespaces_client.clone(),
-            self.proxy.clone(),
-        ) {
-            for cs in list.iter() {
-                if crate::relative_time::state_label(cs.state) == "Starting" {
-                    crate::codespaces_actor::spawn_poll_row(
-                        &handle,
-                        proxy.clone(),
-                        client.clone(),
-                        &cs.name,
-                        cancel_token.clone(),
-                    );
-                }
-            }
-        }
-    }
-
-    /// Connect placeholder — real remote-shell wiring lives in the future
-    /// tunnels phase. For now, show a toast so the picker stays usable.
-    fn codespaces_connect_selected(&mut self) {
-        let Some(modal) = self.codespaces_modal.as_ref() else {
-            return;
-        };
-        let Some(cs) = modal.selected() else {
-            return;
-        };
-        self.toasts.show(ToastBanner::info(format!(
-            "connect to {} — not implemented yet",
-            cs.name
-        )));
-        self.request_redraw_all();
-    }
-
-    /// Start the currently selected Shutdown-family codespace (CS-02).
-    fn codespaces_start_selected(&mut self) {
-        let (Some(modal), Some(handle), Some(client), Some(proxy)) = (
-            self.codespaces_modal.as_ref(),
-            self.tokio_handle.clone(),
-            self.codespaces_client.clone(),
-            self.proxy.clone(),
-        ) else {
-            return;
-        };
-        let Some(cs) = modal.selected() else {
-            return;
-        };
-        let cancel = modal.poll_cancel.clone();
-        crate::codespaces_actor::spawn_start_then_poll(
-            &handle,
-            proxy,
-            client,
-            cs.name.clone(),
-            cancel,
-        );
-    }
-
-    /// Save the currently selected codespace as a profile (CS-03).
-    fn codespaces_save_selected(&mut self) {
-        let Some(modal) = self.codespaces_modal.as_ref() else {
-            return;
-        };
-        let Some(cs) = modal.selected() else {
-            return;
-        };
-        let existing: Vec<String> = self
-            .current_config
-            .as_ref()
-            .map(|c| c.profile.keys().cloned().collect())
-            .unwrap_or_default();
-        let existing_refs: Vec<&str> = existing.iter().map(String::as_str).collect();
-        let suggested =
-            vector_config::derive_profile_name(&cs.repository.full_name, &existing_refs);
-        let path = crate::codespaces_modal::config_path();
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        match vector_config::append_codespace_profile(&path, &suggested, &cs.name, "#7a3aaf") {
-            Ok(final_name) => {
-                self.toasts.show(ToastBanner::info(format!(
-                    "profile saved as \"{final_name}\""
-                )));
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "append_codespace_profile failed");
-                self.toasts
-                    .show(ToastBanner::info(format!("could not save profile — {e}")));
-            }
-        }
-        self.request_redraw_all();
-    }
-
-    /// Dismiss the codespaces picker if open. Used by Esc and lifecycle paths.
-    fn codespaces_picker_dismiss(&mut self) {
-        if let Some(modal) = self.codespaces_modal.take() {
-            modal.dismiss();
-        }
-    }
-
-    /// Returns true if the codespaces picker is the AppKit key window.
-    fn codespaces_picker_is_key(&self) -> bool {
-        self.codespaces_modal
-            .as_ref()
-            .is_some_and(crate::codespaces_modal::CodespacesPickerModal::is_key_window)
-    }
-
-    /// 1 Hz tick into the auth modal countdown. Called from the existing
-    /// frame-tick loop on every WindowEvent::RedrawRequested. If the modal
-    /// has expired, emit `AuthFailed { reason: "expired" }` so the regular
-    /// failure path handles dismiss + toast.
-    pub fn tick_auth_modal(&mut self) {
-        if let Some(modal) = self.auth_modal.as_ref() {
-            if modal.tick() {
-                if let Some(proxy) = &self.proxy {
-                    let _ = proxy.send_event(UserEvent::AuthFailed {
-                        reason: "expired".into(),
-                    });
-                }
-            }
-        }
-    }
 
     /// Plan 05-14 — reload config from disk (same path as FSEvents watcher). D-69 fallback.
     fn do_reload_config(&mut self) {
@@ -733,14 +438,6 @@ impl App {
                 }
             }
             AppShortcut::ReloadConfig => self.do_reload_config(),
-            AppShortcut::OpenCodespacesPicker => {
-                if let Some(proxy) = &self.proxy {
-                    let _ = proxy.send_event(UserEvent::OpenCodespacesPicker);
-                }
-            }
-            AppShortcut::SignInWithGitHub => {
-                self.handle_auth_sign_in_requested();
-            }
             // Phase 8 / D-11 / Plan 08-05 — Cmd-Shift-T opens DevTunnels picker.
             AppShortcut::OpenDevTunnelsPicker => {
                 self.handle_open_devtunnels_picker();
@@ -908,10 +605,6 @@ impl App {
     fn render_window(&mut self, id: WindowId, sel: Option<((u16, u16), (u16, u16))>) {
         // Plan 05-16: tick the toast stack so Info toasts auto-expire after 5 s.
         self.toasts.tick(std::time::Instant::now());
-        // Plan 06-05 / AUTH-01: 1 Hz auth modal countdown (UI-SPEC §5.1). The
-        // tick runs every render frame but only mutates the NSTextField once
-        // per second's worth of difference, so the call is cheap.
-        self.tick_auth_modal();
 
         let Some(aw) = self.windows.get_mut(&id) else {
             return;
@@ -1752,17 +1445,8 @@ impl ApplicationHandler<UserEvent> for App {
         // SAFETY: winit guarantees `resumed` runs on the macOS main thread.
         let overlay_inst = unsafe {
             menu::install_main_menu();
-            // Plan 06-05 / AUTH-01: insert Sign in / Sign out / Codespaces…
-            // above the existing Vector-menu items. Requires proxy (set by
-            // main.rs); skip silently if absent (e.g. integration tests).
-            if let (Some(mtm), Some(proxy)) = (objc2::MainThreadMarker::new(), self.proxy.clone()) {
-                menu::install_auth_menu_items(mtm, proxy);
-                // First-launch: reflect Keychain state so the right item is
-                // visible. @login is not fetched here (would block the UI
-                // thread); the next AuthCompleted will fill it in.
-                let token_present = vector_codespaces::TokenStore::new().load_access().is_some();
-                menu::rebuild_auth_menu_section(mtm, token_present, None);
-            }
+            // Phase 9.1 Gap B: GitHub auth menu install removed. Microsoft
+            // sign-in items are installed by main.rs (Plan 09.1-03 / Gap C).
             Some(overlay::install(&window))
         };
         let render_host = match RenderHost::new(&window) {
@@ -1942,35 +1626,10 @@ impl ApplicationHandler<UserEvent> for App {
                 self.handle_app_shortcut(event_loop, AppShortcut::OpenProfilePicker);
             }
             UserEvent::ProfileSelected(name) => {
-                // D-84: if the selected profile is kind=codespace and no
-                // access token is present in Keychain, divert to the device
-                // flow rather than trying to connect. Reuses the same
-                // AuthSignInRequested path as the menu item; once auth
-                // completes Plan 06-06's Codespaces picker can re-issue the
-                // profile selection.
-                let is_codespace_profile = self
-                    .current_config
-                    .as_ref()
-                    .and_then(|cfg| cfg.profile.get(&name))
-                    .and_then(|p| p.kind)
-                    .is_some_and(|k| matches!(k, vector_config::Kind::Codespace));
-                let has_token = vector_codespaces::TokenStore::new().load_access().is_some();
-                if is_codespace_profile && !has_token {
-                    tracing::info!(
-                        profile = %name,
-                        "D-84: codespace profile selected without token — diverting to sign-in"
-                    );
-                    if let Some(proxy) = &self.proxy {
-                        let _ = proxy.send_event(UserEvent::AuthSignInRequested);
-                    }
-                } else {
-                    tracing::info!(
-                        profile = %name,
-                        is_codespace_profile,
-                        has_token,
-                        "ProfileSelected (connect path lands in Phase 7)"
-                    );
-                }
+                // Phase 9.1 Gap B: codespace-profile divert-to-GitHub-sign-in
+                // path removed. Selecting a codespace profile is now a no-op
+                // (the remote-connect path lives in the Dev Tunnels picker).
+                tracing::info!(profile = %name, "ProfileSelected");
             }
             UserEvent::ToggleSearch => {
                 // Cmd-F via menu — delegate to the same handler path.
@@ -2020,77 +1679,10 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                 }
             }
-            // Phase 6 / AUTH-01 — device-flow user-event arms.
-            UserEvent::AuthSignInRequested => {
-                self.handle_auth_sign_in_requested();
-            }
-            UserEvent::AuthDisplayCode {
-                user_code,
-                verification_uri,
-                expires_at,
-                interval_secs,
-            } => {
-                let _ = interval_secs; // not surfaced in UI; useful for tracing
-                self.handle_auth_display_code(user_code, verification_uri, expires_at);
-            }
-            UserEvent::AuthCompleted { user_login } => {
-                self.handle_auth_completed(&user_login);
-            }
-            UserEvent::AuthFailed { reason } => {
-                self.handle_auth_failed(&reason);
-            }
-            UserEvent::AuthRequired => {
-                // Re-enter the device flow as if the user clicked the menu.
-                if let Some(modal) = self.auth_modal.take() {
-                    if let Some(mtm) = objc2::MainThreadMarker::new() {
-                        modal.dismiss(mtm);
-                    }
-                }
-                // Dismiss the codespaces picker if it's open — the user is no
-                // longer authenticated, so the picker has nothing to show.
-                if let Some(picker) = self.codespaces_modal.take() {
-                    picker.dismiss();
-                }
-                self.handle_auth_sign_in_requested();
-            }
-            UserEvent::SignOut => {
-                let _ = vector_codespaces::TokenStore::new().clear();
-                // Drop the cached client + picker — both reference the now-cleared token.
-                self.codespaces_client = None;
-                if let Some(picker) = self.codespaces_modal.take() {
-                    picker.dismiss();
-                }
-                if let Some(mtm) = objc2::MainThreadMarker::new() {
-                    unsafe { menu::rebuild_auth_menu_section(mtm, false, None) };
-                }
-                self.toasts.show(ToastBanner::info("signed out"));
-                tracing::info!("sign_out_complete");
-            }
-            // Plan 06-06 / CS-01..03 — Codespaces picker handlers.
-            UserEvent::OpenCodespacesPicker => {
-                self.handle_open_codespaces_picker();
-            }
-            UserEvent::CodespacesLoaded(list) => {
-                self.handle_codespaces_loaded(&list);
-            }
-            UserEvent::CodespacesLoadFailed(msg) => {
-                tracing::warn!(error = %msg, "codespaces_load_failed");
-                if let Some(modal) = self.codespaces_modal.as_mut() {
-                    if let Some(mtm) = objc2::MainThreadMarker::new() {
-                        modal.handle_load_failed(
-                            mtm,
-                            "could not fetch codespaces — check your connection".to_string(),
-                        );
-                    }
-                }
-            }
-            UserEvent::CodespaceStateChanged { name, state } => {
-                if let Some(modal) = self.codespaces_modal.as_mut() {
-                    if let Some(mtm) = objc2::MainThreadMarker::new() {
-                        modal.handle_state_change(mtm, &name, state);
-                    }
-                }
-            }
+            // Phase 9.1 Gap B: GitHub device-flow + Codespaces picker UserEvent
+            // arms removed (AuthSignInRequested, AuthDisplayCode, AuthCompleted,
+            // AuthFailed, AuthRequired, SignOut, OpenCodespacesPicker,
+            // CodespacesLoaded, CodespacesLoadFailed, CodespaceStateChanged).
             // ───── Phase 8 / Plan 08-05 — DevTunnels + Microsoft sign-in ─────
             UserEvent::MicrosoftDeviceFlowStarted {
                 user_code,
@@ -2274,65 +1866,7 @@ impl ApplicationHandler<UserEvent> for App {
                 self.mods = ModState::from_winit(modifiers.state());
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                // Plan 06-06 / CS-01..03 — picker keyboard routing.
-                // When the codespaces picker is key, intercept Enter / Cmd-S /
-                // Esc / arrows before the standard mux dispatch. The picker is
-                // a separate NSPanel, so events reaching this winit window mean
-                // the picker is NOT key; but we route here defensively so that
-                // global hotkeys (Cmd-Shift-G, etc.) cannot collide with picker
-                // navigation either.
-                if event.state == ElementState::Pressed && self.codespaces_picker_is_key() {
-                    if let Key::Character(s) = &event.logical_key {
-                        match s.as_str() {
-                            "s" | "S" if self.mods.cmd => {
-                                self.codespaces_save_selected();
-                                return;
-                            }
-                            _ => {}
-                        }
-                    }
-                    if let Key::Named(named) = &event.logical_key {
-                        match named {
-                            NamedKey::Enter => {
-                                // Available/Starting → Connect stub; Shutdown → Start.
-                                if let Some(modal) = self.codespaces_modal.as_ref() {
-                                    if let Some(cs) = modal.selected() {
-                                        let label = crate::relative_time::state_label(cs.state);
-                                        if label == "Shutdown" {
-                                            self.codespaces_start_selected();
-                                        } else {
-                                            self.codespaces_connect_selected();
-                                        }
-                                    }
-                                }
-                                return;
-                            }
-                            NamedKey::Escape => {
-                                self.codespaces_picker_dismiss();
-                                return;
-                            }
-                            NamedKey::ArrowDown => {
-                                if let (Some(modal), Some(mtm)) = (
-                                    self.codespaces_modal.as_mut(),
-                                    objc2::MainThreadMarker::new(),
-                                ) {
-                                    modal.select_next(mtm);
-                                }
-                                return;
-                            }
-                            NamedKey::ArrowUp => {
-                                if let (Some(modal), Some(mtm)) = (
-                                    self.codespaces_modal.as_mut(),
-                                    objc2::MainThreadMarker::new(),
-                                ) {
-                                    modal.select_prev(mtm);
-                                }
-                                return;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
+                // Phase 9.1 Gap B: Codespaces picker keyboard routing removed.
                 // Cmd-V: read NSPasteboard + wrap in bracketed paste markers (D-53).
                 if event.state == ElementState::Pressed && self.mods.cmd {
                     if let Key::Character(s) = &event.logical_key {
