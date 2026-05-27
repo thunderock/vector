@@ -1870,7 +1870,19 @@ impl ApplicationHandler<UserEvent> for App {
                 self.request_redraw_all();
             }
             UserEvent::PaneExited(pane_id) => {
-                tracing::info!(?pane_id, "pane exited (Plan 04-05 will render sentinel)");
+                // Phase 9.1 Gap A: mirror the Cmd-W ClosePane cascade at app.rs:1649-1666.
+                // Local PTY EOF (pty_actor.rs:232) → close the pane via Mux and route the cascade.
+                // Remote panes never reach here (they enter Reconnecting on EOF — D-03).
+                if let Some(cancel) = self.pane_cancel_tokens.remove(&pane_id) {
+                    cancel.cancel();
+                }
+                self.reconnecting_panes.remove(&pane_id);
+                self.reconnect_first_keystroke_shown.remove(&pane_id);
+                let result = Mux::try_get().map(|mux| mux.close_pane(pane_id));
+                tracing::info!(?pane_id, ?result, "PaneExited → close_pane cascade");
+                if matches!(result, Some(vector_mux::CloseResult::LastWindowClosed)) {
+                    event_loop.exit();
+                }
             }
             UserEvent::PaneTitleChanged { pane_id, label } => {
                 // D-79 B2: append `: {cwd_stem}` when OSC 7 ring is non-empty.
