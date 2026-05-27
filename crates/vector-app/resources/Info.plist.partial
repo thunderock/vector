@@ -6,3 +6,5 @@
 <string>2026.05.10</string>
 <key>CFBundleShortVersionString</key>
 <string>2026.05.10</string>
+<key>CFBundleIconFile</key>
+<string>icon</string>
