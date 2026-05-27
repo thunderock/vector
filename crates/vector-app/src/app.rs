@@ -337,8 +337,6 @@ impl App {
         self.request_redraw_all();
     }
 
-
-
     /// Plan 05-14 — reload config from disk (same path as FSEvents watcher). D-69 fallback.
     fn do_reload_config(&mut self) {
         let path = std::env::var_os("HOME")
@@ -1445,8 +1443,13 @@ impl ApplicationHandler<UserEvent> for App {
         // SAFETY: winit guarantees `resumed` runs on the macOS main thread.
         let overlay_inst = unsafe {
             menu::install_main_menu();
-            // Phase 9.1 Gap B: GitHub auth menu install removed. Microsoft
-            // sign-in items are installed by main.rs (Plan 09.1-03 / Gap C).
+            // Plan 09.1-03 (Gap C): install Microsoft sign-in + Dev Tunnels menu
+            // items (defined in Plan 08-05 menu.rs but not previously called).
+            if let (Some(mtm), Some(proxy)) = (objc2::MainThreadMarker::new(), self.proxy.clone()) {
+                menu::install_microsoft_menu_items(mtm, proxy);
+            } else {
+                tracing::warn!("install_microsoft_menu_items skipped: missing mtm or proxy");
+            }
             Some(overlay::install(&window))
         };
         let render_host = match RenderHost::new(&window) {
