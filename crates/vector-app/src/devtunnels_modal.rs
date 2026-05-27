@@ -9,14 +9,19 @@
 //! per UI-SPEC §Interaction Contract.
 
 use objc2::rc::Retained;
-use objc2::MainThreadMarker;
+use objc2::{sel, MainThreadMarker};
 use objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSFont, NSPanel, NSTextAlignment, NSTextField, NSWindowStyleMask,
+    NSBackingStoreType, NSBezelStyle, NSButton, NSColor, NSFont, NSPanel, NSTextAlignment,
+    NSTextField, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use tokio_util::sync::CancellationToken;
+use winit::event_loop::EventLoopProxy;
 
 use crate::devtunnels_actor::TunnelView;
+use crate::UserEvent;
+
+use signin_target::SigninTarget;
 
 /// UI-SPEC §Spacing Scale (locked). Panel frame & subview rects.
 pub const PANEL_W: f64 = 640.0;
@@ -104,6 +109,8 @@ pub fn format_row(view: &TunnelView) -> String {
 /// Modal context passed in at construction.
 pub struct DevTunnelsModalCtx {
     pub poll_cancel: CancellationToken,
+    /// Plan 09.1-04 / D-13 — proxy for the sign-in button click.
+    pub proxy: EventLoopProxy<UserEvent>,
 }
 
 /// AppKit-backed picker panel. Holds the panel + footer label + row fields.
@@ -112,6 +119,11 @@ pub struct DevTunnelsPickerModal {
     rows_container_frame: NSRect,
     row_fields: parking_lot::Mutex<Vec<Retained<NSTextField>>>,
     footer: Retained<NSTextField>,
+    /// Plan 09.1-04 / D-12 — sign-in button shown only in FooterState::NotSignedIn.
+    signin_button: Retained<NSButton>,
+    /// Plan 09.1-04 / D-13 — kept alive so the button's weak `target` ref stays valid.
+    #[allow(dead_code)]
+    signin_target: Retained<SigninTarget>,
     views: Vec<TunnelView>,
     selected_index: Option<usize>,
     filter_text: String,
@@ -146,9 +158,14 @@ impl DevTunnelsPickerModal {
             true,
         );
 
+        // Plan 09.1-04 / D-12..D-14 — sign-in button. Hidden until NotSignedIn.
+        let signin_target = SigninTarget::new(mtm, ctx.proxy);
+        let signin_button = make_signin_button(mtm, &signin_target);
+
         {
             let content = panel.contentView().expect("content");
             content.addSubview(&footer);
+            content.addSubview(&signin_button);
             panel.makeKeyAndOrderFront(None);
         }
 
@@ -157,6 +174,8 @@ impl DevTunnelsPickerModal {
             rows_container_frame,
             row_fields: parking_lot::Mutex::new(Vec::new()),
             footer,
+            signin_button,
+            signin_target,
             views: Vec::new(),
             selected_index: None,
             filter_text: String::new(),
@@ -176,6 +195,7 @@ impl DevTunnelsPickerModal {
             footer_copy(&FooterState::Loaded { shown, total })
         };
         self.footer.setStringValue(&NSString::from_str(&footer));
+        self.signin_button.setHidden(true);
     }
 
     pub fn handle_load_failed(&mut self, mtm: MainThreadMarker, reason: String) {
@@ -186,6 +206,7 @@ impl DevTunnelsPickerModal {
             .setStringValue(&NSString::from_str(&footer_copy(&FooterState::ApiError {
                 reason,
             })));
+        self.signin_button.setHidden(true);
     }
 
     pub fn handle_auth_required(&mut self, mtm: MainThreadMarker) {
@@ -194,6 +215,9 @@ impl DevTunnelsPickerModal {
         self.rerender(mtm);
         self.footer
             .setStringValue(&NSString::from_str(&footer_copy(&FooterState::NotSignedIn)));
+        // Plan 09.1-04 / D-12 — reveal the sign-in button only here.
+        // D-14: no auto-present of the device-flow modal; user must click.
+        self.signin_button.setHidden(false);
     }
 
     #[must_use]
@@ -296,6 +320,39 @@ impl DevTunnelsPickerModal {
     }
 }
 
+/// Plan 09.1-04 / D-12 — Microsoft-blue sRGB tint from `vector_render::tint_stripe::MICROSOFT_BLUE`.
+const MICROSOFT_BLUE_SRGB: [f64; 4] = [0.0, 0.471, 0.831, 1.0];
+
+/// Plan 09.1-04 / D-12 — sign-in button centered horizontally above the footer.
+/// Frame chosen inside the rows container (y=32) so it appears in the empty
+/// rows area when NotSignedIn — there are no rows to overlap in that state.
+fn make_signin_button(mtm: MainThreadMarker, target: &SigninTarget) -> Retained<NSButton> {
+    let width: f64 = 200.0;
+    let height: f64 = 28.0;
+    let frame_x = (PANEL_W - width) / 2.0;
+    let frame_y = ROWS_Y + (ROWS_H - height) / 2.0;
+    let frame = NSRect::new(NSPoint::new(frame_x, frame_y), NSSize::new(width, height));
+    let title = NSString::from_str("Sign in with Microsoft");
+    let button: Retained<NSButton> =
+        unsafe { NSButton::buttonWithTitle_target_action(&title, None, None, mtm) };
+    button.setFrame(frame);
+    button.setBezelStyle(NSBezelStyle::Push);
+    let blue = NSColor::colorWithSRGBRed_green_blue_alpha(
+        MICROSOFT_BLUE_SRGB[0],
+        MICROSOFT_BLUE_SRGB[1],
+        MICROSOFT_BLUE_SRGB[2],
+        MICROSOFT_BLUE_SRGB[3],
+    );
+    button.setContentTintColor(Some(&blue));
+    button.setHidden(true);
+    unsafe {
+        let any: &objc2::runtime::AnyObject = target.as_ref();
+        button.setTarget(Some(any));
+        button.setAction(Some(sel!(microsoftSignIn:)));
+    }
+    button
+}
+
 fn make_label(
     mtm: MainThreadMarker,
     text: &str,
@@ -314,6 +371,60 @@ fn make_label(
         f.setTextColor(Some(&NSColor::secondaryLabelColor()));
     }
     f
+}
+
+/// Plan 09.1-04 / D-13 — ObjC subclass that bridges the sign-in NSButton's
+/// `microsoftSignIn:` action to `UserEvent::MicrosoftSignInRequested`. The
+/// app.rs arm for that event already routes to
+/// `DevTunnelsActor::Command::StartMicrosoftSignIn`, so the picker reuses
+/// the exact same path as the menu item — no duplicate logic.
+mod signin_target {
+    use objc2::define_class;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2::{msg_send, DefinedClass, MainThreadOnly};
+    use objc2_app_kit::NSResponder;
+    use parking_lot::Mutex;
+    use winit::event_loop::EventLoopProxy;
+
+    use crate::UserEvent;
+
+    pub struct Ivars {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    const _: fn() = || {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Mutex<Ivars>>();
+    };
+
+    define_class!(
+        #[unsafe(super(NSResponder))]
+        #[name = "VectorDevTunnelsSigninTarget"]
+        #[ivars = Mutex<Ivars>]
+        pub struct SigninTarget;
+
+        impl SigninTarget {
+            #[unsafe(method(microsoftSignIn:))]
+            fn microsoft_sign_in(&self, _sender: &AnyObject) {
+                let _ = self
+                    .ivars()
+                    .lock()
+                    .proxy
+                    .send_event(UserEvent::MicrosoftSignInRequested);
+            }
+        }
+    );
+
+    impl SigninTarget {
+        pub fn new(
+            mtm: objc2::MainThreadMarker,
+            proxy: EventLoopProxy<UserEvent>,
+        ) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(Mutex::new(Ivars { proxy }));
+            unsafe { msg_send![super(this), init] }
+        }
+    }
 }
 
 #[cfg(test)]

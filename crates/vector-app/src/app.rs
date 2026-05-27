@@ -448,6 +448,10 @@ impl App {
             tracing::warn!("OpenDevTunnelsPicker: not on main thread");
             return;
         };
+        let Some(proxy) = self.proxy.clone() else {
+            tracing::warn!("OpenDevTunnelsPicker: missing proxy");
+            return;
+        };
         if let Some(prev) = self.devtunnels_modal.take() {
             prev.dismiss();
         }
@@ -455,6 +459,7 @@ impl App {
             mtm,
             crate::devtunnels_modal::DevTunnelsModalCtx {
                 poll_cancel: tokio_util::sync::CancellationToken::new(),
+                proxy,
             },
         );
         self.devtunnels_modal = Some(modal);
@@ -1717,6 +1722,12 @@ impl ApplicationHandler<UserEvent> for App {
                 if let Some(mtm) = objc2::MainThreadMarker::new() {
                     unsafe {
                         menu::rebuild_microsoft_signin_section(mtm, menu::SignInState::SignedIn);
+                    }
+                }
+                // Plan 09.1-04 / D-13 — auto-refresh the picker if open.
+                if self.devtunnels_modal.is_some() {
+                    if let Some(tx) = &self.devtunnels_cmd_tx {
+                        let _ = tx.try_send(crate::devtunnels_actor::Command::Load);
                     }
                 }
                 self.toasts
