@@ -102,6 +102,10 @@ pub struct App {
     /// Plan 04-05: dispatches Cmd-D/Cmd-Shift-D split requests to the I/O thread
     /// which drives `Mux::split_pane_async` + `router.spawn_pane`.
     split_req_tx: Option<mpsc::Sender<(PaneId, SplitDirection)>>,
+    /// Cmd-T new-tab request channel. Main thread sends the just-created winit
+    /// `WindowId`; the I/O thread allocates a fresh mux Window + first tab/pane,
+    /// then UserEvent::NewTabReady binds the two ids back together.
+    new_tab_req_tx: Option<mpsc::Sender<WindowId>>,
     /// Plan 04-06: shared handle to the per-pane PtyActorRouter so the App's
     /// per-pane SIGWINCH walk in `flush_pending_resize_if_quiescent` can call
     /// `router.send_resize(pane_id, rows, cols)` for each pane in the layout.
@@ -182,6 +186,7 @@ impl App {
             cursor_px: PhysicalPosition::new(0.0, 0.0),
             lpm_flag,
             split_req_tx: None,
+            new_tab_req_tx: None,
             router: None,
             winit_to_mux_window: HashMap::new(),
             toasts: ToastStack::default(),
@@ -247,6 +252,12 @@ impl App {
     /// dispatch async splits to the I/O thread.
     pub fn set_split_req_tx(&mut self, tx: mpsc::Sender<(PaneId, SplitDirection)>) {
         self.split_req_tx = Some(tx);
+    }
+
+    /// Hook the Cmd-T new-tab request channel so handle_new_tab can dispatch
+    /// `mux.create_window` + `create_tab_async` + `spawn_pane` to the I/O thread.
+    pub fn set_new_tab_req_tx(&mut self, tx: mpsc::Sender<WindowId>) {
+        self.new_tab_req_tx = Some(tx);
     }
 
     /// Plan 04-06: hook the per-pane PtyActorRouter so the App's
@@ -1276,8 +1287,9 @@ impl App {
     }
 
     /// Cmd-T: create a new NSWindowTabbingMode-grouped winit Window (D-56)
-    /// and register an AppWindow for it. Plan 04-04 only ships the window-
-    /// spawn flow; per-pane Mux wiring + a fresh PTY actor land in Plan 04-05.
+    /// and register an AppWindow for it. Dispatches a NewTabReq to the I/O
+    /// thread which runs `mux.create_window` + `create_tab_async` + `spawn_pane`;
+    /// the resulting ids land on the main thread as `UserEvent::NewTabReady`.
     fn handle_new_tab(&mut self, event_loop: &ActiveEventLoop) {
         let attrs = WindowAttributes::default()
             .with_title("Vector")
@@ -1319,17 +1331,18 @@ impl App {
                 active_pane_id: None,
             },
         );
-        // TODO(phase-5): per-NSWindow mux WindowId allocation when Cmd-T spawns a
-        // fresh Mux Tab+Pane. Plan 04-06 bounded scope: reuse the bootstrap mux
-        // WindowId so newly-created tab-group NSWindows still route resize.
-        if let Some(mux_window_id) =
-            Mux::try_get().and_then(|m| m.window_ids_snapshot().first().copied())
-        {
-            self.winit_to_mux_window.insert(id, mux_window_id);
-        }
         // Plan 05-15 / D-81: enable IME delivery on Cmd-T windows too.
         if let Some(aw) = self.windows.get(&id) {
             aw.window.set_ime_allowed(true);
+        }
+        // Dispatch the mux-window + pane spawn to the I/O thread. The
+        // `winit_to_mux_window` mapping is filled in by the NewTabReady handler.
+        if let Some(tx) = self.new_tab_req_tx.as_ref() {
+            if let Err(err) = tx.try_send(id) {
+                tracing::error!(?err, "Cmd-T: new_tab_req channel full/closed");
+            }
+        } else {
+            tracing::error!("Cmd-T: new_tab_req_tx not wired; pane will not spawn");
         }
         tracing::info!(window_id = ?id, "Cmd-T: new tab-grouped window created");
     }
@@ -1560,6 +1573,33 @@ impl ApplicationHandler<UserEvent> for App {
                     t.resize(cols, rows);
                 }
                 self.request_redraw_all();
+            }
+            UserEvent::NewTabReady {
+                winit_window_id,
+                mux_window_id,
+                pane_id,
+            } => {
+                self.winit_to_mux_window
+                    .insert(winit_window_id, mux_window_id);
+                if let Some(aw) = self.windows.get_mut(&winit_window_id) {
+                    aw.active_pane_id = Some(pane_id);
+                }
+                // The new tab takes input focus on macOS — set Mux's active
+                // window so keystrokes route here even before Focused fires
+                // (which may not fire when the very first new tab opens as
+                // part of the tab-group activation).
+                if let Some(mux) = Mux::try_get() {
+                    mux.set_active_window(mux_window_id);
+                }
+                tracing::info!(
+                    ?winit_window_id,
+                    ?mux_window_id,
+                    ?pane_id,
+                    "Cmd-T: NewTabReady — pane bound to window"
+                );
+                // Sync the new mux window's tab dims to this winit surface so
+                // PaneOutput's compositor build picks the right grid size.
+                self.ensure_compositors_for_pane(winit_window_id, pane_id);
             }
             UserEvent::PaneExited(pane_id) => {
                 // Phase 9.1 Gap A: mirror the Cmd-W ClosePane cascade at app.rs:1649-1666.
@@ -2092,6 +2132,15 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                     Ime::Disabled => {
                         self.ime.clear();
+                    }
+                }
+            }
+            // Route NSWindow key-focus changes to Mux so input lands on the
+            // visible window's pane (input fix for Cmd-T tab 2).
+            WindowEvent::Focused(true) => {
+                if let Some(mux_window_id) = self.winit_to_mux_window.get(&id).copied() {
+                    if let Some(mux) = Mux::try_get() {
+                        mux.set_active_window(mux_window_id);
                     }
                 }
             }

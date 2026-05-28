@@ -28,6 +28,11 @@ pub struct Mux {
     windows: RwLock<HashMap<WindowId, Window>>,
     panes: RwLock<HashMap<PaneId, Arc<Pane>>>,
     ids: IdAllocator,
+    /// Plan 04-04 input-routing fix: explicit "currently-focused mux window".
+    /// `any_active_pane_id` consults this first; HashMap iteration order is
+    /// not deterministic and previously made Cmd-T tab 2 silently route input
+    /// to the bootstrap pane.
+    active_window_id: RwLock<Option<WindowId>>,
     /// Local-shell domain. Remote transports are installed directly via
     /// `create_tab_async_with_transport` rather than going through a Domain
     /// trait (WIN-04: keeps russh out of vector-mux).
@@ -47,6 +52,7 @@ impl Mux {
             windows: RwLock::new(HashMap::new()),
             panes: RwLock::new(HashMap::new()),
             ids: IdAllocator::new(),
+            active_window_id: RwLock::new(None),
             default_domain,
             clipboard_tx: None,
         })
@@ -63,6 +69,7 @@ impl Mux {
             windows: RwLock::new(HashMap::new()),
             panes: RwLock::new(HashMap::new()),
             ids: IdAllocator::new(),
+            active_window_id: RwLock::new(None),
             default_domain,
             clipboard_tx: Some(clipboard_tx),
         })
@@ -106,12 +113,21 @@ impl Mux {
         self.windows.read().keys().copied().collect()
     }
 
-    /// Plan 04-04: the first active PaneId observed across all windows. Returns
-    /// the active pane of the active tab of an arbitrary window; `None` if mux
-    /// is empty. Multi-window disambiguation by key-NSWindow lands in Plan 04-05.
+    /// Plan 04-04: active PaneId for the currently-focused mux window. Honors
+    /// `active_window_id` (set on create_window / set_active_window); falls
+    /// back to HashMap scan only when no focused window is recorded.
     #[must_use]
     pub fn any_active_pane_id(&self) -> Option<PaneId> {
         let windows = self.windows.read();
+        if let Some(wid) = *self.active_window_id.read() {
+            if let Some(w) = windows.get(&wid) {
+                if let Some(tab_id) = w.active_tab_id {
+                    if let Some(tab) = w.tabs.iter().find(|t| t.id == tab_id) {
+                        return Some(tab.active_pane_id);
+                    }
+                }
+            }
+        }
         for w in windows.values() {
             if let Some(tab_id) = w.active_tab_id {
                 if let Some(tab) = w.tabs.iter().find(|t| t.id == tab_id) {
@@ -120,6 +136,13 @@ impl Mux {
             }
         }
         None
+    }
+
+    /// Mark `window_id` as the focused mux window for input-routing purposes.
+    /// Called from the App on `WindowEvent::Focused(true)` and from
+    /// `create_window` so a fresh window receives keystrokes immediately.
+    pub fn set_active_window(&self, window_id: WindowId) {
+        *self.active_window_id.write() = Some(window_id);
     }
 
     pub fn allocate_pane_id(&self) -> PaneId {
@@ -132,10 +155,13 @@ impl Mux {
         self.ids.allocate_window()
     }
 
-    /// Insert a brand-new empty Window.
+    /// Insert a brand-new empty Window. The freshly-created window becomes the
+    /// focused one (newly-opened Cmd-T tabs / Cmd-N windows take input focus on
+    /// macOS).
     pub fn create_window(&self) -> WindowId {
         let id = self.ids.allocate_window();
         self.windows.write().insert(id, Window::new(id));
+        *self.active_window_id.write() = Some(id);
         id
     }
 
@@ -265,6 +291,14 @@ impl Mux {
                 if window.tabs.is_empty() {
                     let window_was_only = windows.len() == 1;
                     windows.remove(&window_id);
+                    // Clear active_window_id if it pointed here. The App will
+                    // set a new one when another window gains focus.
+                    {
+                        let mut active = self.active_window_id.write();
+                        if *active == Some(window_id) {
+                            *active = windows.keys().next().copied();
+                        }
+                    }
                     if window_was_only {
                         CloseResult::LastWindowClosed
                     } else {

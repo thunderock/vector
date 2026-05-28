@@ -148,4 +148,12 @@ pub enum UserEvent {
         pane_id: PaneId,
         cancel: tokio_util::sync::CancellationToken,
     },
+    /// Cmd-T new-tab spawn ack: I/O thread finished `mux.create_window` +
+    /// `create_tab_async` + `spawn_pane`. Main thread now binds the new winit
+    /// window to the fresh mux WindowId and seeds the AppWindow's active pane.
+    NewTabReady {
+        winit_window_id: winit::window::WindowId,
+        mux_window_id: vector_mux::WindowId,
+        pane_id: PaneId,
+    },
 }

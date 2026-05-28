@@ -11,6 +11,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 use vector_app::{app, devtunnels_actor, lpm, pty_actor, ske, UserEvent, DEFAULT_CONFIG_TOML};
 use vector_mux::{LocalDomain, Mux};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
+use winit::window::WindowId;
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<()> {
@@ -42,6 +43,9 @@ fn main() -> Result<()> {
     let (resize_tx, resize_rx) = mpsc::channel::<(u16, u16)>(8);
     let (split_req_tx, split_req_rx) =
         mpsc::channel::<(vector_mux::PaneId, vector_mux::SplitDirection)>(8);
+    // Cmd-T new-tab requests: main thread sends the just-created winit WindowId;
+    // I/O thread spawns a fresh mux window + pane and acks via NewTabReady.
+    let (new_tab_req_tx, new_tab_req_rx) = mpsc::channel::<WindowId>(8);
     // Plan 05-12 (POLISH-05 gap-closure, HIGH-3): clipboard channel — flows
     // ForwardingListener.clipboard_tx (inside every pane's Term, via
     // Term::with_channels) -> here -> drain task -> UserEvent::ClipboardStore
@@ -183,6 +187,55 @@ fn main() -> Result<()> {
                     }
                 }));
 
+                // Cmd-T new-tab consumer: allocate a fresh mux Window, spawn
+                // its first pane, and ack via UserEvent::NewTabReady.
+                let router_newtab = Arc::clone(&router);
+                let mux_newtab = Arc::clone(&mux);
+                let local_domain_newtab = Arc::clone(&local_domain_dyn);
+                let proxy_newtab = proxy_io.clone();
+                let mut new_tab_req_rx = new_tab_req_rx;
+                drop(tokio::spawn(async move {
+                    while let Some(winit_window_id) = new_tab_req_rx.recv().await {
+                        let new_mux_window_id = mux_newtab.create_window();
+                        match mux_newtab
+                            .create_tab_async(new_mux_window_id, None, 24, 80)
+                            .await
+                        {
+                            Ok((_tab_id, new_pane_id)) => {
+                                if let Some(pane) = mux_newtab.pane(new_pane_id) {
+                                    if let Some(transport) = pane.take_transport() {
+                                        router_newtab.lock().spawn_pane(
+                                            new_pane_id,
+                                            transport,
+                                            Arc::clone(&local_domain_newtab),
+                                            String::new(),
+                                            tokio_util::sync::CancellationToken::new(),
+                                        );
+                                    }
+                                }
+                                let _ = proxy_newtab.send_event(UserEvent::NewTabReady {
+                                    winit_window_id,
+                                    mux_window_id: new_mux_window_id,
+                                    pane_id: new_pane_id,
+                                });
+                                tracing::info!(
+                                    ?winit_window_id,
+                                    ?new_mux_window_id,
+                                    ?new_pane_id,
+                                    "Cmd-T: new tab pane spawned"
+                                );
+                            }
+                            Err(err) => {
+                                tracing::error!(
+                                    ?winit_window_id,
+                                    ?err,
+                                    "Cmd-T: create_tab_async failed"
+                                );
+                            }
+                        }
+                    }
+                }));
+
                 let router_s = Arc::clone(&router);
                 let mux_s = Arc::clone(&mux);
                 let local_domain_split = Arc::clone(&local_domain_dyn);
@@ -222,6 +275,7 @@ fn main() -> Result<()> {
 
     let mut application = app::App::new(write_tx, resize_tx, lpm_flag);
     application.set_split_req_tx(split_req_tx);
+    application.set_new_tab_req_tx(new_tab_req_tx);
     application.set_router(router_main);
     // Plan 06-05 / AUTH-01: wire the proxy + tokio handle so the device-flow
     // path (menu click -> AuthSignInRequested -> auth_actor.spawn) can find
