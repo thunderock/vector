@@ -22,6 +22,7 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 - [x] **Phase 8: VS Code Remote Tunnels Connect** — Owns DT-01..04. User runs `code tunnel` on their own machine (EC2, home server); Vector attaches over the Microsoft Dev Tunnels relay. Day-1 spike resolves the subprocess/vendor/defer decision tree. (completed 2026-05-22)
 - [ ] **Phase 9: Persistence + Reconnect** — `Domain::reconnect()` hot-swap, inline "Reconnecting…" status bar on remote panes. **Scope revised 2026-05-22:** Vector no longer auto-attaches to tmux; user owns tmux lifecycle on the remote (see 09-CONTEXT.md D-04..D-06).
 - [ ] **Phase 9.1: Prior-Phase Gap Closure (INSERTED 2026-05-26)** — Five user-visible incompletions surfaced during Phase 9 UAT walk: local pane exit not freeing the pane (Phase 4-05 stub), Codespaces UI leftovers after the Phase 7 pivot, missing `install_microsoft_menu_items` call (Phase 8-05), no in-modal sign-in affordance in the Dev Tunnels picker, missing bundled app icon. These block Phase 9 UAT sign-off and Phase 10-04 release tag.
+- [ ] **Phase 9.2: GitHub-auth Dev Tunnels (INSERTED 2026-05-28)** — Swap the Mac app's sign-in from Microsoft Entra to GitHub to bypass the Adobe Azure tenant block (`AADSTS500011`). App-side-only change; relay/transport/agent untouched. GitHub becomes the only app sign-in path (Microsoft app-side auth removed). Spike the Dev Tunnels GitHub App client-ID acceptance first. Release prerequisite — Phase 10's held 10-04 release tag and Phase 9 UAT Tests 3-9 depend on it. Design: `docs/superpowers/specs/2026-05-28-github-auth-dev-tunnels-design.md`.
 - [ ] **Phase 10: Hardening & Release** — Renderer snapshot + VT conformance suites in CI, perf gates, tagged unsigned Universal DMG on GitHub Releases. **10-04 (release tag) held pending 9.1 closure + Phase 9 UAT pass.**
 
 ## Phase Details
@@ -252,6 +253,30 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
   - Re-check Out-of-Scope: no custom remote agent, no predictive echo, no Vector-managed tmux sessions, no app-restart pane restore.
   - Canonical ref: `.planning/phases/09-persistence-reconnect-tmux-auto-attach/09-CONTEXT.md` — all decisions and the tmux scope change rationale.
 
+### Phase 9.2: GitHub-auth Dev Tunnels (INSERTED 2026-05-28)
+**Goal**: The Mac app authenticates to the Dev Tunnels service with GitHub instead of Microsoft Entra, so a sign-in completes without depending on the Adobe Azure tenant. GitHub is the only app sign-in path; relay, transport, and the remote agent are unchanged. A live GitHub sign-in lists tunnels and connects to an agent-hosted remote pane.
+**Depends on**: Phase 9 (reconnect/persist surface), Phase 8 (Dev Tunnels relay + agent), Phase 9.1 (current Microsoft-only sign-in surface being swapped).
+**Requirements**: none new — re-routes DT-03 (sign-in path) from Microsoft Entra to GitHub; closes execution debt exposed by Phase 9 UAT.
+**Why inserted**: Phase 9 UAT Test 3 hit `AADSTS500011` — the Dev Tunnels resource principal is not consented in the Adobe Azure tenant, so a corporate Microsoft sign-in cannot complete. Blocks Phase 9 UAT Tests 3-9 and Phase 10's held 10-04 release tag.
+**Success Criteria** (what must be TRUE):
+  1. Clicking "Sign in with GitHub" (modal button or menu item) drives a GitHub device flow that completes and persists a token to the `github_refresh_token` Keychain slot.
+  2. The Dev Tunnels Management API accepts the GitHub token (`list_tunnels` returns 200) — proven by a spike before full implementation.
+  3. App-side Microsoft Entra auth is removed; GitHub is the only sign-in path in the app (modal, menu, and footer copy all say GitHub).
+  4. A live end-to-end smoke passes: GitHub sign-in → picker lists tunnels → connect to an agent-hosted tunnel → type in the remote pane (resumes Phase 9 UAT Test 3+).
+  5. No regression to relay/transport/agent; the agent stays dual-provider, GitHub-default (with a conditional client-ID bump only if the spike requires it).
+**Design**: `docs/superpowers/specs/2026-05-28-github-auth-dev-tunnels-design.md`
+**Plans**: 4 plans
+  - [x] 09.2-01-PLAN.md — Client-ID spike (HARD GATE): device flow + list_tunnels against both the Dev Tunnels GitHub App ID and the gh-CLI ID
+  - [x] 09.2-02-PLAN.md — GitHub device-flow driver + token store (TDD); delete the Microsoft driver
+  - [x] 09.2-03-PLAN.md — App-side swap to GitHub (actor + main.rs + menu + modal + footer) and remove app-side Microsoft auth
+  - [ ] 09.2-04-PLAN.md — Live UAT smoke + conditional agent client-ID bump (D-4)
+
+Plans:
+- [x] 09.2-01-PLAN.md — Client-ID spike (HARD GATE)
+- [x] 09.2-02-PLAN.md — GitHub device-flow driver + token store (TDD)
+- [ ] 09.2-03-PLAN.md — App-side swap + remove Microsoft auth
+- [ ] 09.2-04-PLAN.md — Live UAT smoke + conditional agent bump (D-4)
+
 ### Phase 9.1: Prior-Phase Gap Closure
 **Goal**: Close five user-visible incompletions discovered during Phase 9 UAT so that Phase 9's reconnect/persist features are actually reachable end-to-end and v1.0.0 can ship with a polished surface.
 **Depends on**: Phase 9 (UAT findings that defined the scope).
@@ -266,8 +291,8 @@ Open the app, pick a remote machine via VS Code Remote Tunnels (`code tunnel`), 
 **Plans**: 5 plans (to be created via `/gsd:plan-phase 9.1`)
   - [x] 09.1-01-PLAN.md — Local pane exit handler (Phase 4-05 gap closure: close pane on PaneExited, or render an exited sentinel)
   - [x] 09.1-02-PLAN.md — Remove Codespaces UI surface (Phase 7 pivot cleanup: menu, crate, actor, modal, UserEvent variants)
-  - [ ] 09.1-03-PLAN.md — Wire `install_microsoft_menu_items` at app startup (Phase 8-05 wiring)
-  - [ ] 09.1-04-PLAN.md — Sign-in affordance inside `DevTunnelsPickerModal` (Phase 8-05 UX gap)
+  - [x] 09.1-03-PLAN.md — Wire `install_microsoft_menu_items` at app startup (Phase 8-05 wiring)
+  - [x] 09.1-04-PLAN.md — Sign-in affordance inside `DevTunnelsPickerModal` (Phase 8-05 UX gap)
   - [x] 09.1-05-PLAN.md — Bundle Vector `.icns` + `CFBundleIconFile` (Phase 1 / 10 distribution polish)
 **Stack additions**: none — all closures use existing crates and patterns.
 **Risks & notes**:
@@ -374,6 +399,19 @@ At every phase transition, re-check the Out-of-Scope list in REQUIREMENTS.md. Ev
 - History scope: last N commands, or semantic search over full history with embeddings?
 - Streaming vs blocking suggestions — what's the keystroke-latency budget?
 - Privacy: opt-in only, never send history without explicit toggle.
+
+Plans:
+- [ ] TBD (promote with `/gsd:review-backlog` when ready)
+
+### Phase 999.2: Cmd-N (SpawnNewWindow) opens an empty/black-pane window (BACKLOG)
+
+**Goal:** Fix Cmd-N so it opens a new window with a working local shell pane. `SpawnNewWindow` at `crates/vector-app/src/app.rs:387-436` has the identical Phase-4 incomplete-feature pattern as the Cmd-T bug fixed in commit `ad1b19d` — it creates an ungrouped NSWindow with empty `compositors` / `active_pane_id: None` but never spawns a backing Mux Window+Tab+Pane/PTY. Apply the same `NewTabReady`-style backing-pane spawn + `Mux::set_active_window` pattern.
+
+**Requirements:** WIN-02 (pane lifecycle) — execution debt, no new requirement
+
+**Plans:** 0 plans
+
+**Discovered:** 2026-05-28 during `/gsd:debug` session `cmd-t-empty-black-pane` (resolved). Flagged out-of-scope by the debugger.
 
 Plans:
 - [ ] TBD (promote with `/gsd:review-backlog` when ready)
