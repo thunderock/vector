@@ -14,16 +14,16 @@ pub const DEFAULT_CONFIG_TOML: &str = "[default]\ntheme = \"vector-dark\"\n\n# M
 pub mod app;
 pub mod chrome;
 pub mod clipboard_router;
-// Phase 8 / Plan 08-05 — DevTunnels picker + Microsoft auth + actor.
+// Phase 8 / Plan 08-05 — DevTunnels picker + GitHub auth + actor.
 pub mod devtunnels_actor;
 pub mod devtunnels_modal;
 pub mod frame_tick;
+pub mod github_auth_modal;
 pub mod hyperlink_dispatch;
 pub mod ime;
 pub mod input_bridge;
 pub mod lpm;
 pub mod menu;
-pub mod microsoft_auth_modal;
 pub mod mux_commands;
 pub mod overlay;
 pub mod profile_picker;

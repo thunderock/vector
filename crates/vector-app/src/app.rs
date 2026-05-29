@@ -152,8 +152,8 @@ pub struct App {
     tokio_handle: Option<tokio::runtime::Handle>,
     /// Phase 8 / Plan 08-05 — DevTunnelsActor command sender; wired by main.rs.
     devtunnels_cmd_tx: Option<mpsc::Sender<crate::devtunnels_actor::Command>>,
-    /// Phase 8 / Plan 08-05 — live MicrosoftAuthDeviceFlowModal.
-    microsoft_auth_modal: Option<crate::microsoft_auth_modal::MicrosoftAuthDeviceFlowModal>,
+    /// Phase 8 / Plan 08-05 — live GitHubAuthDeviceFlowModal.
+    github_auth_modal: Option<crate::github_auth_modal::GitHubAuthDeviceFlowModal>,
     /// Phase 8 / Plan 08-05 — live DevTunnelsPickerModal.
     devtunnels_modal: Option<crate::devtunnels_modal::DevTunnelsPickerModal>,
     /// Plan 09-05 / PERSIST-01 — per-pane reconnect state. Drives the inline
@@ -208,7 +208,7 @@ impl App {
             proxy: None,
             tokio_handle: None,
             devtunnels_cmd_tx: None,
-            microsoft_auth_modal: None,
+            github_auth_modal: None,
             devtunnels_modal: None,
             // Plan 09-05 / PERSIST-01 — per-pane reconnect bookkeeping.
             reconnecting_panes: HashMap::new(),
@@ -545,9 +545,9 @@ impl App {
         aw.last_resize_at = None;
     }
 
-    /// Phase 8 / Plan 08-05 — apply Microsoft blue tint to the chrome pipeline
+    /// Phase 8 / Plan 08-05 — apply the GitHub-purple tint to the chrome pipeline
     /// when the pane with `pane_id` is or becomes active, and that pane's
-    /// `TransportKind` is `DevTunnel`. UI-SPEC §Color: blue is reserved
+    /// `TransportKind` is `DevTunnel`. UI-SPEC §Color: the brand tint is reserved
     /// exclusively for active DevTunnel panes.
     fn apply_devtunnel_tint_for_pane(&mut self, pane_id: PaneId) {
         let Some(mux) = Mux::try_get() else {
@@ -568,7 +568,7 @@ impl App {
             };
             chrome.tint.set_color(
                 host.queue(),
-                Some(vector_render::tint_stripe::MICROSOFT_BLUE),
+                Some(vector_render::tint_stripe::GITHUB_PURPLE),
             );
         }
     }
@@ -1461,12 +1461,12 @@ impl ApplicationHandler<UserEvent> for App {
         // SAFETY: winit guarantees `resumed` runs on the macOS main thread.
         let overlay_inst = unsafe {
             menu::install_main_menu();
-            // Plan 09.1-03 (Gap C): install Microsoft sign-in + Dev Tunnels menu
+            // Plan 09.1-03 (Gap C): install GitHub sign-in + Dev Tunnels menu
             // items (defined in Plan 08-05 menu.rs but not previously called).
             if let (Some(mtm), Some(proxy)) = (objc2::MainThreadMarker::new(), self.proxy.clone()) {
-                menu::install_microsoft_menu_items(mtm, proxy);
+                menu::install_github_menu_items(mtm, proxy);
             } else {
-                tracing::warn!("install_microsoft_menu_items skipped: missing mtm or proxy");
+                tracing::warn!("install_github_menu_items skipped: missing mtm or proxy");
             }
             Some(overlay::install(&window))
         };
@@ -1731,37 +1731,37 @@ impl ApplicationHandler<UserEvent> for App {
             // arms removed (AuthSignInRequested, AuthDisplayCode, AuthCompleted,
             // AuthFailed, AuthRequired, SignOut, OpenCodespacesPicker,
             // CodespacesLoaded, CodespacesLoadFailed, CodespaceStateChanged).
-            // ───── Phase 8 / Plan 08-05 — DevTunnels + Microsoft sign-in ─────
-            UserEvent::MicrosoftDeviceFlowStarted {
+            // ───── Phase 8 / Plan 08-05 — DevTunnels + GitHub sign-in ─────
+            UserEvent::GitHubDeviceFlowStarted {
                 user_code,
                 verification_uri,
                 expires_in,
                 cancel,
             } => {
-                tracing::info!(%user_code, "microsoft_device_flow_started");
+                tracing::info!(%user_code, "github_device_flow_started");
                 if let Some(mtm) = objc2::MainThreadMarker::new() {
-                    if let Some(prev) = self.microsoft_auth_modal.take() {
+                    if let Some(prev) = self.github_auth_modal.take() {
                         prev.dismiss();
                     }
-                    let modal = crate::microsoft_auth_modal::MicrosoftAuthDeviceFlowModal::show(
+                    let modal = crate::github_auth_modal::GitHubAuthDeviceFlowModal::show(
                         mtm,
-                        crate::microsoft_auth_modal::MicrosoftAuthModalCtx {
+                        crate::github_auth_modal::GitHubAuthModalCtx {
                             user_code,
                             verification_uri,
                             expires_in,
                             cancel,
                         },
                     );
-                    self.microsoft_auth_modal = Some(modal);
+                    self.github_auth_modal = Some(modal);
                 }
             }
-            UserEvent::MicrosoftSignedIn => {
-                if let Some(modal) = self.microsoft_auth_modal.take() {
+            UserEvent::GitHubSignedIn => {
+                if let Some(modal) = self.github_auth_modal.take() {
                     modal.dismiss();
                 }
                 if let Some(mtm) = objc2::MainThreadMarker::new() {
                     unsafe {
-                        menu::rebuild_microsoft_signin_section(mtm, menu::SignInState::SignedIn);
+                        menu::rebuild_github_signin_section(mtm, menu::SignInState::SignedIn);
                     }
                 }
                 // Plan 09.1-04 / D-13 — auto-refresh the picker if open.
@@ -1770,25 +1770,24 @@ impl ApplicationHandler<UserEvent> for App {
                         let _ = tx.try_send(crate::devtunnels_actor::Command::Load);
                     }
                 }
-                self.toasts
-                    .show(ToastBanner::info("Signed in to Microsoft."));
+                self.toasts.show(ToastBanner::info("Signed in to GitHub."));
                 self.request_redraw_all();
             }
-            UserEvent::MicrosoftSignInCancelled => {
-                if let Some(modal) = self.microsoft_auth_modal.take() {
+            UserEvent::GitHubSignInCancelled => {
+                if let Some(modal) = self.github_auth_modal.take() {
                     modal.dismiss();
                 }
                 self.toasts
-                    .show(ToastBanner::info("Microsoft sign-in cancelled."));
+                    .show(ToastBanner::info("GitHub sign-in cancelled."));
                 self.request_redraw_all();
             }
-            UserEvent::MicrosoftSignInFailed(reason) => {
-                tracing::warn!(%reason, "microsoft_sign_in_failed");
-                if let Some(modal) = self.microsoft_auth_modal.take() {
+            UserEvent::GitHubSignInFailed(reason) => {
+                tracing::warn!(%reason, "github_sign_in_failed");
+                if let Some(modal) = self.github_auth_modal.take() {
                     modal.dismiss();
                 }
                 self.toasts.show(ToastBanner::info(format!(
-                    "Microsoft sign-in failed: {reason}"
+                    "GitHub sign-in failed: {reason}"
                 )));
                 self.request_redraw_all();
             }
@@ -1815,7 +1814,7 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                 }
                 self.toasts.show(ToastBanner::info(
-                    "Sign in with Microsoft to list Dev Tunnels.",
+                    "Sign in with GitHub to list Dev Tunnels.",
                 ));
                 self.request_redraw_all();
             }
@@ -1853,22 +1852,21 @@ impl ApplicationHandler<UserEvent> for App {
                 )));
                 self.request_redraw_all();
             }
-            UserEvent::MicrosoftSignInRequested => {
+            UserEvent::GitHubSignInRequested => {
                 if let Some(tx) = &self.devtunnels_cmd_tx {
-                    let _ = tx.try_send(crate::devtunnels_actor::Command::StartMicrosoftSignIn);
+                    let _ = tx.try_send(crate::devtunnels_actor::Command::StartGitHubSignIn);
                 }
             }
-            UserEvent::MicrosoftSignOutRequested => {
+            UserEvent::GitHubSignOutRequested => {
                 if let Some(tx) = &self.devtunnels_cmd_tx {
-                    let _ = tx.try_send(crate::devtunnels_actor::Command::SignOutMicrosoft);
+                    let _ = tx.try_send(crate::devtunnels_actor::Command::SignOutGitHub);
                 }
                 if let Some(mtm) = objc2::MainThreadMarker::new() {
                     unsafe {
-                        menu::rebuild_microsoft_signin_section(mtm, menu::SignInState::SignedOut);
+                        menu::rebuild_github_signin_section(mtm, menu::SignInState::SignedOut);
                     }
                 }
-                self.toasts
-                    .show(ToastBanner::info("Signed out of Microsoft."));
+                self.toasts.show(ToastBanner::info("Signed out of GitHub."));
                 self.request_redraw_all();
             }
             UserEvent::OpenDevTunnelsPickerMenu => {

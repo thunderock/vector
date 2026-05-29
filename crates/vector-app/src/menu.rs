@@ -14,7 +14,7 @@ use vector_config::{ConfigFile, Kind};
 
 use crate::UserEvent;
 
-pub use microsoft_target::MicrosoftMenuTarget;
+pub use github_target::GitHubMenuTarget;
 
 /// Newtype that asserts main-thread-only access to a `Retained<NSMenu>`. AppKit
 /// objects are `!Sync` by default; access is always gated by `MainThreadMarker`
@@ -300,7 +300,7 @@ fn add_switch_profile_submenu(mtm: MainThreadMarker, menu: &NSMenu) {
     let _ = SWITCH_PROFILE_SUBMENU.set(MainThreadOnly(sub));
 }
 
-/// Phase 8 / UI-SPEC §Copywriting Contract / S3 — Microsoft sign-in menu state.
+/// Phase 8 / UI-SPEC §Copywriting Contract / S3 — GitHub sign-in menu state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignInState {
     SignedIn,
@@ -308,13 +308,13 @@ pub enum SignInState {
 }
 
 /// Phase 8 / UI-SPEC §Copywriting Contract — pure-data helper returning the
-/// Microsoft sign-in menu rows for `state`. Each row is `(label, enabled)`. The
+/// GitHub sign-in menu rows for `state`. Each row is `(label, enabled)`. The
 /// returned strings MUST match UI-SPEC §Primary CTAs verbatim.
 #[must_use]
-pub fn microsoft_signin_menu_rows(state: SignInState) -> Vec<(String, bool)> {
+pub fn github_signin_menu_rows(state: SignInState) -> Vec<(String, bool)> {
     match state {
-        SignInState::SignedOut => vec![("Sign in with Microsoft".to_string(), true)],
-        SignInState::SignedIn => vec![("Sign out of Microsoft".to_string(), true)],
+        SignInState::SignedOut => vec![("Sign in with GitHub".to_string(), true)],
+        SignInState::SignedIn => vec![("Sign out of GitHub".to_string(), true)],
     }
 }
 
@@ -376,62 +376,59 @@ fn add_services(mtm: MainThreadMarker, menu: &NSMenu) {
 
 // Phase 9.1 Gap B: Phase-6 GitHub auth menu + Codespaces… item removed
 // (install_auth_menu_items, rebuild_auth_menu_section, AuthMenuRefs,
-// AUTH_MENU_REFS, AuthMenuTarget). Microsoft sign-in section below is
+// AUTH_MENU_REFS, AuthMenuTarget). GitHub sign-in section below is
 // the sole sign-in surface in v1.
 
-// ───── Phase 8 / Plan 08-05 — Microsoft sign-in + DevTunnels picker ────────
+// ───── Phase 8 / Plan 08-05 — GitHub sign-in + DevTunnels picker ────────
 
-struct MicrosoftMenuRefs {
+struct GitHubMenuRefs {
     sign_in: Retained<NSMenuItem>,
     sign_out: Retained<NSMenuItem>,
     /// Held so NSMenuItem's weak target reference stays live.
     #[allow(dead_code)]
-    target: Retained<MicrosoftMenuTarget>,
+    target: Retained<GitHubMenuTarget>,
 }
-unsafe impl Sync for MicrosoftMenuRefs {}
-unsafe impl Send for MicrosoftMenuRefs {}
+unsafe impl Sync for GitHubMenuRefs {}
+unsafe impl Send for GitHubMenuRefs {}
 
-static MICROSOFT_MENU_REFS: OnceLock<MainThreadOnly<MicrosoftMenuRefs>> = OnceLock::new();
+static GITHUB_MENU_REFS: OnceLock<MainThreadOnly<GitHubMenuRefs>> = OnceLock::new();
 
-/// Install Microsoft sign-in/out items + Dev Tunnels picker item at the top of
+/// Install GitHub sign-in/out items + Dev Tunnels picker item at the top of
 /// the Vector menu. Idempotent (OnceLock-gated).
 ///
 /// # Safety
 /// Caller must be on the macOS main thread.
-pub unsafe fn install_microsoft_menu_items(
-    mtm: MainThreadMarker,
-    proxy: EventLoopProxy<UserEvent>,
-) {
+pub unsafe fn install_github_menu_items(mtm: MainThreadMarker, proxy: EventLoopProxy<UserEvent>) {
     let app = NSApplication::sharedApplication(mtm);
     let Some(main_menu) = app.mainMenu() else {
-        tracing::warn!("install_microsoft_menu_items: no main menu installed yet");
+        tracing::warn!("install_github_menu_items: no main menu installed yet");
         return;
     };
     let Some(app_item) = main_menu.itemAtIndex(0) else {
-        tracing::warn!("install_microsoft_menu_items: main menu has no items");
+        tracing::warn!("install_github_menu_items: main menu has no items");
         return;
     };
     let Some(app_submenu) = app_item.submenu() else {
-        tracing::warn!("install_microsoft_menu_items: app item has no submenu");
+        tracing::warn!("install_github_menu_items: app item has no submenu");
         return;
     };
 
-    let target = MicrosoftMenuTarget::new(mtm, proxy);
+    let target = GitHubMenuTarget::new(mtm, proxy);
     let target_obj: &objc2::runtime::AnyObject = (*target).as_ref();
 
-    // "Sign in with Microsoft" — UI-SPEC verbatim.
+    // "Sign in with GitHub" — UI-SPEC verbatim.
     let sign_in = NSMenuItem::new(mtm);
-    sign_in.setTitle(&NSString::from_str("Sign in with Microsoft"));
+    sign_in.setTitle(&NSString::from_str("Sign in with GitHub"));
     unsafe {
-        sign_in.setAction(Some(sel!(microsoftSignIn:)));
+        sign_in.setAction(Some(sel!(githubSignIn:)));
         sign_in.setTarget(Some(target_obj));
     }
 
-    // "Sign out of Microsoft" — UI-SPEC verbatim. Hidden until tokens present.
+    // "Sign out of GitHub" — UI-SPEC verbatim. Hidden until tokens present.
     let sign_out = NSMenuItem::new(mtm);
-    sign_out.setTitle(&NSString::from_str("Sign out of Microsoft"));
+    sign_out.setTitle(&NSString::from_str("Sign out of GitHub"));
     unsafe {
-        sign_out.setAction(Some(sel!(microsoftSignOut:)));
+        sign_out.setAction(Some(sel!(githubSignOut:)));
         sign_out.setTarget(Some(target_obj));
     }
     sign_out.setHidden(true);
@@ -457,24 +454,22 @@ pub unsafe fn install_microsoft_menu_items(
     app_submenu.insertItem_atIndex(&devtunnels, 2);
     app_submenu.insertItem_atIndex(&sep, 3);
 
-    let refs = MicrosoftMenuRefs {
+    let refs = GitHubMenuRefs {
         sign_in,
         sign_out,
         target,
     };
-    let _ = MICROSOFT_MENU_REFS.set(MainThreadOnly(refs));
+    let _ = GITHUB_MENU_REFS.set(MainThreadOnly(refs));
 }
 
-/// Toggle "Sign in with Microsoft" / "Sign out of Microsoft" visibility based
+/// Toggle "Sign in with GitHub" / "Sign out of GitHub" visibility based
 /// on token presence. Pure data swap; no main-menu walk (MEDIUM-4 invariant).
 ///
 /// # Safety
 /// AppKit mutation; caller must be on the macOS main thread.
-pub unsafe fn rebuild_microsoft_signin_section(_mtm: MainThreadMarker, state: SignInState) {
-    let Some(bound) = MICROSOFT_MENU_REFS.get() else {
-        tracing::warn!(
-            "rebuild_microsoft_signin_section called before install_microsoft_menu_items"
-        );
+pub unsafe fn rebuild_github_signin_section(_mtm: MainThreadMarker, state: SignInState) {
+    let Some(bound) = GITHUB_MENU_REFS.get() else {
+        tracing::warn!("rebuild_github_signin_section called before install_github_menu_items");
         return;
     };
     let refs = &bound.0;
@@ -483,7 +478,7 @@ pub unsafe fn rebuild_microsoft_signin_section(_mtm: MainThreadMarker, state: Si
     refs.sign_out.setHidden(!signed_in);
 }
 
-mod microsoft_target {
+mod github_target {
     use objc2::define_class;
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
@@ -505,27 +500,27 @@ mod microsoft_target {
 
     define_class!(
         #[unsafe(super(NSResponder))]
-        #[name = "VectorMicrosoftMenuTarget"]
+        #[name = "VectorGitHubMenuTarget"]
         #[ivars = Mutex<Ivars>]
-        pub struct MicrosoftMenuTarget;
+        pub struct GitHubMenuTarget;
 
-        impl MicrosoftMenuTarget {
-            #[unsafe(method(microsoftSignIn:))]
-            fn microsoft_sign_in(&self, _sender: &AnyObject) {
+        impl GitHubMenuTarget {
+            #[unsafe(method(githubSignIn:))]
+            fn github_sign_in(&self, _sender: &AnyObject) {
                 let _ = self
                     .ivars()
                     .lock()
                     .proxy
-                    .send_event(UserEvent::MicrosoftSignInRequested);
+                    .send_event(UserEvent::GitHubSignInRequested);
             }
 
-            #[unsafe(method(microsoftSignOut:))]
-            fn microsoft_sign_out(&self, _sender: &AnyObject) {
+            #[unsafe(method(githubSignOut:))]
+            fn github_sign_out(&self, _sender: &AnyObject) {
                 let _ = self
                     .ivars()
                     .lock()
                     .proxy
-                    .send_event(UserEvent::MicrosoftSignOutRequested);
+                    .send_event(UserEvent::GitHubSignOutRequested);
             }
 
             #[unsafe(method(openDevTunnels:))]
@@ -539,7 +534,7 @@ mod microsoft_target {
         }
     );
 
-    impl MicrosoftMenuTarget {
+    impl GitHubMenuTarget {
         pub fn new(
             mtm: objc2::MainThreadMarker,
             proxy: EventLoopProxy<UserEvent>,

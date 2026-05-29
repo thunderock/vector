@@ -57,7 +57,7 @@ pub fn footer_copy(state: &FooterState) -> String {
             "No Vector-agent tunnels yet. Install vector-tunnel-agent on a remote machine and run it.".to_string()
         }
         FooterState::NotSignedIn => {
-            "Sign in with Microsoft to list Dev Tunnels.".to_string()
+            "Sign in with GitHub to list Dev Tunnels.".to_string()
         }
         FooterState::SignedInOtherProvider { provider } => format!(
             "No tunnels under your {provider} account. Switch providers or register one."
@@ -320,8 +320,8 @@ impl DevTunnelsPickerModal {
     }
 }
 
-/// Plan 09.1-04 / D-12 — Microsoft-blue sRGB tint from `vector_render::tint_stripe::MICROSOFT_BLUE`.
-const MICROSOFT_BLUE_SRGB: [f64; 4] = [0.0, 0.471, 0.831, 1.0];
+/// Plan 09.2-03 / D-12 — GitHub-purple sRGB tint from `vector_render::tint_stripe::GITHUB_PURPLE` (#7a3aaf).
+const GITHUB_PURPLE_SRGB: [f64; 4] = [0.478, 0.227, 0.686, 1.0];
 
 /// Plan 09.1-04 / D-12 — sign-in button centered horizontally above the footer.
 /// Frame chosen inside the rows container (y=32) so it appears in the empty
@@ -332,23 +332,23 @@ fn make_signin_button(mtm: MainThreadMarker, target: &SigninTarget) -> Retained<
     let frame_x = (PANEL_W - width) / 2.0;
     let frame_y = ROWS_Y + (ROWS_H - height) / 2.0;
     let frame = NSRect::new(NSPoint::new(frame_x, frame_y), NSSize::new(width, height));
-    let title = NSString::from_str("Sign in with Microsoft");
+    let title = NSString::from_str("Sign in with GitHub");
     let button: Retained<NSButton> =
         unsafe { NSButton::buttonWithTitle_target_action(&title, None, None, mtm) };
     button.setFrame(frame);
     button.setBezelStyle(NSBezelStyle::Push);
-    let blue = NSColor::colorWithSRGBRed_green_blue_alpha(
-        MICROSOFT_BLUE_SRGB[0],
-        MICROSOFT_BLUE_SRGB[1],
-        MICROSOFT_BLUE_SRGB[2],
-        MICROSOFT_BLUE_SRGB[3],
+    let tint = NSColor::colorWithSRGBRed_green_blue_alpha(
+        GITHUB_PURPLE_SRGB[0],
+        GITHUB_PURPLE_SRGB[1],
+        GITHUB_PURPLE_SRGB[2],
+        GITHUB_PURPLE_SRGB[3],
     );
-    button.setContentTintColor(Some(&blue));
+    button.setContentTintColor(Some(&tint));
     button.setHidden(true);
     unsafe {
         let any: &objc2::runtime::AnyObject = target.as_ref();
         button.setTarget(Some(any));
-        button.setAction(Some(sel!(microsoftSignIn:)));
+        button.setAction(Some(sel!(githubSignIn:)));
     }
     button
 }
@@ -374,9 +374,9 @@ fn make_label(
 }
 
 /// Plan 09.1-04 / D-13 — ObjC subclass that bridges the sign-in NSButton's
-/// `microsoftSignIn:` action to `UserEvent::MicrosoftSignInRequested`. The
+/// `githubSignIn:` action to `UserEvent::GitHubSignInRequested`. The
 /// app.rs arm for that event already routes to
-/// `DevTunnelsActor::Command::StartMicrosoftSignIn`, so the picker reuses
+/// `DevTunnelsActor::Command::StartGitHubSignIn`, so the picker reuses
 /// the exact same path as the menu item — no duplicate logic.
 mod signin_target {
     use objc2::define_class;
@@ -405,13 +405,13 @@ mod signin_target {
         pub struct SigninTarget;
 
         impl SigninTarget {
-            #[unsafe(method(microsoftSignIn:))]
-            fn microsoft_sign_in(&self, _sender: &AnyObject) {
+            #[unsafe(method(githubSignIn:))]
+            fn github_sign_in(&self, _sender: &AnyObject) {
                 let _ = self
                     .ivars()
                     .lock()
                     .proxy
-                    .send_event(UserEvent::MicrosoftSignInRequested);
+                    .send_event(UserEvent::GitHubSignInRequested);
             }
         }
     );
@@ -464,13 +464,13 @@ mod tests {
         );
         assert_eq!(
             footer_copy(&FooterState::NotSignedIn),
-            "Sign in with Microsoft to list Dev Tunnels."
+            "Sign in with GitHub to list Dev Tunnels."
         );
         assert_eq!(
             footer_copy(&FooterState::SignedInOtherProvider {
-                provider: "GitHub".into()
+                provider: "Microsoft".into()
             }),
-            "No tunnels under your GitHub account. Switch providers or register one."
+            "No tunnels under your Microsoft account. Switch providers or register one."
         );
         assert_eq!(
             footer_copy(&FooterState::ApiError {

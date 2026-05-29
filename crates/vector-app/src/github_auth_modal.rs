@@ -1,10 +1,10 @@
-//! Phase 8 / Plan 08-05 Task 2 / UI-SPEC §S2 — Microsoft Device-Flow modal.
+//! Phase 8 / Plan 08-05 Task 2 / UI-SPEC §S2 — GitHub Device-Flow modal.
 //!
-//! Mirrors `crates/vector-app/src/auth_modal.rs` shape against Microsoft-specific
+//! Mirrors `crates/vector-app/src/auth_modal.rs` shape against GitHub-specific
 //! labels per UI-SPEC §Copywriting Contract / Modal copy. 480 × 280 px.
 //!
 //! Buttons fire via an ObjC responder class that captures the
-//! `tokio_util::sync::CancellationToken` from `MicrosoftDeviceFlowStarted`.
+//! `tokio_util::sync::CancellationToken` from `GitHubDeviceFlowStarted`.
 //! Pitfall 14: only `user_code` (8-char pairing code) ever reaches this module —
 //! NEVER the access/refresh token.
 
@@ -19,21 +19,21 @@ use objc2_app_kit::{
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSURL};
 use tokio_util::sync::CancellationToken;
 
-pub use responder::MicrosoftAuthModalResponder;
+pub use responder::GitHubAuthModalResponder;
 
 /// UI-SPEC §Spacing Scale — modal frame size.
 pub const PANEL_W: f64 = 480.0;
 pub const PANEL_H: f64 = 280.0;
 
 /// Modal context handed in by App at construction.
-pub struct MicrosoftAuthModalCtx {
+pub struct GitHubAuthModalCtx {
     pub user_code: String,
     pub verification_uri: String,
     pub expires_in: Duration,
     pub cancel: CancellationToken,
 }
 
-pub struct MicrosoftAuthDeviceFlowModal {
+pub struct GitHubAuthDeviceFlowModal {
     panel: Retained<NSPanel>,
     countdown_field: Retained<NSTextField>,
     started_at: Instant,
@@ -41,11 +41,11 @@ pub struct MicrosoftAuthDeviceFlowModal {
     user_code: String,
     verification_uri: String,
     cancel: CancellationToken,
-    _responder: Retained<MicrosoftAuthModalResponder>,
+    _responder: Retained<GitHubAuthModalResponder>,
 }
 
-impl MicrosoftAuthDeviceFlowModal {
-    pub fn show(mtm: MainThreadMarker, ctx: MicrosoftAuthModalCtx) -> Self {
+impl GitHubAuthDeviceFlowModal {
+    pub fn show(mtm: MainThreadMarker, ctx: GitHubAuthModalCtx) -> Self {
         let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(PANEL_W, PANEL_H));
         let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
         let panel: Retained<NSPanel> = NSPanel::initWithContentRect_styleMask_backing_defer(
@@ -55,11 +55,11 @@ impl MicrosoftAuthDeviceFlowModal {
             NSBackingStoreType::Buffered,
             false,
         );
-        panel.setTitle(&NSString::from_str("Sign in with Microsoft"));
+        panel.setTitle(&NSString::from_str("Sign in with GitHub"));
         panel.setLevel(objc2_app_kit::NSFloatingWindowLevel);
         panel.center();
 
-        let responder = MicrosoftAuthModalResponder::new(
+        let responder = GitHubAuthModalResponder::new(
             mtm,
             ctx.user_code.clone(),
             ctx.verification_uri.clone(),
@@ -113,7 +113,7 @@ impl MicrosoftAuthDeviceFlowModal {
 
         // Best-effort: open the verification URI for the user.
         open_url(&ctx.verification_uri);
-        // Best-effort: copy user code so they can paste it on the Microsoft page.
+        // Best-effort: copy user code so they can paste it on the GitHub page.
         write_clipboard(&ctx.user_code);
 
         Self {
@@ -243,11 +243,11 @@ mod responder {
 
     define_class!(
         #[unsafe(super(NSResponder))]
-        #[name = "VectorMicrosoftAuthModalResponder"]
+        #[name = "VectorGitHubAuthModalResponder"]
         #[ivars = Mutex<Ivars>]
-        pub struct MicrosoftAuthModalResponder;
+        pub struct GitHubAuthModalResponder;
 
-        impl MicrosoftAuthModalResponder {
+        impl GitHubAuthModalResponder {
             #[unsafe(method(cancelClicked:))]
             fn cancel_clicked(&self, _sender: &AnyObject) {
                 let g = self.ivars().lock();
@@ -256,7 +256,7 @@ mod responder {
         }
     );
 
-    impl MicrosoftAuthModalResponder {
+    impl GitHubAuthModalResponder {
         pub fn new(
             mtm: objc2::MainThreadMarker,
             user_code: String,
