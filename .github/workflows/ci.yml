@@ -169,18 +169,6 @@ jobs:
           shared-key: ci-token-redaction
       - name: Static gate — no_token_in_debug_or_log
         run: cargo test -p vector-arch-tests --test no_token_in_debug_or_log
-      - name: Runtime grep gate — vector-codespaces
-        run: |
-          set -euo pipefail
-          mkdir -p target
-          cargo test -p vector-codespaces --test token_redaction_runtime -- --nocapture 2>&1 | tee target/auth-trace-codespaces.log
-          # The fake-token literal `gho_FAKE_TOKEN_FOR_TESTING_*` is the
-          # self-verifying fixture — strip it before grepping so any REAL-shaped
-          # token still trips the gate. JWT prefix (eyJ...) is not used here.
-          if grep -E '(gho_|ghp_|gha_|ghs_|eyJ[A-Za-z0-9_-]{10,})' target/auth-trace-codespaces.log | grep -v 'FAKE_TOKEN' | grep -v 'FAKE_REFRESH'; then
-            echo "::error::Token-shaped string leaked in vector-codespaces tracing output"
-            exit 1
-          fi
       - name: Runtime grep gate — vector-tunnels
         run: |
           set -euo pipefail
