@@ -6,8 +6,9 @@
 //! test pre-checks `$TMUX` is set and fails fast if the user hasn't prepared
 //! tmux per the USER-RUN setup section of `09-SMOKE.md`.
 //!
-//! Gated on both `VECTOR_E2E_TUNNEL_ID` and `VECTOR_E2E_MICROSOFT_TOKEN`. CI
-//! mirrors `tmux-smoke` pattern at `.github/workflows/ci.yml`
+//! Gated on both `VECTOR_E2E_TUNNEL_ID` and `VECTOR_E2E_GITHUB_TOKEN` (09.2-04:
+//! GitHub is the default provider; the relay accepts the Dev Tunnels GitHub App
+//! token). CI mirrors `tmux-smoke` pattern at `.github/workflows/ci.yml`
 //! (`continue-on-error: true`, runs `-- --ignored` only when secrets are set).
 
 use std::time::Duration;
@@ -26,9 +27,9 @@ const PROMPT: &[u8] = b"READY> ";
 /// is missing, so `--ignored` runs without secrets are a no-op.
 fn env_or_skip(test: &str) -> Option<(String, String)> {
     let tid = std::env::var("VECTOR_E2E_TUNNEL_ID").ok()?;
-    let tok = std::env::var("VECTOR_E2E_MICROSOFT_TOKEN").ok()?;
+    let tok = std::env::var("VECTOR_E2E_GITHUB_TOKEN").ok()?;
     if tid.is_empty() || tok.is_empty() {
-        eprintln!("{test}: VECTOR_E2E_TUNNEL_ID or VECTOR_E2E_MICROSOFT_TOKEN unset; skipping");
+        eprintln!("{test}: VECTOR_E2E_TUNNEL_ID or VECTOR_E2E_GITHUB_TOKEN unset; skipping");
         return None;
     }
     Some((tid, tok))
@@ -86,13 +87,13 @@ async fn connect_and_login(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "live e2e — requires VECTOR_E2E_TUNNEL_ID + VECTOR_E2E_MICROSOFT_TOKEN"]
+#[ignore = "live e2e — requires VECTOR_E2E_TUNNEL_ID + VECTOR_E2E_GITHUB_TOKEN"]
 async fn osc52_round_trip() {
     let Some((tunnel_id, token)) = env_or_skip("osc52_round_trip") else {
         return;
     };
     let api = DevTunnelsApi::new();
-    let auth = AuthProvider::Microsoft(token);
+    let auth = AuthProvider::GitHub(token);
     let tunnel = find_tunnel(&api, &auth, &tunnel_id)
         .await
         .expect("find tunnel");
@@ -152,13 +153,13 @@ async fn osc52_round_trip() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "live e2e — requires VECTOR_E2E_TUNNEL_ID + VECTOR_E2E_MICROSOFT_TOKEN"]
+#[ignore = "live e2e — requires VECTOR_E2E_TUNNEL_ID + VECTOR_E2E_GITHUB_TOKEN"]
 async fn decscusr_and_mouse_modes() {
     let Some((tunnel_id, token)) = env_or_skip("decscusr_and_mouse_modes") else {
         return;
     };
     let api = DevTunnelsApi::new();
-    let auth = AuthProvider::Microsoft(token);
+    let auth = AuthProvider::GitHub(token);
     let tunnel = find_tunnel(&api, &auth, &tunnel_id)
         .await
         .expect("find tunnel");
@@ -222,13 +223,13 @@ async fn decscusr_and_mouse_modes() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "live e2e — requires VECTOR_E2E_TUNNEL_ID + VECTOR_E2E_MICROSOFT_TOKEN"]
+#[ignore = "live e2e — requires VECTOR_E2E_TUNNEL_ID + VECTOR_E2E_GITHUB_TOKEN"]
 async fn term_xterm_256color_advertised() {
     let Some((tunnel_id, token)) = env_or_skip("term_xterm_256color_advertised") else {
         return;
     };
     let api = DevTunnelsApi::new();
-    let auth = AuthProvider::Microsoft(token);
+    let auth = AuthProvider::GitHub(token);
     let tunnel = find_tunnel(&api, &auth, &tunnel_id)
         .await
         .expect("find tunnel");

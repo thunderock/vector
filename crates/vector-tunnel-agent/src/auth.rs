@@ -11,8 +11,10 @@ use crate::token_cache::{self, CachedToken, Provider};
 // GitHub endpoints — public per gh CLI; reused per D-89.
 pub const GITHUB_DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 pub const GITHUB_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
-pub const GITHUB_CLIENT_ID: &str = "178c6fc778ccc68e1d6a"; // gh CLI fallback
-pub const GITHUB_SCOPES: &str = "read:user";
+// D-4: bumped to Dev Tunnels GitHub App per 09.2-01 spike — relay rejected gh-CLI token.
+pub const GITHUB_CLIENT_ID: &str = "Iv1.e7b89e013f801f03";
+// GitHub Apps ignore OAuth scopes — no scope param (matches 09.2-02 driver).
+pub const GITHUB_SCOPES: &str = "";
 
 // Microsoft endpoints — `common` authority, multi-tenant (D-04).
 pub const MICROSOFT_DEVICE_CODE_URL: &str =
@@ -144,10 +146,15 @@ async fn request_device_code(
     client_id: &str,
     scopes: &str,
 ) -> Result<DeviceCodeReply, AgentAuthError> {
+    // Omit scope when empty — GitHub Apps ignore scopes (D-4 / 09.2-02 pattern).
+    let mut form: Vec<(&str, &str)> = vec![("client_id", client_id)];
+    if !scopes.is_empty() {
+        form.push(("scope", scopes));
+    }
     let resp = http
         .post(url)
         .header(reqwest::header::ACCEPT, "application/json")
-        .form(&[("client_id", client_id), ("scope", scopes)])
+        .form(&form)
         .send()
         .await?;
     let status = resp.status();
