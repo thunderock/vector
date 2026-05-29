@@ -1,6 +1,5 @@
-//! macOS Keychain-backed Microsoft OAuth token persistence. Mirrors Phase 6
-//! `vector-codespaces::TokenStore` against `MICROSOFT_REFRESH_ACCOUNT` /
-//! `MICROSOFT_OAUTH_ACCOUNT`.
+//! macOS Keychain-backed GitHub OAuth token persistence. Mirrors Phase 6
+//! `vector-codespaces::TokenStore` against `GITHUB_REFRESH_ACCOUNT`.
 //!
 //! Pitfall 14: manual Debug — secrets never enter logs.
 
@@ -8,24 +7,24 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use vector_secrets::Secrets;
 
-use crate::auth::device_flow_microsoft::MicrosoftTokens;
-use crate::auth::error::MicrosoftAuthError;
+use crate::auth::device_flow_github::GitHubTokens;
+use crate::auth::error::GitHubAuthError;
 
 /// Packs access + refresh + expiry into a single JSON blob stored under
-/// `Secrets::MICROSOFT_REFRESH_ACCOUNT`. v1 mirrors Phase 6 — one entry per user.
-pub struct MicrosoftTokenStore {
+/// `Secrets::GITHUB_REFRESH_ACCOUNT`. v1 mirrors Phase 6 — one entry per user.
+pub struct GitHubTokenStore {
     secrets: Secrets,
 }
 
-impl std::fmt::Debug for MicrosoftTokenStore {
+impl std::fmt::Debug for GitHubTokenStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MicrosoftTokenStore")
+        f.debug_struct("GitHubTokenStore")
             .field("service", &self.secrets.service())
             .finish_non_exhaustive()
     }
 }
 
-impl MicrosoftTokenStore {
+impl GitHubTokenStore {
     pub fn new(secrets: Secrets) -> Self {
         Self { secrets }
     }
@@ -34,7 +33,7 @@ impl MicrosoftTokenStore {
         Self::new(Secrets::for_vector())
     }
 
-    pub fn save(&self, t: &MicrosoftTokens) -> Result<(), MicrosoftAuthError> {
+    pub fn save(&self, t: &GitHubTokens) -> Result<(), GitHubAuthError> {
         let expires_at_secs = t
             .expires_at
             .duration_since(UNIX_EPOCH)
@@ -47,19 +46,19 @@ impl MicrosoftTokenStore {
         })
         .to_string();
         self.secrets
-            .set(Secrets::MICROSOFT_REFRESH_ACCOUNT, &blob)
-            .map_err(|e| MicrosoftAuthError::Storage(e.to_string()))
+            .set(Secrets::GITHUB_REFRESH_ACCOUNT, &blob)
+            .map_err(|e| GitHubAuthError::Storage(e.to_string()))
     }
 
-    pub fn load(&self) -> Result<Option<MicrosoftTokens>, MicrosoftAuthError> {
-        match self.secrets.get(Secrets::MICROSOFT_REFRESH_ACCOUNT) {
+    pub fn load(&self) -> Result<Option<GitHubTokens>, GitHubAuthError> {
+        match self.secrets.get(Secrets::GITHUB_REFRESH_ACCOUNT) {
             Ok(blob) => {
                 let v: serde_json::Value = serde_json::from_str(&blob)
-                    .map_err(|e| MicrosoftAuthError::Storage(format!("invalid blob: {e}")))?;
+                    .map_err(|e| GitHubAuthError::Storage(format!("invalid blob: {e}")))?;
                 let access = v["access_token"].as_str().unwrap_or("").to_string();
                 let refresh = v["refresh_token"].as_str().map(String::from);
                 let exp_unix = v["expires_at_unix"].as_u64().unwrap_or(0);
-                Ok(Some(MicrosoftTokens {
+                Ok(Some(GitHubTokens {
                     access_token: access,
                     refresh_token: refresh,
                     expires_at: UNIX_EPOCH + Duration::from_secs(exp_unix),
@@ -69,13 +68,13 @@ impl MicrosoftTokenStore {
         }
     }
 
-    pub fn clear(&self) -> Result<(), MicrosoftAuthError> {
-        let _ = self.secrets.delete(Secrets::MICROSOFT_REFRESH_ACCOUNT);
+    pub fn clear(&self) -> Result<(), GitHubAuthError> {
+        let _ = self.secrets.delete(Secrets::GITHUB_REFRESH_ACCOUNT);
         Ok(())
     }
 }
 
-impl Default for MicrosoftTokenStore {
+impl Default for GitHubTokenStore {
     fn default() -> Self {
         Self::for_vector()
     }

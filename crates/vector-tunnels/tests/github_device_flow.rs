@@ -1,32 +1,38 @@
-//! DT-02 Microsoft Device Flow tests against wiremock-scripted Microsoft `common` responses.
+//! DT-03 GitHub Device Flow tests against wiremock-scripted GitHub responses.
+//! Two GitHub-specific divergences from the generic OAuth device flow:
+//!   - `Accept: application/json` on both POSTs.
+//!   - `slow_down` ADDS 5s to the interval (does NOT double it).
+//!
+//! Plus a `device_flow_disabled`-is-fatal case the Microsoft mirror lacked.
 
 use std::time::Duration;
 
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
-use vector_tunnels::auth::{MicrosoftAuth, MicrosoftAuthError, MicrosoftTokens};
-use wiremock::matchers::{body_string_contains, method, path};
+use vector_tunnels::auth::{GitHubAuth, GitHubAuthError, GitHubTokens};
+use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-const CLIENT_ID: &str = "test-client-id";
-const SCOPE: &str = "46da2f7e-b5ef-422a-9a4e-fb5e1cb7da14/.default";
+const CLIENT_ID: &str = "Iv1.test-client-id";
+const SCOPE: &str = "";
 
-fn auth_for(server: &MockServer) -> MicrosoftAuth {
-    MicrosoftAuth::with_endpoints(
+fn auth_for(server: &MockServer) -> GitHubAuth {
+    GitHubAuth::with_endpoints(
         CLIENT_ID,
-        format!("{}/devicecode", server.uri()),
-        format!("{}/token", server.uri()),
+        format!("{}/device/code", server.uri()),
+        format!("{}/access_token", server.uri()),
         SCOPE,
     )
 }
 
 async fn mock_device_code(server: &MockServer) {
     Mock::given(method("POST"))
-        .and(path("/devicecode"))
+        .and(path("/device/code"))
+        .and(header("accept", "application/json"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "device_code": "DC",
             "user_code": "ABCD-1234",
-            "verification_uri": "https://microsoft.com/devicelogin",
+            "verification_uri": "https://github.com/login/device",
             "expires_in": 900,
             "interval": 5
         })))
@@ -34,9 +40,9 @@ async fn mock_device_code(server: &MockServer) {
         .await;
 }
 
-// Test 1
+// Test 1 — device-code POST sends Accept: application/json and parses the shape.
 #[tokio::test]
-async fn device_flow_start_parses_microsoft_shape() {
+async fn device_flow_start_parses_github_shape() {
     let server = MockServer::start().await;
     mock_device_code(&server).await;
 
@@ -44,29 +50,50 @@ async fn device_flow_start_parses_microsoft_shape() {
     let start = auth.start_device_flow().await.expect("start");
     assert_eq!(start.device_code, "DC");
     assert_eq!(start.user_code, "ABCD-1234");
-    assert_eq!(start.verification_uri, "https://microsoft.com/devicelogin");
+    assert_eq!(start.verification_uri, "https://github.com/login/device");
     assert_eq!(start.interval, Duration::from_secs(5));
     assert_eq!(start.expires_in, Duration::from_secs(900));
 }
 
-// Test 2
+// Test 1b — verification_url fallback (GitHub sometimes uses _url, not _uri).
 #[tokio::test]
-async fn polling_success_returns_tokens() {
+async fn device_flow_start_falls_back_to_verification_url() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/token"))
+        .and(path("/device/code"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "access_token": "at",
-            "refresh_token": "rt",
-            "expires_in": 3600,
-            "token_type": "Bearer",
-            "scope": SCOPE
+            "device_code": "DC",
+            "user_code": "ABCD-1234",
+            "verification_url": "https://github.com/login/device",
+            "expires_in": 900,
+            "interval": 5
         })))
         .mount(&server)
         .await;
 
     let auth = auth_for(&server);
-    let tokens: MicrosoftTokens = auth
+    let start = auth.start_device_flow().await.expect("start");
+    assert_eq!(start.verification_uri, "https://github.com/login/device");
+}
+
+// Test 2 — polling success returns tokens with Accept: application/json.
+#[tokio::test]
+async fn polling_success_returns_tokens() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/access_token"))
+        .and(header("accept", "application/json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "access_token": "at",
+            "refresh_token": "rt",
+            "expires_in": 28800,
+            "token_type": "bearer"
+        })))
+        .mount(&server)
+        .await;
+
+    let auth = auth_for(&server);
+    let tokens: GitHubTokens = auth
         .poll_until_authorized(
             "DC",
             Duration::from_millis(10),
@@ -83,29 +110,65 @@ async fn polling_success_returns_tokens() {
         .duration_since(now)
         .expect("expires_at in future");
     assert!(
-        expires_in <= Duration::from_secs(3601) && expires_in >= Duration::from_secs(3500),
-        "expires_at roughly +3600s, got {expires_in:?}"
+        expires_in <= Duration::from_secs(28801) && expires_in >= Duration::from_secs(28700),
+        "expires_at roughly +28800s, got {expires_in:?}"
     );
 }
 
-// Test 3
+// Test 2b — absent expires_in is a far-future sentinel, NOT unwrap_or(3600).
 #[tokio::test]
-async fn polling_slow_down_doubles_interval() {
+async fn polling_success_without_expires_in_uses_far_future_sentinel() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/token"))
+        .and(path("/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "access_token": "at",
+            "token_type": "bearer"
+        })))
+        .mount(&server)
+        .await;
+
+    let auth = auth_for(&server);
+    let tokens = auth
+        .poll_until_authorized(
+            "DC",
+            Duration::from_millis(10),
+            Duration::from_secs(60),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("poll success");
+    let now = std::time::SystemTime::now();
+    let expires_in = tokens
+        .expires_at
+        .duration_since(now)
+        .expect("expires_at in future");
+    // Far-future sentinel — must be well beyond an hour so a non-expiring token
+    // isn't treated as stale (Pitfall 4: NOT unwrap_or(3600)).
+    assert!(
+        expires_in > Duration::from_secs(365 * 24 * 3600),
+        "absent expires_in should be far-future, got {expires_in:?}"
+    );
+}
+
+// Test 3 — slow_down ADDS 5s to the interval (explicitly NOT doubled).
+#[tokio::test]
+async fn polling_slow_down_adds_five_seconds() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/access_token"))
         .and(body_string_contains("device_code"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "error": "slow_down"
         })))
         .up_to_n_times(1)
         .mount(&server)
         .await;
     Mock::given(method("POST"))
-        .and(path("/token"))
+        .and(path("/access_token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "access_token": "after_slowdown",
-            "token_type": "Bearer"
+            "token_type": "bearer"
         })))
         .mount(&server)
         .await;
@@ -115,7 +178,7 @@ async fn polling_slow_down_doubles_interval() {
     let tokens = auth
         .poll_until_authorized(
             "DC",
-            Duration::from_millis(50),
+            Duration::from_millis(10),
             Duration::from_secs(60),
             CancellationToken::new(),
         )
@@ -123,31 +186,36 @@ async fn polling_slow_down_doubles_interval() {
         .expect("slow_down then success");
     let elapsed = started.elapsed();
     assert_eq!(tokens.access_token, "after_slowdown");
-    // After slow_down, the next sleep is the doubled interval (~100ms),
-    // so total elapsed should be ≥ 100ms.
+    // After slow_down with a 10ms start interval: ADD 5s -> next sleep ~5010ms.
+    // Doubling would give ~20ms. Assert ≥5s to prove +5s (not doubling).
     assert!(
-        elapsed >= Duration::from_millis(90),
-        "expected ≥90ms after slow_down doubling, got {elapsed:?}"
+        elapsed >= Duration::from_secs(5),
+        "expected ≥5s after slow_down +5s (NOT doubled), got {elapsed:?}"
+    );
+    // And bound it so we know it's +5s, not some larger multiplication.
+    assert!(
+        elapsed < Duration::from_secs(8),
+        "slow_down should add only 5s, got {elapsed:?}"
     );
 }
 
-// Test 4
+// Test 4 — authorization_pending keeps polling at the current interval.
 #[tokio::test]
 async fn polling_authorization_pending_keeps_polling_then_succeeds() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/token"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+        .and(path("/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "error": "authorization_pending"
         })))
         .up_to_n_times(2)
         .mount(&server)
         .await;
     Mock::given(method("POST"))
-        .and(path("/token"))
+        .and(path("/access_token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "access_token": "finally",
-            "token_type": "Bearer"
+            "token_type": "bearer"
         })))
         .mount(&server)
         .await;
@@ -165,20 +233,48 @@ async fn polling_authorization_pending_keeps_polling_then_succeeds() {
     assert_eq!(tokens.access_token, "finally");
 }
 
-// Test 5
+// Test 5 — device_flow_disabled is a distinct typed FATAL error.
+#[tokio::test]
+async fn polling_device_flow_disabled_returns_typed_fatal_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "error": "device_flow_disabled",
+            "error_description": "Device flow is not enabled for this app."
+        })))
+        .mount(&server)
+        .await;
+
+    let auth = auth_for(&server);
+    let err = auth
+        .poll_until_authorized(
+            "DC",
+            Duration::from_millis(20),
+            Duration::from_secs(60),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, GitHubAuthError::DeviceFlowDisabled),
+        "expected DeviceFlowDisabled, got {err:?}"
+    );
+}
+
+// Test 6 — device code expiry maps to typed error.
 #[tokio::test]
 async fn polling_device_code_expired_returns_typed_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/token"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+        .and(path("/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "error": "authorization_pending"
         })))
         .mount(&server)
         .await;
 
     let auth = auth_for(&server);
-    // expires_in shorter than the polling interval → first poll, then time runs out.
     let err = auth
         .poll_until_authorized(
             "DC",
@@ -189,18 +285,18 @@ async fn polling_device_code_expired_returns_typed_error() {
         .await
         .unwrap_err();
     assert!(
-        matches!(err, MicrosoftAuthError::DeviceCodeExpired),
+        matches!(err, GitHubAuthError::DeviceCodeExpired),
         "expected DeviceCodeExpired, got {err:?}"
     );
 }
 
-// Test 6
+// Test 7 — cancellation exits within one interval.
 #[tokio::test]
 async fn polling_cancellation_exits_within_one_interval() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/token"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+        .and(path("/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "error": "authorization_pending"
         })))
         .mount(&server)
@@ -225,7 +321,7 @@ async fn polling_cancellation_exits_within_one_interval() {
         .unwrap_err();
     let elapsed = started.elapsed();
     assert!(
-        matches!(err, MicrosoftAuthError::Cancelled),
+        matches!(err, GitHubAuthError::Cancelled),
         "expected Cancelled, got {err:?}"
     );
     assert!(
@@ -234,18 +330,19 @@ async fn polling_cancellation_exits_within_one_interval() {
     );
 }
 
-// Test 7
+// Test 8 — refresh success returns new tokens.
 #[tokio::test]
 async fn refresh_success_returns_new_tokens() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/token"))
+        .and(path("/access_token"))
+        .and(header("accept", "application/json"))
         .and(body_string_contains("grant_type=refresh_token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "access_token": "new_at",
             "refresh_token": "new_rt",
-            "expires_in": 3600,
-            "token_type": "Bearer"
+            "expires_in": 28800,
+            "token_type": "bearer"
         })))
         .mount(&server)
         .await;
@@ -256,15 +353,15 @@ async fn refresh_success_returns_new_tokens() {
     assert_eq!(tokens.refresh_token.as_deref(), Some("new_rt"));
 }
 
-// Test 8
+// Test 9 — bad_refresh_token maps to RefreshExpired (GitHub's error name).
 #[tokio::test]
-async fn refresh_invalid_grant_returns_refresh_expired() {
+async fn refresh_bad_refresh_token_returns_refresh_expired() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/token"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
-            "error": "invalid_grant",
-            "error_description": "AADSTS70008: The provided authorization code or refresh token has expired."
+        .and(path("/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "error": "bad_refresh_token",
+            "error_description": "The refresh token passed is incorrect or expired."
         })))
         .mount(&server)
         .await;
@@ -272,18 +369,18 @@ async fn refresh_invalid_grant_returns_refresh_expired() {
     let auth = auth_for(&server);
     let err = auth.refresh("expired_rt").await.unwrap_err();
     assert!(
-        matches!(err, MicrosoftAuthError::RefreshExpired),
+        matches!(err, GitHubAuthError::RefreshExpired),
         "expected RefreshExpired, got {err:?}"
     );
 }
 
-// Test 9 — Debug never leaks tokens
+// Test 10 — Debug never leaks token bytes.
 #[test]
 fn debug_format_never_leaks_token_bytes() {
-    let tokens = MicrosoftTokens {
+    let tokens = GitHubTokens {
         access_token: "at_secret_value_xyz".into(),
         refresh_token: Some("rt_secret_value_xyz".into()),
-        expires_at: std::time::SystemTime::now() + Duration::from_secs(3600),
+        expires_at: std::time::SystemTime::now() + Duration::from_secs(28800),
     };
     let rendered = format!("{tokens:?}");
     assert!(
@@ -294,7 +391,6 @@ fn debug_format_never_leaks_token_bytes() {
         !rendered.contains("rt_secret_value_xyz"),
         "refresh_token leaked into Debug: {rendered}"
     );
-    // Sanity: the metadata fields ARE present.
     assert!(
         rendered.contains("access_token_len"),
         "Debug should include access_token_len: {rendered}"

@@ -1,10 +1,9 @@
-//! Microsoft OAuth Device Flow error variants. Mirrors `vector-codespaces::AuthError`
-//! shape against Microsoft Entra `common` endpoints.
+//! GitHub OAuth Device Flow error variants (Dev Tunnels GitHub App).
 
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum MicrosoftAuthError {
+pub enum GitHubAuthError {
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("device code expired before user completed sign-in")]
@@ -15,7 +14,9 @@ pub enum MicrosoftAuthError {
     RefreshExpired,
     #[error("sign-in cancelled")]
     Cancelled,
-    #[error("Microsoft returned unexpected response: {0}")]
+    #[error("GitHub App does not have device flow enabled")]
+    DeviceFlowDisabled,
+    #[error("GitHub returned unexpected response: {0}")]
     Unexpected(String),
     #[error("token persistence error: {0}")]
     Storage(String),

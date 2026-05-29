@@ -1,9 +1,11 @@
-//! Microsoft OAuth Device Flow + token store. Plan 08-02.
+//! GitHub OAuth Device Flow + token store (Dev Tunnels GitHub App). Plan 09.2-02.
 
-pub mod device_flow_microsoft;
+pub mod device_flow_github;
 pub mod error;
 pub mod token_store;
 
-pub use device_flow_microsoft::{DeviceFlowStart, MicrosoftAuth, MicrosoftTokens};
-pub use error::MicrosoftAuthError;
-pub use token_store::MicrosoftTokenStore;
+pub use device_flow_github::{
+    DeviceFlowStart, GitHubAuth, GitHubTokens, GITHUB_DEVTUNNELS_CLIENT_ID,
+};
+pub use error::GitHubAuthError;
+pub use token_store::GitHubTokenStore;

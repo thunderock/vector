@@ -1,9 +1,9 @@
-//! DT-02 Microsoft token store roundtrip. `#[ignore]`-gated by default because
-//! the macOS Keychain prompts interactively and CI runners lack it (mirrors
-//! Phase 6 `vector-codespaces::tests::keychain_roundtrip`).
+//! DT-03 GitHub token store roundtrip. `#[ignore]`-gated by default because the
+//! macOS Keychain prompts interactively and CI runners lack it (mirrors the
+//! Microsoft token-store tests).
 //!
 //! Run locally with:
-//!   cargo test -p vector-tunnels --test microsoft_token_store -- --ignored
+//!   cargo test -p vector-tunnels --test github_token_store -- --ignored
 //!
 //! Each test uses a UNIQUE service namespace so concurrent runs / leftover
 //! state from prior runs don't collide.
@@ -11,33 +11,30 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use vector_secrets::Secrets;
-use vector_tunnels::auth::{MicrosoftTokenStore, MicrosoftTokens};
+use vector_tunnels::auth::{GitHubTokenStore, GitHubTokens};
 
 fn unique_service() -> String {
-    // pid + nanos avoids the `uuid` dep while remaining collision-free for
-    // realistic test concurrency.
     let nanos = std::time::SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("vector-test-msft-{}-{}", std::process::id(), nanos)
+    format!("vector-test-gh-{}-{}", std::process::id(), nanos)
 }
 
-fn sample_tokens() -> MicrosoftTokens {
-    MicrosoftTokens {
+fn sample_tokens() -> GitHubTokens {
+    GitHubTokens {
         access_token: "at_uat_value_local_only".into(),
         refresh_token: Some("rt_uat_value_local_only".into()),
-        // Round to seconds — the JSON blob stores `expires_at_unix` as u64 seconds,
-        // so any sub-second resolution is lost across save+load.
+        // Round to seconds — the JSON blob stores `expires_at_unix` as u64 seconds.
         expires_at: UNIX_EPOCH + Duration::from_secs(1_900_000_000),
     }
 }
 
-// Test 1
+// Test 1 — round-trips access+refresh+expiry through GITHUB_REFRESH_ACCOUNT.
 #[test]
 #[ignore = "Manual UAT — requires real macOS Keychain"]
 fn save_then_load_returns_identical_tokens() {
-    let store = MicrosoftTokenStore::new(Secrets::new(unique_service()));
+    let store = GitHubTokenStore::new(Secrets::new(unique_service()));
     let _ = store.clear();
 
     let tokens = sample_tokens();
@@ -50,11 +47,11 @@ fn save_then_load_returns_identical_tokens() {
     let _ = store.clear();
 }
 
-// Test 2
+// Test 2 — clear deletes the slot.
 #[test]
 #[ignore = "Manual UAT — requires real macOS Keychain"]
 fn clear_after_save_yields_none() {
-    let store = MicrosoftTokenStore::new(Secrets::new(unique_service()));
+    let store = GitHubTokenStore::new(Secrets::new(unique_service()));
     let _ = store.clear();
 
     store.save(&sample_tokens()).expect("save");
@@ -63,11 +60,11 @@ fn clear_after_save_yields_none() {
     assert!(loaded.is_none(), "post-clear load should be None");
 }
 
-// Test 3
+// Test 3 — load on a fresh store is Ok(None), not Err.
 #[test]
 #[ignore = "Manual UAT — requires real macOS Keychain"]
 fn load_when_never_saved_returns_ok_none_not_err() {
-    let store = MicrosoftTokenStore::new(Secrets::new(unique_service()));
+    let store = GitHubTokenStore::new(Secrets::new(unique_service()));
     let _ = store.clear();
 
     let loaded = store.load();
@@ -78,15 +75,12 @@ fn load_when_never_saved_returns_ok_none_not_err() {
     assert!(loaded.unwrap().is_none());
 }
 
-// Test 4 — pure unit: Debug never leaks
+// Test 4 — pure unit: Debug never leaks token field names.
 #[test]
 fn debug_format_never_leaks_token_bytes() {
-    // No Keychain access needed — `MicrosoftTokenStore::new` just stores Secrets.
-    let store = MicrosoftTokenStore::new(Secrets::new("vector-test-msft-debug-check"));
+    let store = GitHubTokenStore::new(Secrets::new("vector-test-gh-debug-check"));
     let rendered = format!("{store:?}");
-    // The store holds NO token bytes — `service` is the only field rendered.
-    // Confirm the format is well-formed and doesn't accidentally name a token field.
-    assert!(rendered.contains("MicrosoftTokenStore"));
+    assert!(rendered.contains("GitHubTokenStore"));
     assert!(rendered.contains("service"));
     assert!(
         !rendered.contains("access_token") && !rendered.contains("refresh_token"),
@@ -94,13 +88,10 @@ fn debug_format_never_leaks_token_bytes() {
     );
 }
 
-// Sanity build-only check: SystemTime sub-second resolution is lost across the
-// JSON blob, so users must compare at second resolution. Documented here so the
-// next reader doesn't trip over it.
+// Sanity build-only check: sub-second resolution is lost across the JSON blob.
 #[test]
 fn save_load_drops_subsecond_resolution() {
-    // Pure constructor test — does not touch Keychain.
-    let with_nanos = MicrosoftTokens {
+    let with_nanos = GitHubTokens {
         access_token: "a".into(),
         refresh_token: None,
         expires_at: SystemTime::now(),
@@ -111,6 +102,5 @@ fn save_load_drops_subsecond_resolution() {
         .unwrap()
         .as_secs();
     let rebuilt_expires_at = UNIX_EPOCH + Duration::from_secs(secs);
-    // Confirm equality only at second resolution — the round-trip rounds down.
     assert!(rebuilt_expires_at <= with_nanos.expires_at);
 }

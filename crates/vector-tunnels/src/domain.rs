@@ -35,8 +35,8 @@ pub async fn connect_tunnel(
 /// call.
 ///
 /// `auth_factory` is invoked on every reconnect attempt so the picker actor's
-/// `MicrosoftTokenStore` can mint a fresh `AuthProvider` (the upstream MS
-/// access token may have rotated between attempts).
+/// `GitHubTokenStore` can mint a fresh `AuthProvider` (the upstream access
+/// token may have rotated between attempts).
 pub struct ReconnectableDevTunnelDomain {
     api: Arc<DevTunnelsApi>,
     auth_factory: Arc<dyn Fn() -> AuthProvider + Send + Sync>,
