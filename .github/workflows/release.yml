@@ -53,8 +53,80 @@ jobs:
           name: vector-x86_64
           path: target/x86_64-apple-darwin/release/vector-app
 
+  build-deb:
+    name: Build .deb (${{ matrix.deb-arch }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            deb-arch: amd64
+          - target: aarch64-unknown-linux-gnu
+            deb-arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: agent-${{ matrix.deb-arch }}
+
+      - name: Install cross-compile toolchain (aarch64 only)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml << 'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+
+      - name: Install cargo-deb
+        run: cargo install --locked cargo-deb
+
+      - name: Build release binary
+        run: cargo build --release -p vector-tunnel-agent --target ${{ matrix.target }}
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ github.event.release.tag_name || github.ref_name }}"
+          # Strip leading 'v' from tag for the .deb version field (cargo-deb expects unprefixed).
+          VER="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Build .deb
+        run: |
+          cargo deb -p vector-tunnel-agent \
+            --no-build \
+            --target ${{ matrix.target }} \
+            --output target/${{ matrix.target }}/debian/vector-tunnel-agent_${{ steps.tag.outputs.ver }}_${{ matrix.deb-arch }}.deb
+
+      - name: Sanity-check .deb
+        run: |
+          set -e
+          DEB=$(ls target/${{ matrix.target }}/debian/vector-tunnel-agent_*.deb | head -1)
+          echo "Inspecting $DEB"
+          dpkg-deb --info "$DEB"
+          dpkg-deb --contents "$DEB" | tee /tmp/contents.txt
+          grep -q 'usr/bin/vector-tunnel-agent' /tmp/contents.txt
+
+      - name: Upload artifact (CI staging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-deb-${{ matrix.deb-arch }}
+          path: target/${{ matrix.target }}/debian/*.deb
+          retention-days: 90
+
   release:
-    needs: [build-arm64, build-x86_64]
+    needs: [build-arm64, build-x86_64, build-deb]
     runs-on: macos-14
     permissions:
       contents: write
@@ -79,6 +151,11 @@ jobs:
         with:
           name: vector-x86_64
           path: artifacts/x86_64
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-deb-*
+          path: artifacts/deb
+          merge-multiple: true
       - name: Make per-arch binaries executable
         run: |
           chmod +x artifacts/aarch64/vector-app
@@ -131,17 +208,23 @@ jobs:
 
           Built from commit \`${{ github.sha }}\` on macOS 13+ (Ventura). Apple Silicon and Intel both supported (Universal binary).
           EOF
+      - name: Verify agent .debs present
+        run: |
+          set -e
+          ls artifacts/deb/vector-tunnel-agent_*_amd64.deb
+          ls artifacts/deb/vector-tunnel-agent_*_arm64.deb
       - name: Publish or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" target/dmg/Vector-*-universal.dmg --clobber
+            gh release upload "$TAG" target/dmg/Vector-*-universal.dmg artifacts/deb/vector-tunnel-agent_*.deb --clobber
             gh release edit "$TAG" --title "Vector $TAG" --notes-file RELEASE_NOTES.md
           else
             gh release create "$TAG" \
               --title "Vector $TAG" \
               --notes-file RELEASE_NOTES.md \
-              target/dmg/Vector-*-universal.dmg
+              target/dmg/Vector-*-universal.dmg \
+              artifacts/deb/vector-tunnel-agent_*.deb
           fi
