@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: "Completed 09.2-03-PLAN.md (app-side GitHub auth swap); next: 09.2-04 live smoke"
-last_updated: "2026-05-29T04:25:49.287Z"
+stopped_at: "Paused at 09.2-04 Task 3 (blocking human-verify): Tasks 1-2 done & committed (c1d7c86); awaiting human live GitHub-auth smoke walk of 09.2-SMOKE.md"
+last_updated: "2026-05-29T04:32:06.653Z"
 progress:
   total_phases: 14
   completed_phases: 8
@@ -235,11 +235,17 @@ Plan: 4 of 4
 
 - Plan 09-06 Task 3b (USER smoke matrix sign-off in 09-SMOKE.md) is DEFERRED — same root cause as 09-05 Task 3. Both 09-05-HUMAN-UAT.md (11 pending items) and 09-06-HUMAN-UAT.md (16 pending items: 3 automated + 13 manual) block on the SAME DevTunnelsActor main.rs wiring gap. PERSIST-04 stays Pending in REQUIREMENTS.md until both UATs sign off. The follow-up wiring plan unblocks both UATs simultaneously.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260529-hni | Unify agent .deb build into release.yml (one v* tag → DMG + agent .debs on one Release; retired redundant agent-release.yml) | 2026-05-29 | b54858f | [260529-hni-unify-agent-deb-build-into-release-yml-s](./quick/260529-hni-unify-agent-deb-build-into-release-yml-s/) |
+
 ## Session Continuity
 
-**Last session:** 2026-05-29T04:25:49.280Z
+**Last session:** 2026-05-29T04:32:06.646Z
 
-**Stopped at:** Completed 09.2-03-PLAN.md (app-side GitHub auth swap); next: 09.2-04 live smoke
+**Stopped at:** Paused at 09.2-04 Task 3 (blocking human-verify): Tasks 1-2 done & committed (c1d7c86); awaiting human live GitHub-auth smoke walk of 09.2-SMOKE.md
 
 **Next action:**
 
