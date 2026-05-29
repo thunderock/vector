@@ -59,6 +59,25 @@ async fn list_tunnels_strips_vector_prefix() {
 }
 
 #[tokio::test]
+async fn list_tunnels_decodes_bare_array_envelope() {
+    // Regression: the live relay returns a top-level JSON array, not {"value":[...]}.
+    // An account with zero tunnels returns `[]` — must decode to an empty list, not error.
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/tunnels"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("[]", "application/json"))
+        .mount(&server)
+        .await;
+
+    let api = DevTunnelsApi::with_base_url(server.uri());
+    let tunnels = api
+        .list_tunnels(&AuthProvider::GitHub("gho_test".into()))
+        .await
+        .expect("empty bare array must decode to empty list");
+    assert!(tunnels.is_empty());
+}
+
+#[tokio::test]
 async fn list_tunnels_handles_401() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

@@ -7,11 +7,6 @@ use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Deserialize)]
-struct ListBody {
-    value: Vec<TunnelRecord>,
-}
-
-#[derive(Deserialize)]
 struct TokenBody {
     token: String,
 }
@@ -100,9 +95,9 @@ impl DevTunnelsApi {
             403 => Err(ApiError::Forbidden),
             404 => Err(ApiError::NotFound),
             s if (200..300).contains(&s) => {
-                let b: ListBody = resp.json().await?;
-                Ok(b.value
-                    .into_iter()
+                // The live relay returns a top-level JSON array, not a {"value":[...]} envelope.
+                let v: Vec<TunnelRecord> = resp.json().await?;
+                Ok(v.into_iter()
                     .filter(TunnelRecord::is_vector_agent)
                     .collect())
             }
