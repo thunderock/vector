@@ -81,27 +81,27 @@ pub enum UserEvent {
     // Phase 9.1 Gap B: GitHub OAuth + Codespaces UserEvent variants removed
     // (AuthSignInRequested, AuthDisplayCode, AuthCompleted, AuthFailed,
     // AuthRequired, SignOut, OpenCodespacesPicker, CodespacesLoaded,
-    // CodespacesLoadFailed, CodespaceStateChanged). Microsoft auth path
+    // CodespacesLoadFailed, CodespaceStateChanged). GitHub auth path
     // below is the sole sign-in surface in v1.
     // ───── Phase 8 (DT-02/03/04) — appended; never reorder ─────
-    /// Microsoft device flow obtained user_code; main thread shows MicrosoftAuthDeviceFlowModal.
-    MicrosoftDeviceFlowStarted {
+    /// GitHub device flow obtained user_code; main thread shows GitHubAuthDeviceFlowModal.
+    GitHubDeviceFlowStarted {
         user_code: String,
         verification_uri: String,
         expires_in: std::time::Duration,
         cancel: tokio_util::sync::CancellationToken,
     },
-    /// Microsoft device flow completed; tokens persisted to Keychain.
-    MicrosoftSignedIn,
-    /// Microsoft sign-in ended with a non-user terminal error.
-    MicrosoftSignInFailed(String),
-    /// Microsoft sign-in cancelled by the user (Cancel button or modal close).
-    MicrosoftSignInCancelled,
+    /// GitHub device flow completed; tokens persisted to Keychain.
+    GitHubSignedIn,
+    /// GitHub sign-in ended with a non-user terminal error.
+    GitHubSignInFailed(String),
+    /// GitHub sign-in cancelled by the user (Cancel button or modal close).
+    GitHubSignInCancelled,
     /// DevTunnels picker REST list arrived (already filtered to vector-agent tunnels).
     DevTunnelsLoaded(Vec<devtunnels_actor::TunnelView>),
     /// DevTunnels list call failed (non-401 error).
     DevTunnelsLoadFailed(String),
-    /// DevTunnels list returned 401 (or no Microsoft token present); picker should prompt sign-in.
+    /// DevTunnels list returned 401 (or no GitHub token present); picker should prompt sign-in.
     DevTunnelsAuthRequired,
     /// Picker requests a connect for tunnel_id.
     DevTunnelConnectRequested {
@@ -120,10 +120,10 @@ pub enum UserEvent {
         tunnel_id: String,
         reason: String,
     },
-    /// Menu "Sign in with Microsoft" clicked.
-    MicrosoftSignInRequested,
-    /// Menu "Sign out of Microsoft" clicked.
-    MicrosoftSignOutRequested,
+    /// Menu "Sign in with GitHub" clicked.
+    GitHubSignInRequested,
+    /// Menu "Sign out of GitHub" clicked.
+    GitHubSignOutRequested,
     /// Menu "Dev Tunnels…" clicked (equivalent to Cmd-Shift-T keypress).
     OpenDevTunnelsPickerMenu,
     // ───── Phase 9 (PERSIST-01/02) — appended; never reorder ─────

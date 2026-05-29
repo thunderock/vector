@@ -97,10 +97,10 @@ fn main() -> Result<()> {
 
                 // Plan 09-07 — construct DevTunnelsActor so Cmd-Shift-T can reach the picker.
                 let dt_api = vector_tunnels::DevTunnelsApi::new();
-                let dt_auth = vector_tunnels::auth::MicrosoftAuth::new(
-                    vector_tunnels::auth::device_flow_microsoft::DEFAULT_MICROSOFT_CLIENT_ID,
+                let dt_auth = vector_tunnels::auth::GitHubAuth::new(
+                    vector_tunnels::auth::GITHUB_DEVTUNNELS_CLIENT_ID,
                 );
-                let dt_store = vector_tunnels::auth::MicrosoftTokenStore::for_vector();
+                let dt_store = vector_tunnels::auth::GitHubTokenStore::for_vector();
                 let mut dt_actor = devtunnels_actor::DevTunnelsActor::new(
                     dt_api,
                     Arc::clone(&mux),

@@ -1,7 +1,7 @@
 //! Phase 8 / DT-02..04 — tokio actor for the Dev Tunnels picker.
 //!
 //! Mirrors Phase 6 `codespaces_actor` shape. Owns the `DevTunnelsApi` +
-//! `MicrosoftAuth` + `MicrosoftTokenStore` handles; emits `UserEvent` variants
+//! `GitHubAuth` + `GitHubTokenStore` handles; emits `UserEvent` variants
 //! across the `EventLoopProxy` boundary. The picker UI never speaks REST.
 //!
 //! Pitfall 14: no derived Debug on the actor or any token-bearing fields.
@@ -15,7 +15,7 @@ use winit::event_loop::EventLoopProxy;
 
 use vector_mux::{Domain as MuxDomain, Mux, PtyTransport, WindowId as MuxWindowId};
 use vector_tunnels::{
-    auth::{MicrosoftAuth, MicrosoftAuthError, MicrosoftTokenStore, MicrosoftTokens},
+    auth::{GitHubAuth, GitHubAuthError, GitHubTokenStore, GitHubTokens},
     domain::{connect_tunnel, ReconnectableDevTunnelDomain},
     AuthProvider, DevTunnelsApi, TunnelRecord,
 };
@@ -65,17 +65,17 @@ pub enum Command {
         cols: u16,
         window_id: MuxWindowId,
     },
-    /// Menu "Sign in with Microsoft".
-    StartMicrosoftSignIn,
-    /// Menu "Sign out of Microsoft".
-    SignOutMicrosoft,
+    /// Menu "Sign in with GitHub".
+    StartGitHubSignIn,
+    /// Menu "Sign out of GitHub".
+    SignOutGitHub,
 }
 
 /// Actor state. Note: derived Debug forbidden (Pitfall 14).
 pub struct DevTunnelsActor {
     api: Arc<DevTunnelsApi>,
-    microsoft_auth: MicrosoftAuth,
-    token_store: Arc<MicrosoftTokenStore>,
+    github_auth: GitHubAuth,
+    token_store: Arc<GitHubTokenStore>,
     proxy: EventLoopProxy<UserEvent>,
     mux: Arc<Mux>,
     /// Plan 09-05 — router handle so the actor can `spawn_pane` for tunnel
@@ -83,7 +83,7 @@ pub struct DevTunnelsActor {
     router: Option<Arc<Mutex<PtyActorRouter>>>,
 }
 
-// Manual Debug — never reach into MicrosoftAuth or token_store contents.
+// Manual Debug — never reach into GitHubAuth or token_store contents.
 impl std::fmt::Debug for DevTunnelsActor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DevTunnelsActor")
@@ -96,13 +96,13 @@ impl DevTunnelsActor {
     pub fn new(
         api: DevTunnelsApi,
         mux: Arc<Mux>,
-        microsoft_auth: MicrosoftAuth,
-        token_store: MicrosoftTokenStore,
+        github_auth: GitHubAuth,
+        token_store: GitHubTokenStore,
         proxy: EventLoopProxy<UserEvent>,
     ) -> Self {
         Self {
             api: Arc::new(api),
-            microsoft_auth,
+            github_auth,
             token_store: Arc::new(token_store),
             proxy,
             mux,
@@ -134,18 +134,18 @@ impl DevTunnelsActor {
                             .handle_connect(&tunnel_id, rows, cols, window_id)
                             .await;
                     }
-                    Command::StartMicrosoftSignIn => actor.handle_start_microsoft_signin().await,
-                    Command::SignOutMicrosoft => actor.handle_sign_out(),
+                    Command::StartGitHubSignIn => actor.handle_start_github_signin().await,
+                    Command::SignOutGitHub => actor.handle_sign_out(),
                 }
             }
         });
         tx
     }
 
-    /// Read tokens from Keychain; pack into AuthProvider::Microsoft.
+    /// Read tokens from Keychain; pack into AuthProvider::GitHub.
     fn auth_provider(&self) -> Option<AuthProvider> {
         let tokens = self.token_store.load().ok().flatten()?;
-        Some(AuthProvider::Microsoft(tokens.access_token))
+        Some(AuthProvider::GitHub(tokens.access_token))
     }
 
     async fn handle_load(&mut self) {
@@ -189,14 +189,14 @@ impl DevTunnelsActor {
     }
 
     /// Single refresh attempt. Returns Ok on success (tokens saved) or err.
-    async fn try_refresh(&mut self) -> Result<(), MicrosoftAuthError> {
+    async fn try_refresh(&mut self) -> Result<(), GitHubAuthError> {
         let Some(tokens) = self.token_store.load()? else {
-            return Err(MicrosoftAuthError::RefreshExpired);
+            return Err(GitHubAuthError::RefreshExpired);
         };
         let Some(rt) = tokens.refresh_token.as_deref() else {
-            return Err(MicrosoftAuthError::RefreshExpired);
+            return Err(GitHubAuthError::RefreshExpired);
         };
-        let new_tokens = self.microsoft_auth.refresh(rt).await?;
+        let new_tokens = self.github_auth.refresh(rt).await?;
         self.token_store.save(&new_tokens)?;
         Ok(())
     }
@@ -259,7 +259,7 @@ impl DevTunnelsActor {
                 .flatten()
                 .map(|t| t.access_token)
                 .unwrap_or_default();
-            AuthProvider::Microsoft(tokens)
+            AuthProvider::GitHub(tokens)
         });
         let domain: Arc<dyn MuxDomain> = Arc::new(ReconnectableDevTunnelDomain::new(
             Arc::clone(&self.api),
@@ -315,41 +315,39 @@ impl DevTunnelsActor {
         }
     }
 
-    async fn handle_start_microsoft_signin(&mut self) {
-        let dc = match self.microsoft_auth.start_device_flow().await {
+    async fn handle_start_github_signin(&mut self) {
+        let dc = match self.github_auth.start_device_flow().await {
             Ok(d) => d,
             Err(e) => {
                 let _ = self
                     .proxy
-                    .send_event(UserEvent::MicrosoftSignInFailed(e.to_string()));
+                    .send_event(UserEvent::GitHubSignInFailed(e.to_string()));
                 return;
             }
         };
         let cancel = CancellationToken::new();
-        let _ = self
-            .proxy
-            .send_event(UserEvent::MicrosoftDeviceFlowStarted {
-                user_code: dc.user_code.clone(),
-                verification_uri: dc.verification_uri.clone(),
-                expires_in: dc.expires_in,
-                cancel: cancel.clone(),
-            });
+        let _ = self.proxy.send_event(UserEvent::GitHubDeviceFlowStarted {
+            user_code: dc.user_code.clone(),
+            verification_uri: dc.verification_uri.clone(),
+            expires_in: dc.expires_in,
+            cancel: cancel.clone(),
+        });
         // Poll inline (we're already on the actor task; one signin at a time).
         match self
-            .microsoft_auth
+            .github_auth
             .poll_until_authorized(&dc.device_code, dc.interval, dc.expires_in, cancel)
             .await
         {
             Ok(tokens) => {
                 let _ = save_then_announce(&self.token_store, &tokens, &self.proxy);
             }
-            Err(MicrosoftAuthError::Cancelled) => {
-                let _ = self.proxy.send_event(UserEvent::MicrosoftSignInCancelled);
+            Err(GitHubAuthError::Cancelled) => {
+                let _ = self.proxy.send_event(UserEvent::GitHubSignInCancelled);
             }
             Err(e) => {
                 let _ = self
                     .proxy
-                    .send_event(UserEvent::MicrosoftSignInFailed(e.to_string()));
+                    .send_event(UserEvent::GitHubSignInFailed(e.to_string()));
             }
         }
     }
@@ -360,12 +358,12 @@ impl DevTunnelsActor {
 }
 
 fn save_then_announce(
-    store: &MicrosoftTokenStore,
-    tokens: &MicrosoftTokens,
+    store: &GitHubTokenStore,
+    tokens: &GitHubTokens,
     proxy: &EventLoopProxy<UserEvent>,
-) -> Result<(), MicrosoftAuthError> {
+) -> Result<(), GitHubAuthError> {
     store.save(tokens)?;
-    let _ = proxy.send_event(UserEvent::MicrosoftSignedIn);
+    let _ = proxy.send_event(UserEvent::GitHubSignedIn);
     Ok(())
 }
 
