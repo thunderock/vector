@@ -9,6 +9,10 @@ ignore = [
     # rsa 0.9.x timing sidechannel via jsonwebtoken→octocrab; no patch available.
     # This is a local desktop app — not exposed as a server — so the risk is acceptable.
     "RUSTSEC-2023-0071",
+    # aes 0.8.4 is yanked but pulled transitively via russh→aes-gcm 0.10.3→aes ^0.8;
+    # no non-yanked 0.8.x exists and the russh chain can't move to aes 0.9. Yank was
+    # not a security advisory. Revisit when russh bumps its aes-gcm.
+    { crate = "aes@0.8.4", reason = "yanked, no upgrade path through russh; not a security yank" },
 ]
 unmaintained = "workspace"
 
@@ -30,16 +34,33 @@ allow = [
 ]
 confidence-threshold = 0.93
 
+# The vendored dev-tunnels SDK (git, 0.1.0) ships no `license` field in its
+# manifest. The repo (github.com/microsoft/dev-tunnels) is MIT. Assert it.
+[[licenses.clarify]]
+crate = "tunnels"
+expression = "MIT"
+license-files = []
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Intra-workspace `{ path = ... }` deps resolve to `*`; that's expected, not a real wildcard.
+allow-wildcard-paths = true
 deny = [
-    { name = "openssl", reason = "use rustls; OpenSSL adds C build complexity" },
-    { name = "openssl-sys", reason = "see openssl above" },
+    # Banned for OUR code, but the vendored dev-tunnels SDK forces openssl via two
+    # paths: russh 0.37 (its pinned fork) and tokio-tungstenite→native-tls. Exempt
+    # only those SDK parents; any new route to openssl still trips the ban.
+    { name = "openssl", reason = "use rustls; OpenSSL adds C build complexity", wrappers = ["russh", "russh-keys", "native-tls"] },
+    { name = "openssl-sys", reason = "see openssl above", wrappers = ["openssl", "native-tls"] },
 ]
 skip-tree = []
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = []
+# Vendored per stack design: dev-tunnels SDK (no crates.io release) and the
+# Microsoft russh fork the SDK pins. See CLAUDE.md §Dev Tunnels.
+allow-git = [
+    "https://github.com/microsoft/dev-tunnels",
+    "https://github.com/microsoft/vscode-russh",
+]
