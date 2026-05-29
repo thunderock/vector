@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "Vector Tunnel Agent — Linux user-space binary that hosts a Dev Tunnel and serves PTY shells (Phase 8 D-A1 Path 2c)."
+publish = false
 
 [lints]
 workspace = true
@@ -26,19 +27,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 portable-pty = { workspace = true }
 vector-tunnel-protocol = { workspace = true }
-base64 = { workspace = true }
-oauth2 = { workspace = true }
-keyring-core = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }
 clap = { workspace = true }
 dirs = { workspace = true }
 hostname = { workspace = true }
-nix = { workspace = true }
-chrono = { workspace = true }
-tokio-util = { workspace = true }
-tokio-tungstenite = { workspace = true }
-zeroize = { workspace = true }
 tunnels = { workspace = true }
 
 [dev-dependencies]
