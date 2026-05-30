@@ -31,6 +31,31 @@ pub const VECTOR_PTY_PORT: u16 = 16632;
 /// matching this exact string in `Tunnel.labels`.
 pub const VECTOR_AGENT_LABEL: &str = "vector-agent";
 
+/// Build a Dev Tunnels-valid tunnel name from a hostname.
+///
+/// The Management API `Name` field must match `([a-z0-9][a-z0-9-]{1,47}[a-z0-9])|(^$)`
+/// — lowercase alphanumeric + hyphens, 3-49 chars, starting/ending alphanumeric.
+/// Raw macOS hostnames carry uppercase + a `.local` suffix (e.g.
+/// `Ashutoshs-MacBook-Pro-4.local`), so lowercase, map non-`[a-z0-9]` to `-`,
+/// collapse/trim hyphens, clamp to 49, and fall back when too short.
+fn sanitize_tunnel_name(hostname: &str) -> String {
+    let mut s: String = format!("vector-{hostname}")
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    while s.contains("--") {
+        s = s.replace("--", "-");
+    }
+    let s: String = s.trim_matches('-').chars().take(49).collect();
+    let s = s.trim_end_matches('-').to_string();
+    if s.len() < 3 {
+        "vector-agent".to_string()
+    } else {
+        s
+    }
+}
+
 /// Entry point. Loads cached token (or runs device flow), registers tunnel,
 /// opens relay host, accepts inbound channels, hands each to `session::run`.
 pub async fn run() -> Result<()> {
@@ -39,7 +64,7 @@ pub async fn run() -> Result<()> {
         .context("read hostname")?
         .to_string_lossy()
         .to_string();
-    let tunnel_name = format!("vector-{hostname_str}");
+    let tunnel_name = sanitize_tunnel_name(&hostname_str);
 
     tracing::info!(provider = ?token.provider, tunnel_name = %tunnel_name, "agent starting");
 
@@ -183,4 +208,48 @@ async fn shutdown_signal() {
 #[cfg(not(unix))]
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_tunnel_name;
+
+    // Dev Tunnels Name regex: ([a-z0-9][a-z0-9-]{1,47}[a-z0-9])|(^$)
+    fn is_valid(name: &str) -> bool {
+        let bytes = name.as_bytes();
+        (3..=49).contains(&name.len())
+            && bytes
+                .iter()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
+            && bytes[0].is_ascii_alphanumeric()
+            && bytes[name.len() - 1].is_ascii_alphanumeric()
+    }
+
+    #[test]
+    fn macos_hostname_becomes_valid_tunnel_name() {
+        // Regression: raw macOS hostname (uppercase + `.local`) was rejected 400.
+        let name = sanitize_tunnel_name("Ashutoshs-MacBook-Pro-4.local");
+        assert!(is_valid(&name), "invalid tunnel name: {name}");
+        assert!(name.starts_with("vector-"));
+        assert!(!name.contains('.') && name.chars().all(|c| !c.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn plain_linux_hostname_passes_through() {
+        let name = sanitize_tunnel_name("devbox");
+        assert!(is_valid(&name));
+        assert_eq!(name, "vector-devbox");
+    }
+
+    #[test]
+    fn overlong_hostname_is_clamped_and_valid() {
+        let name = sanitize_tunnel_name(&"a".repeat(80));
+        assert!(is_valid(&name), "invalid tunnel name: {name}");
+    }
+
+    #[test]
+    fn empty_or_garbage_hostname_falls_back() {
+        assert!(is_valid(&sanitize_tunnel_name("")));
+        assert!(is_valid(&sanitize_tunnel_name("...")));
+    }
 }
