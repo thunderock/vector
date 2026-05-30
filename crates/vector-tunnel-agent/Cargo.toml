@@ -37,6 +37,7 @@ tunnels = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "signal", "test-util"] }
+wiremock = { workspace = true }
 
 # cargo-deb metadata: Plan 08-06 D-01. Produces .deb on Linux x86_64 + aarch64.
 [package.metadata.deb]
