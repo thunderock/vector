@@ -9,7 +9,8 @@ pub struct TunnelRecord {
     #[serde(rename = "tunnelId")]
     pub tunnel_id: String,
     pub name: Option<String>,
-    #[serde(default)]
+    // The live relay returns this under `tags`; newer api-versions use `labels`.
+    #[serde(default, alias = "tags")]
     pub labels: Vec<String>,
     #[serde(rename = "endpoints", default)]
     pub endpoints: Vec<TunnelEndpoint>,
@@ -218,5 +219,15 @@ mod tests {
             last_updated_at: None,
         };
         assert!(!t.is_vector_agent());
+    }
+
+    // Regression: the live relay returns the label under `tags`, not `labels`.
+    #[test]
+    fn deserializes_tags_field_as_labels() {
+        let json = r#"{"tunnelId":"silent-book-tphgwm9","name":"","tags":["vector-agent"]}"#;
+        let t: TunnelRecord = serde_json::from_str(json).expect("parse");
+        assert!(t.is_vector_agent(), "tags must populate labels");
+        // name is empty → display falls back to the tunnel id.
+        assert_eq!(t.display_name(), "silent-book-tphgwm9");
     }
 }

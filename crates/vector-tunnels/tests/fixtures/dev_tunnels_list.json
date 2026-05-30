@@ -2,7 +2,7 @@
   {
     "tunnelId": "tunnel-vec-1",
     "name": "vector-corp-box",
-    "labels": ["vector-agent", "linux"],
+    "tags": ["vector-agent", "linux"],
     "endpoints": [
       {
         "hostId": "host-vec-1",
@@ -15,7 +15,7 @@
   {
     "tunnelId": "tunnel-vec-2",
     "name": "vector-home-server",
-    "labels": ["vector-agent", "personal"],
+    "tags": ["vector-agent", "personal"],
     "endpoints": [
       {
         "hostId": "host-vec-2",
@@ -28,7 +28,7 @@
   {
     "tunnelId": "tunnel-code-1",
     "name": "code-tunnel-laptop",
-    "labels": ["code-tunnel"],
+    "tags": ["code-tunnel"],
     "endpoints": [
       {
         "hostId": "host-code-1",
@@ -41,7 +41,7 @@
   {
     "tunnelId": "tunnel-misc-1",
     "name": "misc-shared",
-    "labels": [],
+    "tags": [],
     "endpoints": [
       {
         "hostId": "host-misc-1",
@@ -54,7 +54,7 @@
   {
     "tunnelId": "tunnel-misc-2",
     "name": "demo",
-    "labels": ["demo"],
+    "tags": ["demo"],
     "endpoints": [
       {
         "hostId": "host-misc-2",
