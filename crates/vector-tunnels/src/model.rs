@@ -30,7 +30,7 @@ impl std::fmt::Debug for TunnelRecord {
 }
 
 impl TunnelRecord {
-    pub const VECTOR_AGENT_LABEL: &str = "vector-agent: true";
+    pub const VECTOR_AGENT_LABEL: &str = "vector-agent";
     pub const VECTOR_NAME_PREFIX: &str = "vector-";
 
     /// D-10: only tunnels labelled by our agent are surfaced to the picker.
@@ -38,12 +38,16 @@ impl TunnelRecord {
         self.labels.iter().any(|l| l == Self::VECTOR_AGENT_LABEL)
     }
 
-    /// D-09: registration name is `vector-{hostname}`; picker shows without prefix.
+    /// Display name for the picker. Custom tunnel names are disabled on the relay,
+    /// so `name` is usually absent — fall back to the auto-assigned `tunnel_id`.
     pub fn display_name(&self) -> String {
-        let name = self.name.as_deref().unwrap_or("");
-        name.strip_prefix(Self::VECTOR_NAME_PREFIX)
-            .unwrap_or(name)
-            .to_string()
+        match self.name.as_deref().filter(|n| !n.is_empty()) {
+            Some(name) => name
+                .strip_prefix(Self::VECTOR_NAME_PREFIX)
+                .unwrap_or(name)
+                .to_string(),
+            None => self.tunnel_id.clone(),
+        }
     }
 
     /// RFC 3339 `lastUpdatedAt` → DateTime<Utc>; None if missing/garbled.
@@ -197,7 +201,7 @@ mod tests {
         let t = TunnelRecord {
             tunnel_id: "tid".into(),
             name: None,
-            labels: vec!["vector-agent: true".into(), "linux".into()],
+            labels: vec!["vector-agent".into(), "linux".into()],
             endpoints: vec![],
             last_updated_at: None,
         };

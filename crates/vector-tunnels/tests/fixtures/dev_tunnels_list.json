@@ -2,7 +2,7 @@
   {
     "tunnelId": "tunnel-vec-1",
     "name": "vector-corp-box",
-    "labels": ["vector-agent: true", "linux"],
+    "labels": ["vector-agent", "linux"],
     "endpoints": [
       {
         "hostId": "host-vec-1",
@@ -15,7 +15,7 @@
   {
     "tunnelId": "tunnel-vec-2",
     "name": "vector-home-server",
-    "labels": ["vector-agent: true", "personal"],
+    "labels": ["vector-agent", "personal"],
     "endpoints": [
       {
         "hostId": "host-vec-2",

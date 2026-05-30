@@ -69,11 +69,11 @@ pub async fn run() -> Result<()> {
     tracing::info!(provider = ?token.provider, tunnel_name = %tunnel_name, "agent starting");
 
     let mgmt = build_mgmt_client(&token)?;
-    let tunnel = register_tunnel(&mgmt, &tunnel_name).await?;
+    let tunnel = register_tunnel(&mgmt).await?;
     let locator = ::tunnels::management::TunnelLocator::try_from(&tunnel)
         .map_err(|e| anyhow::anyhow!("could not derive tunnel locator: {e}"))?;
 
-    eprintln!("vector-tunnel-agent: tunnel '{tunnel_name}' registered. Waiting for connections.");
+    eprintln!("vector-tunnel-agent: registered for host '{tunnel_name}'. Waiting for connections.");
 
     let host_token = extract_host_token(&tunnel)?;
     let mut host = ::tunnels::connections::RelayTunnelHost::new(locator, mgmt);
@@ -159,12 +159,12 @@ fn build_mgmt_client(t: &CachedToken) -> Result<::tunnels::management::TunnelMan
 
 async fn register_tunnel(
     mgmt: &::tunnels::management::TunnelManagementClient,
-    name: &str,
 ) -> Result<::tunnels::contracts::Tunnel> {
     use ::tunnels::contracts::Tunnel;
     use ::tunnels::management::NO_REQUEST_OPTIONS;
+    // Custom tunnel names are disabled on the relay (HTTP 403), so omit `name` and
+    // let the service auto-assign the id; clients identify us by the label (D-10).
     let tunnel = Tunnel {
-        name: Some(name.to_owned()),
         labels: vec![VECTOR_AGENT_LABEL.to_owned()],
         ..Default::default()
     };
