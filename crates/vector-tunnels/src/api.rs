@@ -6,9 +6,17 @@ use crate::model::{AuthProvider, TunnelRecord};
 use serde::Deserialize;
 use thiserror::Error;
 
+// Dev Tunnels has no POST `/access` endpoint; a connect token is returned
+// inline on the tunnel object when fetched with `?tokenScopes=connect`.
 #[derive(Deserialize)]
-struct TokenBody {
-    token: String,
+struct TunnelAccessBody {
+    #[serde(rename = "accessTokens")]
+    access_tokens: Option<AccessTokens>,
+}
+
+#[derive(Deserialize)]
+struct AccessTokens {
+    connect: Option<String>,
 }
 
 pub const TUNNELS_BASE_URL: &str = "https://global.rel.tunnels.api.visualstudio.com";
@@ -116,12 +124,12 @@ impl DevTunnelsApi {
         tunnel_id: &str,
     ) -> Result<String, ApiError> {
         let url = format!(
-            "{}/api/v1/tunnels/{}/access?scopes=connect",
+            "{}/api/v1/tunnels/{}?tokenScopes=connect",
             self.base_url, tunnel_id
         );
         let resp = self
             .http
-            .post(&url)
+            .get(&url)
             .header("Authorization", auth.format_header())
             .send()
             .await?;
@@ -135,7 +143,14 @@ impl DevTunnelsApi {
                 body: resp.text().await.unwrap_or_default(),
             });
         }
-        Ok(resp.json::<TokenBody>().await?.token)
+        resp.json::<TunnelAccessBody>()
+            .await?
+            .access_tokens
+            .and_then(|t| t.connect)
+            .ok_or_else(|| ApiError::Other {
+                status: status.as_u16(),
+                body: "tunnel response carried no connect access token".into(),
+            })
     }
 
     /// Fetch a single tunnel by ID. Used by the picker to refresh endpoint state.

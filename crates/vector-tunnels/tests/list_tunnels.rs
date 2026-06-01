@@ -2,7 +2,7 @@
 
 use vector_tunnels::api::{ApiError, DevTunnelsApi};
 use vector_tunnels::model::AuthProvider;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn load_fixture() -> String {
@@ -127,14 +127,18 @@ async fn list_tunnels_sends_provider_auth_header_microsoft() {
 }
 
 #[tokio::test]
-async fn get_access_token_returns_token() {
+async fn get_access_token_returns_connect_token() {
+    // Verified live: connect tokens are returned inline on the tunnel object via
+    // GET /api/v1/tunnels/{id}?tokenScopes=connect → {"accessTokens":{"connect":..}}.
+    // There is no POST .../access endpoint (it 401s).
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/api/v1/tunnels/tunnel-vec-1/access"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_raw(r#"{"token":"connect-scope-abc"}"#, "application/json"),
-        )
+    Mock::given(method("GET"))
+        .and(path("/api/v1/tunnels/tunnel-vec-1"))
+        .and(query_param("tokenScopes", "connect"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"tunnelId":"tunnel-vec-1","accessTokens":{"connect":"connect-scope-abc"}}"#,
+            "application/json",
+        ))
         .mount(&server)
         .await;
     let api = DevTunnelsApi::with_base_url(server.uri());
@@ -143,4 +147,21 @@ async fn get_access_token_returns_token() {
         .await
         .expect("token");
     assert_eq!(tok, "connect-scope-abc");
+}
+
+#[tokio::test]
+async fn get_access_token_handles_401() {
+    // The actor refreshes upstream auth on Unauthorized — keep that signal intact.
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/tunnels/tunnel-vec-1"))
+        .respond_with(ResponseTemplate::new(401))
+        .mount(&server)
+        .await;
+    let api = DevTunnelsApi::with_base_url(server.uri());
+    let err = api
+        .get_access_token(&AuthProvider::GitHub("gho_test".into()), "tunnel-vec-1")
+        .await
+        .expect_err("must surface 401");
+    assert!(matches!(err, ApiError::Unauthorized));
 }

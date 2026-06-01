@@ -21,13 +21,15 @@ use vector_tunnels::{AuthProvider, DevTunnelsApi, ReconnectableDevTunnelDomain, 
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// Spin up a wiremock that serves a connect-scope token for any tunnel id.
+/// Spin up a wiremock that serves a connect-scope token for `t-fake`. The real
+/// relay returns it inline on the tunnel object via GET ?tokenScopes=connect.
 async fn mock_token_server() -> MockServer {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/api/v1/tunnels/t-fake/access"))
+    Mock::given(method("GET"))
+        .and(path("/api/v1/tunnels/t-fake"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "token": "fake-connect-scope-token"
+            "tunnelId": "t-fake",
+            "accessTokens": { "connect": "fake-connect-scope-token" }
         })))
         .mount(&server)
         .await;
