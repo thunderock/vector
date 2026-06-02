@@ -9,10 +9,11 @@ ignore = [
     # rsa 0.9.x timing sidechannel via jsonwebtoken→octocrab; no patch available.
     # This is a local desktop app — not exposed as a server — so the risk is acceptable.
     "RUSTSEC-2023-0071",
-    # aes 0.8.4 is yanked but pulled transitively via russh→aes-gcm 0.10.3→aes ^0.8;
-    # no non-yanked 0.8.x exists and the russh chain can't move to aes 0.9. Yank was
-    # not a security advisory. Revisit when russh bumps its aes-gcm.
-    { crate = "aes@0.8.4", reason = "yanked, no upgrade path through russh; not a security yank" },
+    # aes 0.9.0 is yanked but pulled transitively via russh 0.60→aes-gcm 0.11.0-rc.3;
+    # the russh RC-crypto chain can't move off it yet. Yank was not a security advisory.
+    # (aes 0.8.4 was un-yanked upstream, so its old entry is gone.) Revisit when russh
+    # bumps its aes-gcm off the rc.
+    { crate = "aes@0.9.0", reason = "yanked, no upgrade path through russh 0.60 aes-gcm rc; not a security yank" },
 ]
 unmaintained = "workspace"
 
