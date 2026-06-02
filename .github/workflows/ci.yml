@@ -125,14 +125,18 @@ jobs:
   cargo-geiger:
     # HARDEN-03 D-22 — unsafe-dep audit. cargo-deny has no [bans] unsafe knob;
     # cargo-geiger 0.13 --output-format Json + a JSON allowlist is the working
-    # substitute. ubuntu-latest for the cold cache install of cargo-geiger.
+    # substitute.
     # Geiger requires running from a concrete package directory (the workspace
     # root is a virtual manifest); vector-app is the binary that pulls in the
     # whole dep tree so it's the canonical root for the audit.
-    runs-on: ubuntu-latest
+    # macos-14 (not ubuntu): vector-app pulls in objc2, which `compile_error!`s
+    # on non-Apple targets, so geiger can't build the dep tree on Linux.
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-darwin
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-cargo-geiger
