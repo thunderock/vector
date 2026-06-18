@@ -1,56 +1,40 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-19T21:40:59.129Z",
-  "phase": "7",
-  "phase_name": "SSH Transport + Codespaces Connect",
-  "phase_dir": ".planning/phases/07-ssh-transport-codespaces-connect",
-  "plan": null,
-  "task": null,
-  "total_tasks": null,
+  "timestamp": "2026-05-30T14:57:09.068Z",
+  "phase": "09.2",
+  "phase_name": "github-auth-dev-tunnels",
+  "phase_dir": ".planning/phases/09.2-github-auth-dev-tunnels",
+  "plan": 4,
+  "task": 3,
+  "total_tasks": 3,
   "status": "paused",
   "completed_tasks": [
-    {"id": "debug-1", "name": "black-screen-render: double surface present fix", "status": "done", "commit": "uncommitted (in working tree)"},
-    {"id": "debug-2", "name": "terminal-partial-window: hardcoded 80x24 initial dims fix", "status": "done", "commit": "uncommitted (in working tree)"},
-    {"id": "debug-3", "name": "oauth-device-flow-broken: Accept:application/json + modal persistence", "status": "done", "commit": "uncommitted (in working tree)"},
-    {"id": "debug-4", "name": "codespace-tunnel-connect-fails: post-auth picker auto-open", "status": "done", "commit": "uncommitted (in working tree)"},
-    {"id": "debug-5", "name": "auth-completion-not-detected: GitHub HTTP-200 polling fix + reqwest user fetch + octocrab tower panic + codespace listing direct reqwest", "status": "done", "commit": "uncommitted (in working tree)"},
-    {"id": "test-1", "name": "8 regression tests for auth + codespaces listing", "status": "done", "commit": "uncommitted (in working tree)"},
-    {"id": "plan-7", "name": "Phase 7 plans: 5 plans across 4 waves", "status": "done", "commit": "53bb825"}
+    {"id": 1, "name": "Bump agent GitHub client ID to Dev Tunnels App (D-4)", "status": "done", "commit": "c1d7c86"},
+    {"id": 2, "name": "Author live smoke test + checklist (09.2-SMOKE.md)", "status": "done", "commit": "c1d7c86"},
+    {"id": 3, "name": "Human-verify: live GitHub-auth end-to-end smoke walk", "status": "in_progress", "progress": "GitHub sign-in works; picker lists tunnels (after list-decode fix); agent authenticates, registers, and hosts. 5 real-API bugs found & fixed live. Pending: user restarts app to pick up the tags-field fix, confirms picker lists the tunnel, then tests CONNECT (get_access_token endpoint shape still unverified)."}
   ],
   "remaining_tasks": [
-    {"id": "commit-fixes", "name": "Commit all debug session fixes from the working tree", "status": "not_started"},
-    {"id": "execute-7", "name": "Execute Phase 7 — SSH transport + Codespaces connect", "status": "not_started"},
-    {"id": "create-codespace", "name": "Create a GitHub Codespace at github.com/codespaces to test against", "status": "not_started", "type": "human_action"}
+    {"id": 3, "name": "Confirm picker lists silent-book-tphgwm9 after app restart, then connect -> [remote] tab -> type in remote shell; complete 09.2-SMOKE.md sign-off", "status": "in_progress"}
   ],
   "blockers": [
-    {
-      "description": "User has no codespaces yet — picker shows empty (correct behavior). Need at least one codespace to test Phase 7.",
-      "type": "human_action",
-      "workaround": "Create a codespace at github.com/codespaces on any repo"
-    }
+    {"description": "Connect path (get_access_token, POST /api/v1/tunnels/{id}/access?scopes=connect, expects {token:...}) is unverified against the real API -- may have a shape mismatch like the list endpoint did", "type": "technical", "workaround": "If connect throws 'error decoding response body', apply the same fix pattern: probe the real response with the cached token via curl, then correct the model/decode"}
   ],
   "human_actions_pending": [
-    {
-      "action": "Create a GitHub Codespace at github.com/codespaces",
-      "context": "Needed to test Phase 7 SSH transport end-to-end. The API returns total_count=0 meaning zero codespaces exist.",
-      "blocking": true
-    }
+    {"action": "Restart Vector app (cargo run -p vector-app), sign in with GitHub, open picker (Cmd-Shift-T)", "context": "tags-field fix 4f1882e is app-side; running app is stale", "blocking": true},
+    {"action": "Confirm picker lists tunnel 'silent-book-tphgwm9', select it, connect, type a command in the [remote] tab", "context": "final smoke gate for phase 09.2", "blocking": true},
+    {"action": "git push (user pushes asynchronously per CLAUDE.md) -- 13 commits this session are local-only on master", "context": "CI re-run validates the fixes remotely", "blocking": false}
   ],
   "decisions": [
-    {"decision": "Phase 7 v1 transport = gh codespace ssh --stdio subprocess", "rationale": "Sidesteps native russh+gRPC tunnel plumbing (v1.x). gh handles all tunnel protocol.", "phase": "7"},
-    {"decision": "CodespaceDomain lives in vector-ssh, not vector-mux", "rationale": "Keeps WIN-04 seam clean — mux takes Box<dyn PtyTransport> directly, not russh types.", "phase": "7"},
-    {"decision": "KeyManager title = 'vector-{hostname}' (no UUID)", "rationale": "Stable title prevents unbounded SSH key growth on github.com/settings/keys.", "phase": "7"},
-    {"decision": "All debug session fixes uncommitted", "rationale": "Multiple files modified across sessions, need to commit before executing phase 7.", "phase": "6"}
+    {"decision": "Dev Tunnels list endpoint returns a bare JSON array, not {value:[...]}", "rationale": "verified live: empty account returns [] with 200", "phase": "09.2"},
+    {"decision": "Agent device-flow polls must wait interval before the first poll (RFC 8628 3.4) and treat incorrect_device_code as transient", "rationale": "immediate poll races GitHub code propagation -> intermittent incorrect_device_code", "phase": "09.2"},
+    {"decision": "Agent must NOT set a custom tunnel name (relay 403 'custom tunnel names disabled'); identify by label only", "rationale": "feature disabled for this account; auto-assigned id is used", "phase": "09.2"},
+    {"decision": "vector-agent label lives under the relay's tags field; both agent and picker use the plain string 'vector-agent'", "rationale": "API returns tags not labels; 'vector-agent: true' was never a valid label (colon/space)", "phase": "09.2"},
+    {"decision": "Unified agent .deb + app .dmg into a single release.yml; retired agent-release.yml (quick task 260529-hni)", "rationale": "one v* tag should produce both artifacts on one Release", "phase": "quick"}
   ],
-  "uncommitted_files": [
-    "Makefile",
-    "crates/vector-app/src/app.rs",
-    "crates/vector-app/src/auth_actor.rs",
-    "crates/vector-codespaces/src/auth/device_flow.rs",
-    "crates/vector-codespaces/src/auth/error.rs",
-    "crates/vector-codespaces/tests/device_flow.rs",
-    "crates/vector-app/src/codespaces_actor.rs"
+  "uncommitted_files": [".planning/ (commit_docs=false -- planning docs incl. this handoff and 09.2 SUMMARYs are intentionally uncommitted; user commits .planning on their cadence)", ".claude/scheduled_tasks.lock (runtime lock)"],
+  "background_processes": [
+    {"name": "vector-tunnel-agent", "tunnel": "silent-book-tphgwm9", "state": "RUNNING and hosting (under a backgrounded Bash task)", "note": "token cached at ~/.config/vector/agent-token; re-run with `cargo run -p vector-tunnel-agent` if it stopped (no re-auth needed while token valid, ~8h)"}
   ],
-  "next_action": "Run 'git add -p' to stage and commit all debug session fixes, then /clear and /gsd:execute-phase 7",
-  "context_notes": "Long debug session fixed: black screen, partial window, OAuth device flow (GitHub HTTP-200 non-RFC polling), auth completion detection (tower panic from octocrab on winit main thread), codespaces empty list (user simply has zero codespaces). All auth + codespaces infrastructure now works. Phase 7 fully planned and verified. Need to commit the working tree fixes before executing."
+  "next_action": "Restart the Vector app, confirm the picker lists 'silent-book-tphgwm9', then test connect. If connect errors with a decode/HTTP failure, probe get_access_token's real response (cached github token via curl) and fix the model the same way as the list/tags bugs.",
+  "context_notes": "Phase 09.2 swapped Dev Tunnels sign-in from Microsoft to GitHub (plans 01-03 complete). Plan 04 is the live smoke gate. This session ran the smoke walk and fixed a cascade of fixture-vs-reality bugs in code paths that had never run against the live API (Phase 9 UAT died at Microsoft auth before reaching them). Each fix used TDD: probe real API -> failing test -> fix -> green. Also did out-of-band work: CI remediation (4 commits: ci.yml codespaces step, arch-lint test files, machete unused deps, deny policy) after Phases 5-9.2 were pushed to master for the first time since Phase 4, and a quick task unifying the release workflow. All code is committed to master locally; NOT pushed. The connect leg is the only remaining smoke step."
 }

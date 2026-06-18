@@ -7,3 +7,4 @@ crates/vector-app/resources/icon.icns
 artifacts/
 RELEASE_NOTES.md
 .claude/worktrees/
+.claude/scheduled_tasks.lock
