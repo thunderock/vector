@@ -1,14 +1,19 @@
 ---
-status: partial
+status: testing
 phase: 09-persistence-reconnect-tmux-auto-attach
 source: [09-05-SUMMARY.md]
 started: 2026-05-22T20:24:53Z
-updated: 2026-05-22T20:24:53Z
+updated: 2026-05-25T00:00:00Z
 ---
 
 ## Current Test
 
-[testing paused — 11 items outstanding; blocked on `DevTunnelsActor` construction wiring in `main.rs` (separate follow-up plan)]
+number: 1
+name: Build and launch Vector locally
+expected: |
+  `cargo run --release` builds and launches `Vector.app`. Window opens, native menu visible,
+  no panic in stderr.
+awaiting: user response
 
 ## Tests
 
